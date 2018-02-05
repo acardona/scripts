@@ -60,7 +60,7 @@ def parseLabeledMatrix(filename, cast=int, separator=","):
             row_names.append(line[i1+1:i2])
             # Parse matrix values starting after first comma outside quotes
             first_comma = line.find(separator, i2)
-            synapse_counts = map(cast, line[first_comma+1:].split(separator))
+            synapse_counts = [cast(val) for val in line[first_comma+1:].split(separator)]
             # Accummulate
             matrix.append(synapse_counts)
 
