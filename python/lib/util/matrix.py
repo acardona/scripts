@@ -4,6 +4,9 @@
 #
 # TODO: replace with functions from the pandas library, if these exist.
 
+from PIL import Image
+from itertools import chain
+
 def combineConsecutivePairs(matrix, aggregateFn=sum):
     """
     Combine consecutive pairs of rows and of columns
@@ -26,4 +29,24 @@ def combineConsecutivePairs(matrix, aggregateFn=sum):
         combined_matrix.append(row)
 
     return combined_matrix
+
+def createIntImage(matrix):
+    """
+    Return a 2d 32-bit signed integer image from a matrix of numerical values
+    that can be read as a list (of rows) of lists (the column values of each row.)
+
+    To save the image, call its "save('data.png')" method with a name ending in a specific extension such as ".png".
+    To see the image, call its "show()" method
+    """
+
+    # A 32-bit signed integer image ('I' mode). See: https://pillow.readthedocs.io/en/3.1.x/handbook/concepts.html
+    # For reference, 'L' is 8-bit greyscale
+    #                'F' is 32-bit floating point pixels
+    #                '1' is with 1-bit pixels
+    #                'P' is 8-bit colors, using a look-up table or "palette"
+    #                'RGB', 'RGBA', 'CMYK', 'YCbCr', 'LAB', 'HSV' 
+    # There's also 'LA' (8-bit with alpha) and 'RGBa' (alpha premultiplied)
+    image = Image.new('I', (len(matrix[0]), len(matrix)))
+    image.putdata(tuple(int(val) for val in chain.from_iterable(matrix)))
+    return image
 
