@@ -1,0 +1,301 @@
+import bdv.*;
+import bdv.cache.*;
+import bdv.viewer.*;
+import bdv.viewer.animate.*;
+import bdv.viewer.overlay.*;
+import bdv.viewer.render.*;
+import bdv.viewer.state.*;
+import ij.*;
+import ij.process.*;
+import java.awt.*;
+import java.awt.image.*;
+import java.util.*;
+import javax.imageio.ImageIO;
+import mpicbg.spim.data.generic.sequence.*;
+import mpicbg.spim.data.registration.*;
+import mpicbg.spim.data.sequence.*;
+import net.imglib2.realtransform.*;
+import net.imglib2.ui.RenderTarget;
+import net.imglib2.ui.PainterThread;
+
+/* some parameters */
+int screenWidth = 1280;
+int screenHeight = 720;
+String outDir = "/home/saalfelds/record";
+String n5Path = "/nrs/flyem/data/tmp/Z0115-22.export.n5";
+String n5Group = "/22-34";
+
+viewerScale = new AffineTransform3D();
+//viewerScale.set(
+//	0.35, 0, 0, 0,
+//	0, 0.35, 0, 0,
+//	0, 0, 0.35, 0);
+viewerScale.set(
+	1.0, 0, 0, 0,
+	0, 1.0, 0, 0,
+	0, 0, 1.0, 0);
+
+viewerTranslation = new AffineTransform3D();
+viewerTranslation.set(
+	1, 0, 0, 0.5 * screenWidth,
+	0, 1, 0, 0.5 * screenHeight,
+	0, 0, 1, 0);
+
+class Target implements RenderTarget {
+	BufferedImage bi;
+	int width;
+	int height;
+
+	Target(int width, int height) {
+		this.width = width;
+		this.height = height;
+	}
+
+	public BufferedImage setBufferedImage(BufferedImage bufferedImage) {
+		bi = bufferedImage;
+		return null;
+	}
+
+	public int getWidth() {
+		return this.width;
+	}
+
+	public int getHeight() {
+		return this.height;
+	}
+}
+
+
+/**
+ * Cosine shape of linear [0,1]
+ */
+double cos(double x) {
+	return 0.5 - 0.5 * Math.cos(Math.PI * x);
+}
+
+
+/**
+ * Acceleration function for a t in [0,1]:
+ * 
+ * types
+ *   0  symmetric
+ *   1  slow start
+ *   2  slow end
+ *   3  soft symmetric
+ *   4  soft slow start
+ *   5  soft slow end
+ */
+double accel(double t, int type) {
+	switch (type) {
+	case 1:		// slow start
+		return cos(t * t);
+		break;
+	case 2:		// slow end
+		return 1.0 - cos(Math.pow(1.0 - t, 2));
+		break;
+	case 3:		// soft symmetric
+		return cos(cos(t));
+		break;
+	case 4:		// soft slow start
+		return cos(cos(t * t));
+		break;
+	case 5:		// soft slow end
+		return 1.0 - cos(cos(Math.pow(1.0 - t, 2)));
+		break;
+	default:	// symmetric
+		return cos(t);
+	}
+}
+
+
+void recordMovie(
+		ViewerPanel viewer,
+		int width,
+		int height,
+		AffineTransform3D[] transforms,
+		int[] frames,
+		int[] accel,
+		int firstTransformIndex,
+		String dir) {
+	ViewerState renderState = viewer.getState();
+	ScaleBarOverlayRenderer scalebar = new ScaleBarOverlayRenderer();
+	MultiBoxOverlayRenderer box = new MultiBoxOverlayRenderer(width, height);
+
+	Target target = new Target(width, height);
+	
+	MultiResolutionRenderer renderer = new MultiResolutionRenderer(
+			target,
+			new PainterThread(null),
+			new double[]{1},
+			0l,
+			false,
+			12,
+			null,
+			false,
+			viewer.getOptionValues().getAccumulateProjectorFactory(),
+			new CacheControl.Dummy());
+
+	/* count i up to firstFrame */
+	int i = 0;
+	for (int k = 0; k < firstTransformIndex; ++k)
+		i += frames[k];
+		
+	for (int k = firstTransformIndex; k < transforms.length; ++k) {
+//	for (int i = 1920, k = 5; k < transforms.length; ++k) {
+		SimilarityTransformAnimator animator = new SimilarityTransformAnimator(
+				transforms[k - 1],
+				transforms[k],
+				width / 2,
+				height / 2,
+				0);
+		
+		for (int d = 0; d < frames[k]; ++d) {
+			AffineTransform3D tkd = animator.get(accel((double)d / (double)frames[k], accel[k]));
+			tkd.preConcatenate(viewerTranslation.inverse());
+			tkd.preConcatenate(viewerScale);
+			tkd.preConcatenate(viewerTranslation);
+			viewer.setCurrentViewerTransform(tkd);
+			renderState.setViewerTransform(tkd);
+			renderer.requestRepaint();
+			try {
+				renderer.paint(renderState);
+			} catch (e) {
+				e.printStackTrace();
+				return;
+			}
+
+			/* clahe */
+			ColorProcessor ip = new ColorProcessor(target.bi);
+			ImagePlus imp = new ImagePlus("", ip);
+			mpicbg.ij.clahe.Flat.getFastInstance().run(imp, 128, 256, 2.0f, null, false);
+			
+			Graphics2D g2 = target.bi.createGraphics();
+			g2.drawImage(ip.createImage(), 0, 0, null);
+			
+			/* scalebar */
+			g2.setClip(0, 0, width, height);
+			scalebar.setViewerState(renderState);
+			scalebar.paint(g2);
+			box.setViewerState(renderState);
+			box.paint(g2);
+
+			/* save image */
+			ImageIO.write(target.bi, "png", new File(String.format("%s/img-%04d.png", new Object[]{dir, new Integer(i++)})));
+		}
+	}
+}
+
+ViewerOptions options = ViewerOptions.options();
+options.width(screenWidth);
+options.height(screenHeight);
+
+bdv = org.janelia.saalfeldlab.hotknife.ViewSlab.run(
+	n5Path,
+	n5Group,
+	new mpicbg.spim.data.sequence.FinalVoxelDimensions("um", new double[]{0.008, 0.008, 0.008}),
+	false);
+			
+bdv.getBdvHandle().getViewerPanel().setInterpolation(Interpolation.NLINEAR);
+
+bdv.getBdvHandle().getViewerPanel().setCanvasSize(screenWidth, screenHeight);
+
+
+/* animate */
+
+AffineTransform3D[] transforms = new AffineTransform3D[17];
+int[] frames = new int[transforms.length];
+int[] accel  = new int[transforms.length];
+
+transforms[0] = new AffineTransform3D();
+transforms[0].set(-6.734802876494941E-4, 1.1858999917709729E-4, 0.03761848449525448, -628.9194812420379, 0.0045681137279035425, 0.037346339306602055, -3.594955560541121E-5, -761.7801528535322, -0.03734028355913418, 0.004566715648439719, -6.828959768581453E-4, 837.1787007953322);
+frames[0] = 0;
+accel[0] = 0;
+
+transforms[1] = new AffineTransform3D();
+transforms[1].set(-0.013843117402104033, 0.0024375699058002106, 0.7732328724490757, -15094.020337800053, 0.09389574691522987, 0.7676390371638874, -7.389287079746937E-4, -9675.35814708221, -0.7675145637016448, 0.09386700995215892, -0.014036653120264456, 10277.932510141567);
+frames[1] = 200;
+accel[1] = 0;
+
+transforms[2] = new AffineTransform3D();
+transforms[2].set(-0.007996250944511535, 0.02543560674774298, -0.051797537708729476, 889.7817867895578, -0.008074379703037697, 0.05128485943508568, 0.026430335177885313, -1089.0953778669443, 0.05713807308375265, 0.0108068559062459, -0.0035139012760843844, -807.4597589202131);
+frames[2] = 90;
+accel[2] = 3;
+
+transforms[3] = new AffineTransform3D();
+transforms[3].set(-0.24329733392646297, 0.7739145946608176, -1.5760139240176316, 25404.255925703113, -0.24567451277994137, 1.5604149567009307, 0.8041806251686012, -38376.11754395113, 1.7385073259255523, 0.32881399650441967, -0.10691545551592886, -35833.55442520438);
+frames[3] = 150;
+accel[3] = 0;
+
+transforms[4] = new AffineTransform3D();
+transforms[4].set(0.14234953869494082, -0.17011437793267117, -1.1790523904333472, 25317.48030215143, 1.1453858900968203, 0.3459007044928189, 0.08837815075665056, -29135.776727119955, 0.3274058700346279, -1.1361252717832802, 0.20344924481284005, 8292.327945652112);
+frames[4] = 90;
+accel[4] = 3;
+
+transforms[5] = new AffineTransform3D();
+transforms[5].set(-0.143737254224046, 0.34890818947123475, -0.20918467121455672, 3251.213303725029, -0.2134504457871008, 0.12418270618015938, 0.35379812362725377, -406.63731016118254, 0.3463149701421024, 0.2213532931961539, 0.13124104026484099, -15858.378586029872);
+frames[5] = 90;
+accel[5] = 3;
+
+transforms[6] = new AffineTransform3D();
+transforms[6].set(0.7937602552944188, 0.5073458027111681, 0.3008068683342781, -36332.46541391451, -0.48923233168683117, 0.28462903731902967, 0.810911780157302, -858.8708830909071, 0.32944841963193766, -0.7997039614988655, 0.47945509822695115, -7422.867521449428);
+frames[6] = 90;
+accel[6] = 3;
+
+transforms[7] = new AffineTransform3D();
+transforms[7].set(0.7937602552944182, 0.5073458027111676, 0.30080686833427833, -36332.465413914484, -0.4892323316868311, 0.2846290373190294, 0.8109117801573017, -858.870883090905, 0.32944841963193777, -0.799703961498865, 0.4794550982269509, -7439.867521449419);
+frames[7] = 30;
+accel[7] = 3;
+
+transforms[8] = new AffineTransform3D();
+transforms[8].set(0.7937602552944182, 0.5073458027111676, 0.30080686833427833, -36332.465413914484, -0.4892323316868311, 0.2846290373190294, 0.8109117801573017, -858.870883090905, 0.32944841963193777, -0.799703961498865, 0.4794550982269509, -7379.867521449419);
+frames[8] = 60;
+accel[8] = 3;
+
+transforms[9] = transforms[7].copy();
+frames[9] = 60;
+accel[9] = 3;
+
+transforms[10] = new AffineTransform3D();
+transforms[10].set(0.7937602552944182, 0.5073458027111676, 0.30080686833427833, -36332.465413914484, -0.4892323316868311, 0.2846290373190294, 0.8109117801573017, -858.870883090905, 0.32944841963193777, -0.799703961498865, 0.4794550982269509, -6826.867521449419);
+frames[10] = 200;
+accel[10] = 0;
+
+transforms[11] = new AffineTransform3D();
+transforms[11].set(1.1239772988208134, 0.8089418269501918, -0.10572307859304039, -55280.54728440577, -0.5799992469386024, 0.918914060083395, 0.8649202510826852, -19809.007048104366, 0.5737291366902688, -0.6558195542927668, 1.0814919356708628, -24360.725554076766);
+frames[11] = 90;
+accel[11] = 3;
+
+transforms[12] = new AffineTransform3D();
+transforms[12].set(-0.48145204043909906, 0.6011177886137027, -1.155746751659045, 24135.335286162423, -0.6277959637416539, 0.9725757550198622, 0.7673707354717557, -17602.47156118114, 1.1414750885008202, 0.7884434170953195, -0.06542795558732883, -56152.30788554921);
+frames[12] = 90;
+accel[12] = 3;
+
+transforms[13] = new AffineTransform3D();
+transforms[13].set(-0.3421589764931214, 0.42720318957686465, -0.8213676387626183, 17153.68945898587, -0.44616287056223963, 0.6911914312298261, 0.5453560549879982, -12494.935871067413, 0.8112250342061613, 0.5603320163936414, -0.046498426504499646, -40011.57769483755);
+frames[13] = 120;
+accel[13] = 3;
+
+transforms[14] = new AffineTransform3D();
+transforms[14].set(-0.010867131833739175, 0.0019135425028079293, 0.607003705813231, -5498.339347261484, 0.07371009222244286, 0.6026124300814265, -5.800742312620443E-4, -7871.7244042949, -0.6025147158538654, 0.0736875331154786, -0.0110190613524086, 12430.938583255063);
+frames[14] = 90;
+accel[14] = 3;
+
+transforms[15] = new AffineTransform3D();
+transforms[15].set(-0.020491597821804066, 0.0036082697792188473, 1.1445960172537446, -10389.700202477847, 0.1389913721798161, 1.1363156119363635, -0.0010938164766630763, -14957.44070246423, -1.1361313571869698, 0.13894883361911728, -0.020778083588376656, 21120.719893916674);
+frames[15] = 120;
+accel[15] = 3;
+
+transforms[16] = transforms[0].copy();
+frames[16] = 200;
+accel[16] = 3;
+
+recordMovie(
+		bdv.getBdvHandle().getViewerPanel(),
+		screenWidth,
+		screenHeight,
+		transforms,
+		frames,
+		accel,
+		12,
+		outDir);
+		
