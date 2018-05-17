@@ -5,16 +5,20 @@ from ini.trakem2 import Project
 from ini.trakem2.utils import CachingThread
 import sys, traceback
 
+# 4096x4096 RGBA
+IMAGE_SIZE = pow(4096, 2) * 4  # bytes
+RELEASE_EVERY = 60  # seconds
+
 exe = Executors.newScheduledThreadPool(1)
+
 
 def free():
   #Loader.releaseAllCaches()
   #System.out.println("Released all")
   #
   # Instead of releasing all, release half of all loaded images
-  # !!! ASSUMES that all cached images are of 4096x4096 dimensions !!!!
   try:
-    image_n_bytes = pow(4096, 2) * 4 # RGBA
+    image_n_bytes = IMAGE_SIZE
     projects = Project.getProjects()
     if 0 == projects.size():
       return
@@ -35,12 +39,12 @@ def free():
       loader.printCacheStatus()
     if 0 == n_bytes_released:
        # All memory retained is in the form of native arrays stored for loading images later
-      System.out.println("Cleared CachingThread cache.")
       CachingThread.releaseAll()
+      System.out.println("Cleared CachingThread cache.")
   except:
     traceback.print_exc(file=sys.stdout)
 
-exe.scheduleWithFixedDelay(free, 0, 60, TimeUnit.SECONDS)
+exe.scheduleWithFixedDelay(free, 0, RELEASE_EVERY, TimeUnit.SECONDS)
 
 # To cancel, call:
 #exe.shutdownNow()
