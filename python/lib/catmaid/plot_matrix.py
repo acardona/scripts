@@ -76,8 +76,8 @@ def plotMergedNormalized(matrix_csv_path, measurements_csv_path, single, joint, 
     title = matrix_csv_path[:-4].replace('_', ' ')
     xlabel = None
     ylabel = None
-    xticklabels = row_names
-    yticklabels = column_names
+    xticklabels = column_names
+    yticklabels = row_names
 
     return matrix_plot(
             np.array(combined),
