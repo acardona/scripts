@@ -3,11 +3,12 @@ from lib.util.matrix import combineConsecutivePairs
 from lib.plotting.matrix_plot import matrix_plot
 import numpy as np
 
-def plotMergedNormalized(matrix_csv_path, measurements_csv_path, single, joint, params):
+def plotMergedNormalized(matrix_csv_path, measurements_csv_path, fix, single, joint, params):
     """
     Return the matplotlib 'fig, ax, c' instances of a matrix plot, created
     by merging the left-right homologous pairs in the matrix_csv_path
     and normalizing by the total amount of inputs as present in the measurements_csv_path.
+    'fix': (optional, can be None) a function that receives 3 arguments: row_names, column_names and matrix, and returns the same 3 arguments, fixing ordering etc. as necessary.
     'single': synapse count threshold for an individual connection. 3 can be a reasonable value.
     'joint': synapse count threshold for a joint left-right homologous pair of connections. 10 can be a reasonable value.
     'params': contains keyword arguments for the plot, with defaults:
@@ -19,17 +20,11 @@ def plotMergedNormalized(matrix_csv_path, measurements_csv_path, single, joint, 
         value_range=(0, 25),
         cm_dimensions=(30, 25))
     """
+    if not fix:
+        def fix(*args):
+            return args
     # Load
-    row_names, column_names, matrix = parseLabeledMatrix(matrix_csv_path, cast=float, separator=',')
-
-    # FANs are first, then FBNs. Reorder.
-    # matrix: a list of lists, each inner list being a row.
-    # First put the top 12*2 rows at the bottom
-    matrix = matrix[24:] + matrix[:24]
-    row_names = row_names[24:] + row_names[:24]
-    # Second put the top 12*2 columns at the right
-    matrix = [row[24:] + row[:24] for row in matrix]
-    column_names = column_names[24:] + column_names[:24]
+    row_names, column_names, matrix = fix(*parseLabeledMatrix(matrix_csv_path, cast=float, separator=','))
 
     # Load the table of measurements
     neuron_names, measurement_names, measurements = parseLabeledMatrix(measurements_csv_path, cast=float, separator=',')
@@ -39,9 +34,8 @@ def plotMergedNormalized(matrix_csv_path, measurements_csv_path, single, joint, 
 
     # Normalize: divide each value by the total number of postsynaptic sites in the entire postsynaptic neuron.
     normalized = []
-    for name, row in zip(neuron_names, matrix):
-        b = n_inputs[name] # guaranteed to be above zero
-        normalized.append([a/b for a in row])
+    for row in matrix:
+        normalized.append([a / n_inputs[name] for name, a in zip(column_names, row)])
 
     # Merge left and right partners:
     # Requires both left and right having at least 3 synapses, and the sum at least 10
