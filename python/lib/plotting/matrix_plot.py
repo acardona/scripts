@@ -16,9 +16,13 @@ def show_values(pc, fmt="%.2f", hideZeros=True, **kw):
     """
       Show the numeric values of each matrix cell inside the cell.
       'pc': the value returned from ax.pcolor(...)
-      'fmt': the format of the number, defaults to float with 2 decimal points.
+      'fmt': the format of the number, defaults to float with 2 decimal points. Can also be a function that returns a string.
       Additional keyword arguments are passed verbatim to the ax.text function.
     """
+    if isinstance(fmt, str):
+        fmt_ = fmt
+        fmt = lambda x: fmt_ % x
+
     pc.update_scalarmappable()
     ax = pc.axes # .get_axes() is deprecated
     for p, color, value in zip(pc.get_paths(), pc.get_facecolors(), pc.get_array()):
@@ -27,9 +31,9 @@ def show_values(pc, fmt="%.2f", hideZeros=True, **kw):
             color = (0.0, 0.0, 0.0)
         else:
             color = (1.0, 1.0, 1.0)
-        if hideZeros and 0.0 == value:
+        if hideZeros and value <= 0:
             continue
-        ax.text(x, y, fmt % value, ha="center", va="center", color=color, **kw)
+        ax.text(x, y, fmt(value), ha="center", va="center", color=color, **kw)
 
 
 def cm2inch(*tup):
