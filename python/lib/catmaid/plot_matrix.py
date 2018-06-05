@@ -7,6 +7,7 @@ def plotMergedNormalized(matrix_csv_path, measurements_csv_path, fix, single, jo
     """
     Return the matplotlib 'fig, ax, c' instances of a matrix plot, created
     by merging the left-right homologous pairs in the matrix_csv_path
+    according to rules involving the single and joint thresholds of synaptic ounts,
     and normalizing by the total amount of inputs as present in the measurements_csv_path.
     'fix': (optional, can be None) a function that receives 3 arguments: row_names, column_names and matrix, and returns the same 3 arguments, fixing ordering etc. as necessary.
     'single': synapse count threshold for an individual connection. 3 can be a reasonable value.
@@ -15,7 +16,7 @@ def plotMergedNormalized(matrix_csv_path, measurements_csv_path, fix, single, jo
         x_axis_at_top=True,
         cmap='Blues',
         with_values=True,
-        fmt='%i',
+        fmt='%i', # can also be a function
         hideZeros=True,
         value_range=(0, 25),
         cm_dimensions=(30, 25))
