@@ -11,6 +11,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 
 def show_values(pc, fmt="%.2f", hideZeros=True, **kw):
     """
@@ -117,6 +118,9 @@ def matrix_plot(matrix, title, xlabel, ylabel, xticklabels, yticklabels, x_axis_
     # resize 
     fig = plt.gcf()
     fig.set_size_inches(cm2inch(cm_dimensions))
+
+    # Ensure fonts will be exported as text rather than as paths:
+    matplotlib.rcParams['svg.fonttype'] = 'none'
 
     return fig, ax, c
 
