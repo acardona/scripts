@@ -48,7 +48,18 @@ def cm2inch(*tup):
         return (i/inch for i in tup)
 
 
-def matrix_plot(matrix, title, xlabel, ylabel, xticklabels, yticklabels, x_axis_at_top=False, cmap='RdBu', with_values=False, fmt='%.2f', hideZeros=True, value_range=(0.0, 1.0), cm_dimensions=(40, 20)):
+def matrix_plot(
+        matrix,
+        title,
+        xlabel, ylabel,
+        xticklabels, yticklabels,
+        x_axis_at_top=False,
+        cmap='RdBu',
+        with_values=False,
+        fmt='%.2f',
+        hideZeros=True,
+        value_range=(0.0, 1.0),
+        cm_dimensions=(40, 20)):
     """
      'matrix': numpy 2d-shaped array with the values to plot.
      'title': string, optional (can be None)
