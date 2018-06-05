@@ -67,7 +67,7 @@ def matrix_plot(matrix, title, xlabel, ylabel, xticklabels, yticklabels, x_axis_
     """
     # Plot it out
     fig, ax = plt.subplots()    
-    c = ax.pcolor(matrix, edgecolors='k', linestyle= 'dashed', linewidths=0.2, cmap=cmap, vmin=value_range[0], vmax=value_range[1])
+    c = ax.pcolor(matrix, edgecolors='k', linestyle='dashed', linewidths=0.2, cmap=cmap, vmin=value_range[0], vmax=value_range[1])
 
     # put the major ticks at the middle of each cell
     ax.set_yticks(np.arange(matrix.shape[0]) + 0.5, minor=False)
