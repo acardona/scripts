@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+  <_name>Split kerned text</_name>
+  <id>org.cardona.splitkernedtext</id>
+  <dependency type="executable" location="extensions">split_kerned_text.py</dependency>
+  <dependency type="executable" location="extensions">inkex.py</dependency>
+  <param name="separation" type="float" _gui-text="Maximum separation between characters (px)">1.0</param>
+  <effect>
+    <object-type>text</object-type>
+    <effects-menu>
+       <submenu _name="Text"/>
+    </effects-menu>
+  </effect>
+  <script>
+    <command reldir="extensions" interpreter="python">split_kerned_text.py</command>
+  </script>
+</inkscape-extension>
