@@ -70,7 +70,7 @@ class SplitKernedText(inkex.Effect):
         inkex.debug("Can't yet handle kerning in the Y axis.")
         continue
 
-      strings = filter(None, map(lambda a: a.strip(), self.plain_string(node))) # without empty strings
+      strings = filter(None, map(lambda a: a.strip(), self.plain_string(text_node))) # without empty strings
       if not strings or len(strings) > 1:
         inkex.debug("Can only handle text that appears as single strings. You chose: ##" + ",".join(strings) + "##")
         continue
