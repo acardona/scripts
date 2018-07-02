@@ -13,6 +13,12 @@ sys.path.append('/usr/share/inkscape/extensions')
 import inkex
 from copy import copy
 
+
+class Word:
+  def __init__(self, x, text): 
+    self.x = x
+    self.text = text
+
 class SplitKernedText(inkex.Effect):
   def __init__(self):
     inkex.Effect.__init__(self)
@@ -73,11 +79,6 @@ class SplitKernedText(inkex.Effect):
       if len(word) != len(xs):
         inkex.debug("Can only handle kerned text for which there is an x coordinate for every character.")
         continue
-
-      class Word:
-        def __init__(self, x, text): 
-          self.x = x
-          self.text = text
 
       # Split according to X-axis kerning and the specified maximum separation
       i = 0
