@@ -25,13 +25,14 @@ class SplitKernedText(inkex.Effect):
     self.OptionParser.add_option("-s", "--separation", action="store", type="float", dest="separation", default="1.0", help="Maximum separation to split two characters")
     self.OptionParser.add_option("-p", "--preserve", action="store", type="inkbool", dest="preserve", default="True", help="Preserve original")
 
-  def extract_text(self, node, n):
-    text = inkex.etree.Element(inkex.addNS("text", "svg"), node.attrib)
-    x = n.get("x") or node.get("x")
-    y = n.get("y") or node.get("y")
+  def extract_text_nodes(self, parent, child):
+    """ Return a text node with x,y attributes. """
+    text = inkex.etree.Element(inkex.addNS("text", "svg"), parent.attrib)
+    x = child.get("x") or parent.get("x")
+    y = child.get("y") or parent.get("y")
     text.set("x", x)
     text.set("y", y)
-    text.append(copy(n))
+    text.append(copy(child))
     return text
 
   def plain_string(self, elem):
@@ -53,9 +54,9 @@ class SplitKernedText(inkex.Effect):
     separation = self.options.separation
     preserve = self.options.preserve
 
-    text_nodes = [self.extract_text(node, n) for n in node]
+    # Find all the tspan entries, which are direct children of the node
+    text_nodes = [self.extract_text_nodes(node, n) for n in node]
 
-    # Obtain list of x,y coords for the text element
     for text_node in text_nodes:
       # Keep non-empty entries
       xs = map(float, filter(len, text_node.get("x").split(' ')))
