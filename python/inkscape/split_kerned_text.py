@@ -12,6 +12,8 @@ sys.path.append('/usr/share/inkscape/extensions')
 
 import inkex
 from copy import copy
+from simplestyle import parseStyle
+import re
 
 
 class Word:
@@ -23,6 +25,7 @@ class SplitKernedText(inkex.Effect):
   def __init__(self):
     inkex.Effect.__init__(self)
     self.OptionParser.add_option("-s", "--separation", action="store", type="float", dest="separation", default="1.0", help="Maximum separation to split two characters")
+    self.OptionParser.add_option("-a", "--autosize", action="store", type="inkbool", dest="autosize", default="True", help="Automatic separation estimation")
     self.OptionParser.add_option("-p", "--preserve", action="store", type="inkbool", dest="preserve", default="True", help="Preserve original")
 
   def extract_text_nodes(self, parent, child):
@@ -52,7 +55,7 @@ class SplitKernedText(inkex.Effect):
     new_text_nodes = []
 
     separation = self.options.separation
-    preserve = self.options.preserve
+    autosize = self.options.autosize
 
     # Find all the tspan entries, which are direct children of the node
     text_nodes = [self.extract_text_nodes(node, n) for n in node]
@@ -81,6 +84,18 @@ class SplitKernedText(inkex.Effect):
         inkex.debug("Can only handle kerned text for which there is an x coordinate for every character.")
         continue
 
+      if autosize:
+          # Automatic estimation of separation parameter: check size of a character in the font of the text node
+          try:
+              fontsize = parseStyle(text_node.get("style"))["font-size"]
+              # Fontsize looks like e.g. '12px'
+              # Take half of the width of a character in the fontsize
+              separation = self.unittouu(fontsize) * 3
+              inkex.debug("separation: " + str(separation))
+          except:
+              inkex.debug("Automatic estimation of separation parameter failed. Using 1.0 for " + word)
+              separation = 1.0
+
       # Split according to X-axis kerning and the specified maximum separation
       i = 0
       tokens = []
@@ -95,13 +110,6 @@ class SplitKernedText(inkex.Effect):
           token.text += c2
         i += 1
       tokens.append(token)
-
-      try:
-          from simplestyle import parseStyle
-          fontsize = parseStyle(text.get("style"))["font-size"]
-      except:
-        fontsize = "12px"
-      fs = self.unittouu(fontsize) # !?!?!
 
       # Create a new text node for each token
       for token in tokens:

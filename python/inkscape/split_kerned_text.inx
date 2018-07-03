@@ -5,6 +5,8 @@
   <dependency type="executable" location="extensions">split_kerned_text.py</dependency>
   <dependency type="executable" location="extensions">inkex.py</dependency>
   <param name="separation" type="float" _gui-text="Maximum separation between characters (px)">1.0</param>
+  <param name="autosize" type="boolean" _gui-text="Estimate separation automatically">true</param>
+  <param name="preserve" type="boolean" _gui-text="Preserve original text">true</param>
   <effect>
     <object-type>text</object-type>
     <effects-menu>
