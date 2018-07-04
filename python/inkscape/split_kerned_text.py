@@ -89,7 +89,7 @@ class SplitKernedText(inkex.Effect):
           try:
               fontsize = parseStyle(text_node.get("style"))["font-size"]
               # Fontsize looks like e.g. '12px'
-              # Take half of the width of a character in the fontsize
+              # Take a multiple of the width of a character in the fontsize
               separation = self.unittouu(fontsize) * 3
               inkex.debug("separation: " + str(separation))
           except:
