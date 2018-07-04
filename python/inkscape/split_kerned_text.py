@@ -146,6 +146,7 @@ class SplitKernedText(inkex.Effect):
           parent.remove(node)
 
 
-# Execute extension
-SplitKernedText().affect()
+if __name__ == '__main__':
+  # Execute extension
+  SplitKernedText().affect()
 
