@@ -2,24 +2,35 @@
 
 from net.imglib2.img.cell import LazyCellImg, CellGrid, Cell
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
-from net.imglib2.view import Views
 from net.imglib2.util import Intervals, IntervalIndexer
-from net.imglib2.img.basictypeaccess import ShortAccess
-from net.imglib2 import Cursor
-from net.imglib2.type.numeric.integer import UnsignedShortType
-from net.imglib2.img.array import ArrayImgs
-from ij import IJ, VirtualStack, ImagePlus, CompositeImage
-from ij.process import ShortProcessor
-from jarray import zeros, array
+from ij import IJ
+from net.imagej import ImgPlus
+
+# Cache
 import os
 from collections import OrderedDict
-from net.imagej import ImgPlus
+
+# VirtualStack
+from net.imglib2.view import Views
+from net.imglib2.img.array import ArrayImgs
+from net.imglib2.img.basictypeaccess import ShortAccess
+from ij import VirtualStack, ImagePlus, CompositeImage
+from jarray import zeros, array
+
+
+# Proxy
+from ij.process import ShortProcessor
+
 #from net.imglib2.algorithm.math import ImgSource
 #from net.imglib2.algorithm.math.ImgMath import compute, into
 from fiji.scripting import Weaver
+from net.imglib2 import Cursor
+from net.imglib2.type.numeric.integer import UnsignedShortType
+
+from bdv.util import BdvFunctions
 
 # Source directory containing a list of files, one per stack
-src_dir = "/mnt/ssd-512/MVD_Results/"
+src_dir = "/home/albert/lab/scripts/data/4D-series/" # "/mnt/ssd-512/MVD_Results/"
 
 # Each timepoint is a path to a 3D stack file
 timepoint_paths = sorted(os.path.join(src_dir, name) for name in os.listdir(src_dir) if name.endswith(".klb"))
@@ -92,9 +103,9 @@ class TimePointGet(LazyCellImg.Get):
   def get(self, index):
     img = getStack(self.timepoint_paths[index])
     if not self.cell_dimensions:
-      self.cell_dimensions = Intervals.dimensionsAsIntArray(img)
+      self.cell_dimensions = [img.dimension(0), img.dimension(1), img.dimension(2), 1]
     return Cell(self.cell_dimensions,
-                [0, 0, index * self.cell_dimensions[2]],
+                [0, 0, 0, index],
                 extractDataAccess(img, self.cell_dimensions))
 
 
@@ -102,15 +113,25 @@ first = getStack(timepoint_paths[0])
 # One cell per time point
 dimensions = [1 * first.dimension(0),
               1 * first.dimension(1),
-              len(timepoint_paths) * first.dimension(2)]
+              1 * first.dimension(2),
+              len(timepoint_paths)]
 
-grid = CellGrid(dimensions, dimensions[0:2] + [first.dimension(2)])
+grid = CellGrid(dimensions, dimensions[0:3] + [1])
 
 vol4d = LazyCellImg(grid,
                     first.randomAccess().get().createVariable(),
                     TimePointGet(timepoint_paths))
 
 print dimensions
+
+
+# Visualization option 1:
+# An automatically created 4D VirtualStack
+#IL.wrap(vol4d, "Volume 4D").show()
+
+
+# Visualization option 2:
+# Create a 4D VirtualStack manually
 
 # Need a fast way to copy pixel-wise
 w = Weaver.method("""
@@ -127,27 +148,33 @@ w = Weaver.method("""
 
 class Stack4D(VirtualStack):
   def __init__(self, img4d):
-    super(VirtualStack, self).__init__(img4d.dimension(0), img4d.dimension(1), img4d.dimension(2))
+    super(VirtualStack, self).__init__(img4d.dimension(0), img4d.dimension(1), img4d.dimension(2) * img4d.dimension(3))
     self.img4d = img4d
     self.dimensions = array([img4d.dimension(0), img4d.dimension(1)], 'l')
     
   def getPixels(self, n):
     # 'n' is 1-based
-    aimg = ArrayImgs.unsignedShorts(self.dimensions)
+    aimg = ArrayImgs.unsignedShorts(self.dimensions[0:2])
     #computeInto(ImgSource(Views.hyperSlice(self.img4d, 2, n-1)), aimg)
-    w.copy(Views.hyperSlice(self.img4d, 2, n-1).cursor(), aimg.cursor())
+    nZ = self.img4d.dimension(2)
+    fixedT = Views.hyperSlice(self.img4d, 3, int((n-1) / nZ)) # Z blocks
+    fixedZ = Views.hyperSlice(fixedT, 2, (n-1) % nZ)
+    w.copy(fixedZ.cursor(), aimg.cursor())
     return aimg.update(None).getCurrentStorageArray()
     
   def getProcessor(self, n):
     return ShortProcessor(self.dimensions[0], self.dimensions[1], self.getPixels(n), None)
 
-
-#IL.wrap(vol4d, "Volume 4D").show()
-
+"""
 imp = ImagePlus("vol4d", Stack4D(vol4d))
-imp.setDimensions(1, first.dimension(2), len(timepoint_paths))
+nChannels = 1
+nSlices = first.dimension(2)
+nFrames = len(timepoint_paths)
+imp.setDimensions(nChannels, nSlices, nFrames)
 com = CompositeImage(imp, CompositeImage.GRAYSCALE)
 com.show()
+"""
 
 
-
+# Visualization option 3: BigDataViewer
+bdv = BdvFunctions.show(vol4d, "vol4d")

@@ -29,7 +29,8 @@ def run():
   #dc = DirectoryChooser("Choose folder")
   #folder = dc.getDirectory()
   #folder = '/run/user/52828/gvfs/smb-share:server=keller-s7,share=microscopy1/SV3/RC_17-10-31/GCaMP6s_2_20171031_145624.corrected/SPM00'
-  folder = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/dff_on_fused/from_Raghav/MVD_Results/"
+  #folder = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/dff_on_fused/from_Raghav/MVD_Results/"
+  folder = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/tests/dff_on_4view_fused/from_Raghav/MVD_Results/"
   print folder
 
   if not folder:
