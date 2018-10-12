@@ -96,6 +96,14 @@ def extractDataAccess(img, dimensions):
   except:
     return ProxyShortAccess(img, dimensions)
 
+def extractCalibration(img):
+  # an ImgPlus has an axis(int dimension) method that returns a DefaultLinearAxis
+  # which has relevant methods scale() and unit(), among others
+  # See: https://javadoc.scijava.org/ImageJ/net/imagej/axis/DefaultLinearAxis.html
+  if isinstance(img, ImgPlus):
+    return [img.axis(d).scale() for d in img.numDimensions()]
+  return [1.0 for d in img.numDimensions()]
+
 class TimePointGet(LazyCellImg.Get):
   def __init__(self, timepoint_paths):
     self.timepoint_paths = timepoint_paths
@@ -165,7 +173,7 @@ class Stack4D(VirtualStack):
   def getProcessor(self, n):
     return ShortProcessor(self.dimensions[0], self.dimensions[1], self.getPixels(n), None)
 
-"""
+
 imp = ImagePlus("vol4d", Stack4D(vol4d))
 nChannels = 1
 nSlices = first.dimension(2)
@@ -173,8 +181,8 @@ nFrames = len(timepoint_paths)
 imp.setDimensions(nChannels, nSlices, nFrames)
 com = CompositeImage(imp, CompositeImage.GRAYSCALE)
 com.show()
-"""
+
 
 
 # Visualization option 3: BigDataViewer
-bdv = BdvFunctions.show(vol4d, "vol4d")
+#bdv = BdvFunctions.show(vol4d, "vol4d")
