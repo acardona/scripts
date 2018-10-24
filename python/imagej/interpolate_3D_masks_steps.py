@@ -58,9 +58,13 @@ imp1.setDisplayRange(0, 1)
 imp1.show()
 
 
-# Second 3D mask: a cube
+# Second 3D mask: three small cubes
 img2 = ArrayImgs.unsignedBytes([100, 100, 100])
-for t in Views.interval(img2, [20, 20, 20], [80, 80, 80]):
+for t in Views.interval(img2, [10, 10, 10], [29, 29, 29]):
+  t.setOne()
+for t in Views.interval(img2, [70, 10, 70], [89, 29, 89]):
+  t.setOne()
+for t in Views.interval(img2, [40, 70, 40], [59, 89, 59]):
   t.setOne()
 
 imp2 = IL.wrap(img2, "cube")
@@ -92,19 +96,12 @@ def findEdgePixels(img):
   return edge_pix
 
 # Generate interpolated image
-def makeInterpolatedImage(img1, img2, weight):
+def makeInterpolatedImage(img1, search1, img2, search2, weight):
   """ weight: float between 0 and 1 """
-  edge_pix1 = findEdgePixels(img1)
-  kdtree1 = KDTree(edge_pix1, edge_pix1)
-  search1 = NearestNeighborSearchOnKDTree(kdtree1)
-  edge_pix2 = findEdgePixels(img2)
-  kdtree2 = KDTree(edge_pix2, edge_pix2)
-  search2 = NearestNeighborSearchOnKDTree(kdtree2)
   img3 = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img1))
   c1 = img1.cursor()
   c2 = img2.cursor()
   c3 = img3.cursor()
-  pos = zeros(img1.numDimensions(), 'l')
   while c3.hasNext():
     t1 = c1.next()
     t2 = c2.next()
@@ -113,14 +110,23 @@ def makeInterpolatedImage(img1, img2, weight):
     sign2 = -1 if 0 == t2.get() else 1
     search1.search(c1)
     search2.search(c2)
-    value1 = sign1 * search1.getDistance() * weight
-    value2 = sign2 * search2.getDistance() * (1 - weight)
+    value1 = sign1 * search1.getDistance() * (1 - weight)
+    value2 = sign2 * search2.getDistance() * weight
     if value1 + value2 > 0:
       t3.setOne()
   return img3
 
-weight = 0.5
-img3 = makeInterpolatedImage(img1, img2, weight)
-imp3 = IL.wrap(img3, "interpolated " + str(weight))
+edge_pix1 = findEdgePixels(img1)
+kdtree1 = KDTree(edge_pix1, edge_pix1)
+search1 = NearestNeighborSearchOnKDTree(kdtree1)
+edge_pix2 = findEdgePixels(img2)
+kdtree2 = KDTree(edge_pix2, edge_pix2)
+search2 = NearestNeighborSearchOnKDTree(kdtree2)
+
+steps = []
+for weight in [x / 10.0 for x in xrange(2, 10, 2)]:
+  steps.append(makeInterpolatedImage(img1, search1, img2, search2, weight))
+
+imp3 = IL.wrap(Views.stack([img1] + steps + [img2]), "interpolations")
 imp3.setDisplayRange(0, 1)
 imp3.show()
