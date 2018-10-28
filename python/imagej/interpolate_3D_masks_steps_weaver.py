@@ -159,5 +159,6 @@ for weight in [x / 10.0 for x in xrange(2, 10, 2)]:
   steps.append(w2.makeInterpolatedImage(img1, search1, img2, search2, weight))
 
 imp3 = IL.wrap(Views.stack([img1] + steps + [img2]), "interpolations")
+imp3.setDimensions(1, img1.dimensions(3), len(steps))
 imp3.setDisplayRange(0, 1)
 imp3.show()
