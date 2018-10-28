@@ -9,6 +9,7 @@ from net.imagej import ImgPlus
 # Cache
 import os
 from collections import OrderedDict
+from synchronize import make_synchronized
 
 # VirtualStack
 from net.imglib2.view import Views
@@ -55,6 +56,7 @@ class Memoize:
     self.fn = fn
     self.m = OrderedDict()
     self.maxsize = maxsize
+  @make_synchronized
   def __call__(self, key):
     o = self.m.get(key, None)
     if o:
@@ -189,6 +191,8 @@ from net.imglib2.algorithm.dog import DogDetection
 from collections import defaultdict
 from ij import ImageListener, ImagePlus
 from ij.gui import PointRoi
+from java.awt import Color
+import sys
 
 # Parameters for a Difference of Gaussian to detect nuclei positions
 calibration = [1.0 for i in range(vol4d.numDimensions())] # no calibration: identity
@@ -207,32 +211,36 @@ def createDoG(img, calibration, sigmaSmaller, sigmaLarger, minPeakValue):
   return DogDetection(imgE, img, calibration, sigmaLarger, sigmaSmaller,
     extremaType, minPeakValue, normalizedMinPeakValue)
 
-# A map of slice indices and 2D points, over the whole 4d volume
-nuclei = defaultdict(list) # Any query returns at least an empty list
-
-p = zeros(3, 'i')
-
-# For every timepoint 3D volume
-for i in xrange(vol4d.dimension(3)):
-  # Slice index offset, 0-based
-  zOffset = i * vol4d.dimension(2)
+def getDoGPeaks(timepoint_index, print_count=True):
   # From the cache
-  img = getStack(timepoint_paths[i])
+  img = getStack(timepoint_paths[timepoint_index])
   # or from the vol4d (same thing)
   #img = Views.hyperslice(vol4d, 3, i)
   dog = createDoG(img, calibration, sigmaSmaller, sigmaLarger, minPeakValue)
-  peaks = dog.getPeaks()
-  print "Found", len(peaks), " peaks in timepoint", i
-  print peaks[0:10]
-  for peak in peaks: # integer coordinates
-    peak.localize(p)
-    nuclei[zOffset + p[2]].append(p[0:2])
+  peaks = dog.getSubpixelPeaks() # could also use getPeaks() in integer precision
+  if print_count:
+    print "Found", len(peaks), "peaks in timepoint", timepoint_index
+  return peaks
+
+# A map of timepoint indices and collections of DoG peaks in local 3D coordinates
+nuclei_detections = {ti: getDoGPeaks(ti) for ti in xrange(vol4d.dimension(3))}
+
+# Visualization 1: with a PointRoi for every vol4d stack slice,
+#                  automatically updated when browsing through slices.
 
 # Create a listener that, on slice change, updates the ROI
 class PointRoiRefresher(ImageListener):
-  def __init__(self, imp, nuclei):
+  def __init__(self, imp, nuclei_detections):
     self.imp = imp
-    self.nuclei = nuclei
+    # A map of slice indices and 2D points, over the whole 4d volume
+    self.nuclei = defaultdict(list)  # Any query returns at least an empty list
+    p = zeros(3, 'f')
+    for ti, peaks in nuclei_detections.iteritems():
+      # Slice index offset, 0-based, for the whole timepoint 3D volume
+      zOffset = ti * vol4d.dimension(2)
+      for peak in peaks: # peaks are float arrays of length 3
+        peak.localize(p)
+        self.nuclei[zOffset + int(p[2])].append(p[0:2])
   def imageOpened(self, imp):
     pass
   def imageClosed(self, imp):
@@ -242,16 +250,205 @@ class PointRoiRefresher(ImageListener):
     if imp == self.imp:
       self.updatePointRoi()
   def updatePointRoi(self):
-    # Update PointRoi
-    self.imp.killRoi()
-    points = self.nuclei[self.imp.getSlice() -1] # map 1-based slices to 0-based nuclei Z coords
-    if 0 == len(points):
-      print "No points for slice", self.imp.getSlice()
-      return
-    roi = PointRoi()
-    for point in points:
-      roi.addPoint(self.imp, point[0], point[1])
-    self.imp.setRoi(roi)
+    # Surround with try/except to prevent blocking
+    #   ImageJ's stack slice updater thread in case of error.
+    try:
+      # Update PointRoi
+      self.imp.killRoi()
+      points = self.nuclei[self.imp.getSlice() -1] # map 1-based slices to 0-based nuclei Z coords
+      if 0 == len(points):
+        IJ.log("No points for slice " + str(self.imp.getSlice()))
+        return
+      roi = PointRoi()
+      # Style: large, red dots
+      roi.setSize(4) # ranges 1-4
+      roi.setPointType(2) # 2 is a dot (filled circle)
+      roi.setFillColor(Color.red)
+      roi.setStrokeColor(Color.red)
+      # Add points
+      for point in points: # points are floats
+        roi.addPoint(self.imp, int(point[0]), int(point[1]))
+      self.imp.setRoi(roi)
+    except:
+      IJ.error(sys.exc_info())
 
-ImagePlus.addImageListener(PointRoiRefresher(com, nuclei))
-  
+listener = PointRoiRefresher(com, nuclei_detections)
+ImagePlus.addImageListener(listener)
+
+
+# Visualization 2: with a 2nd channel where each each detection is painted as a sphere
+
+from net.imglib2 import KDTree, RealPoint, RealRandomAccess, RealRandomAccessible, FinalInterval
+from net.imglib2.neighborsearch import NearestNeighborSearchOnKDTree
+from net.imglib2.type.numeric.integer import UnsignedShortType
+
+# A KDTree is a data structure for fast lookup of e.g. neareast spatial coordinates
+# Here, we create a KDTree for each timepoint 3D volume
+# ('i' is the timepoint index
+kdtrees = {i: KDTree(peaks, peaks) for i, peaks in nuclei_detections.iteritems()}
+
+radius = 5.0 # pixels
+
+inside = UnsignedShortType(255) # 'white'
+outside = UnsignedShortType(0)  # 'black'
+
+# The definition of one sphere in 3D space for every nuclei detection
+class Spheres(RealPoint, RealRandomAccess):
+  def __init__(self, kdtree, radius, inside, outside):
+    super(RealPoint, self).__init__(3) # 3-dimensional
+    self.search = NearestNeighborSearchOnKDTree(kdtree)
+    self.radius = radius
+    self.radius_squared = radius * radius # optimization for the search
+    self.inside = inside
+    self.outside = outside
+  def copyRealRandomAccess(self):
+    return Spheres(3, self.kdtree, self.radius, self.inside, self.outside)
+  def get(self):
+    self.search.search(self)
+    if self.search.getSquareDistance() < self.radius_squared:
+      return self.inside
+    return self.outside
+
+
+# Testing out a speed up: define the Spheres class in java
+ws = Weaver.method("""
+public final class Spheres extends RealPoint implements RealRandomAccess {
+	private final KDTree kdtree;
+	private final NearestNeighborSearchOnKDTree search;
+	private final double radius,
+	                     radius_squared;
+	private final UnsignedShortType inside,
+	                                outside;
+
+	public Spheres(final KDTree kdtree,
+	               final double radius,
+	               final UnsignedShortType inside,
+	               final UnsignedShortType outside)
+	{
+	    super(3); // 3 dimensions
+		this.kdtree = kdtree;
+		this.radius = radius;
+		this.radius_squared = radius * radius;
+		this.inside = inside;
+		this.outside = outside;
+		this.search = new NearestNeighborSearchOnKDTree(kdtree);
+	}
+
+	public final Spheres copyRealRandomAccess() { return copy(); }
+
+	public final Spheres copy() {
+		return new Spheres(this.kdtree, this.radius, this.inside, this.outside);
+	}
+
+	public final UnsignedShortType get() {
+		this.search.search(this);
+		if (this.search.getSquareDistance() < this.radius_squared) {
+			return inside;
+		}
+		return outside;
+	}
+}
+
+public final Spheres createSpheres(final KDTree kdtree,
+                                   final double radius,
+	                               final UnsignedShortType inside,
+	                               final UnsignedShortType outside)
+{
+	return new Spheres(kdtree, radius, inside, outside);
+}
+
+""", [RealPoint, RealRandomAccess, KDTree, NearestNeighborSearchOnKDTree, UnsignedShortType])
+
+
+# The RealRandomAccessible that wraps the Spheres, unbounded
+# NOTE: partial implementation, unneeded methods were left unimplemented
+# NOTE: args are "kdtree, radius, inside, outside", using the * shortcut
+#       given that this class is merely a wrapper for the Spheres class
+class SpheresData(RealRandomAccessible):
+  def __init__(self, *args):
+    self.args = args
+  def realRandomAccess(self):
+    # Performance improvement
+    return ws.createSpheres(*self.args) # Arguments get unpacked from the args list
+    #return Spheres(*self.args) # Arguments get unpacked from the args list
+  def numDimensions(self):
+    return 3
+
+# A two color channel virtual stack:
+# - odd slices: image data
+# - even slices: spheres (nuclei detections)
+class Stack4DTwoChannels(VirtualStack):
+  def __init__(self, img4d, kdtrees):
+    # The last coordinate, Z (number of slices), is the number of slices per timepoint 3D volume
+    # times the number of timepoints, times the number of channels: two.
+    super(VirtualStack, self).__init__(img4d.dimension(0), img4d.dimension(1),
+                                       img4d.dimension(2) * img4d.dimension(3) * 2)
+    self.img4d = img4d
+    self.dimensions = array([img4d.dimension(0), img4d.dimension(1)], 'l')
+    self.kdtrees = kdtrees
+    self.dimensions3d = FinalInterval([img4d.dimension(0), img4d.dimension(1), img4d.dimension(2)])
+    
+  def getPixels(self, n):
+    # 'n' is 1-based
+    # Target 2D array img to copy data into
+    aimg = ArrayImgs.unsignedShorts(self.dimensions[0:2])
+    # The number of slices of the 3D volume of a single timepoint
+    nZ = self.img4d.dimension(2)
+    # The slice_index if there was a single channel
+    slice_index = int((n-1) / 2) # 0-based, of the whole 4D series
+    local_slice_index = slice_index % nZ # 0-based, of the timepoint 3D volume
+    timepoint_index = int(slice_index / nZ) # Z blocks
+    if 1 == n % 2:
+      # Odd slice index: image channel
+      fixedT = Views.hyperSlice(self.img4d, 3, timepoint_index)
+      fixedZ = Views.hyperSlice(fixedT, 2, local_slice_index)
+      w.copy(fixedZ.cursor(), aimg.cursor())
+    else:
+      # Even slice index: spheres channel
+      sd = SpheresData(self.kdtrees[timepoint_index], radius, inside, outside)
+      volume = Views.interval(Views.raster(sd), self.dimensions3d)
+      plane = Views.hyperSlice(volume, 2, local_slice_index)
+      w.copy(plane.cursor(), aimg.cursor())
+    #
+    return aimg.update(None).getCurrentStorageArray()
+    
+  def getProcessor(self, n):
+    return ShortProcessor(self.dimensions[0], self.dimensions[1], self.getPixels(n), None)
+
+
+imp2 = ImagePlus("vol4d - with nuclei channel", Stack4DTwoChannels(vol4d, kdtrees))
+nChannels = 2
+nSlices = vol4d.dimension(2) # Z dimension of each time point 3D volume
+nFrames = len(timepoint_paths) # number of time points
+# Test:
+if nChannels * nSlices * nFrames == imp2.getStack().size():
+  print "Dimensions are correct."
+else:
+  print "Mismatching dimensions!"
+imp2.setDimensions(nChannels, nSlices, nFrames)
+com2 = CompositeImage(imp2, CompositeImage.COMPOSITE)
+com2.show()
+
+
+# Visualization 3: two-channels with the BigDataViewer
+
+from bdv.util import BdvFunctions, Bdv
+from net.imglib2.view import Views
+from net.imglib2 import FinalInterval
+
+# Open a new BigDataViewer window with the 4D image data
+bdv = BdvFunctions.show(vol4d, "vol4d")
+
+# Create a bounded 3D volume view from a KDTree
+def as3DVolume(kdtree, dimensions3d):
+  sd = SpheresData(kdtree, radius, inside, outside)
+  vol3d = Views.interval(Views.raster(sd), dimensions3d)
+  return vol3d
+
+# Define a 4D volume as a sequence of generative Spheres 3D volumes
+dims3d = FinalInterval(map(vol4d.dimension, xrange(3)))
+spheres4d = Views.stack([as3DVolume(kdtrees[ti], dims3d) for ti in sorted(kdtrees.iterkeys())])
+
+BdvFunctions.show(spheres4d, "spheres4d", Bdv.options().addTo(bdv))
+
+
