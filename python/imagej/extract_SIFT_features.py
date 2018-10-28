@@ -79,7 +79,7 @@ except NotEnoughDataPointsException, e:
   print e
 
 if modelFound:
-  # Store pointmatches (a subset of the extracted features: the intersection)
+  # Store inlier pointmatches: the spatially coherent subset
   roi1pm = PointRoi()
   roi1pm.setName("matches in cut1")
   roi2pm = PointRoi()
