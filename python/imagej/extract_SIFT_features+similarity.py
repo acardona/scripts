@@ -136,16 +136,21 @@ if modelFound:
                                                int(ybottomright - ytopleft))
   
   p = zeros(2, 'd')
-  
-  def pull(source, target, x, y, p, model):
-    p[0] = x + (0 if xtopleft > 0 else xtopleft)
-    p[1] = y + (0 if ytopleft > 0 else ytopleft)
+
+  xoffset = 0 if xtopleft > 0 else xtopleft
+  yoffset = 0 if ytopleft > 0 else ytopleft
+
+  def pull(source, target, x, xoffset, y, yoffset, p, model):
+    p[0] = x + xoffset
+    p[1] = y + yoffset
     model.applyInPlace(p) # imp1 -> imp2, target is in imp1 coords, source in imp2 coords.
     # getPixelInterpolated returns 0 when outside the image
     target.setf(x, y, source.getPixelInterpolated(p[0], p[1]))
   
-  deque(pull(source, target, x, y, p, model) for x in xrange(target.getWidth())
-                                             for y in xrange(target.getHeight()), maxlen=0)
+  deque(pull(source, target, x, xoffset, y, yoffset, p, model)
+          for x in xrange(target.getWidth())
+          for y in xrange(target.getHeight()),
+        maxlen=0)
 
   slice2 = slice1.createProcessor(canvas_width, canvas_height)
   slice2.insert(target, int(0 if xtopleft < 0 else xtopleft),
