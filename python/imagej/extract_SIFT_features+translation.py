@@ -1,8 +1,24 @@
 from mpicbg.imagefeatures import FloatArray2DSIFT, FloatArray2D
 from mpicbg.models import PointMatch, TranslationModel2D, NotEnoughDataPointsException
-from ij import IJ, ImagePlus
+from ij import IJ, ImagePlus, ImageStack
 from ij.gui import PointRoi, Roi
 from ij.plugin.frame import RoiManager
+
+# Open Nile Bend sample image
+# imp = IJ.getImage()
+imp = IJ.openImage("https://imagej.nih.gov/ij/images/NileBend.jpg")
+
+# Cut out two overlapping ROIs
+roi1 = Roi(1708, 680, 1792, 1760)
+roi2 = Roi(520, 248, 1660, 1652)
+
+imp.setRoi(roi1)
+imp1 = ImagePlus("cut 1", imp.getProcessor().crop())
+imp1.show()
+
+imp.setRoi(roi2)
+imp2 = ImagePlus("cut 2", imp.getProcessor().crop())
+imp2.show()
 
 # Parameters for extracting Scale Invariant Feature Transform features
 p = FloatArray2DSIFT.Param()
@@ -19,21 +35,6 @@ def extractFeatures(ip, params):
                          ip.getWidth(), ip.getHeight()))
   features = sift.run() # instances of mpicbg.imagefeatures.Feature
   return features
-
-# Open Nile Bend sample image
-imp = IJ.getImage()
-
-# Cut out two overlapping ROIs
-roi1 = Roi(1708, 680, 1792, 1760)
-roi2 = Roi(520, 248, 1660, 1652)
-
-imp.setRoi(roi1)
-imp1 = ImagePlus("cut 1", imp.getProcessor().crop())
-imp1.show()
-
-imp.setRoi(roi2)
-imp2 = ImagePlus("cut 2", imp.getProcessor().crop())
-imp2.show()
 
 features1 = extractFeatures(imp1.getProcessor(), p)
 features2 = extractFeatures(imp2.getProcessor(), p)
@@ -74,7 +75,10 @@ try:
   modelFound = model.filterRansac(candidates, inliers, 1000,
                                   maxEpsilon, minInlierRatio, minNumInliers)
   if modelFound:
-    PointMatch.apply(inliers, model) # TODO what is this for?
+    # Apply the transformation defined by the model to the first point
+    # of each pair (PointMatch) of points. That is, to the point from
+    # the first image.
+    PointMatch.apply(inliers, model)
 except NotEnoughDataPointsException, e:
   print e
 
@@ -94,7 +98,25 @@ if modelFound:
   roi_manager.addRoi(roi1pm)
   roi_manager.addRoi(roi2pm)
 
-
-
+  # Register images
+  # Transform the top-left and bottom-right corner of imp2
+  # (use applyInverse: the model describes imp1 -> imp2)
+  x0, y0 = model.applyInverse([0, 0])
+  x1, y1 = model.applyInverse([imp2.getWidth(), imp2.getHeight()])
+  # Determine dimensions of the registered images
+  canvas_width = int(max(imp1.getWidth(), x1) - min(0, x0))
+  canvas_height = int(max(imp1.getHeight(), y1) - min(0, y0))
+  # Create a 2-slice stack with both images aligned, one on each slice
+  stack = ImageStack(canvas_width, canvas_height)
+  ip1 = imp1.getProcessor().createProcessor(canvas_width, canvas_height)
+  ip1.insert(imp1.getProcessor(), int(0 if x0 > 0 else abs(x0)),
+                                  int(0 if y0 > 0 else abs(y0)))
+  stack.addSlice("cut1", ip1)
+  ip2 = ip1.createProcessor(canvas_width, canvas_height)
+  ip2.insert(imp2.getProcessor(), int(0 if x0 < 0 else x0),
+                                  int(0 if y0 < 0 else y0))
+  stack.addSlice("cut2", ip2)
+  imp = ImagePlus("registered", stack)
+  imp.show()
 
 
