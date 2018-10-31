@@ -131,7 +131,7 @@ for t0, t1 in izip(timepoints, timepoints[1:]):
   # Compare all possible pairs of constellation features
   for c0, c1 in product(features[t0], features[t1]):
     if c0.compareTo(c1, angle_epsilon, len_epsilon_sq):
-      ti_pointmatches[t0].append(PointMatch(c0.position, c1.position))
+      ti_pointmatches[t1].append(PointMatch(c0.position, c1.position))
   print t0, "vs", t1, "- found", len(ti_pointmatches[t0]), "point matches"
 
 # Reduce each list of pointmatches to a spatially coherent subset
@@ -142,9 +142,14 @@ ti_inliers = defaultdict(list)
 
 with open("/tmp/rigid-models.csv", "wb") as csvfile:
   w = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
-  w.writerow(['timepoint', 'm00', 'm01', 'm02', 'm03',
-                           'm10', 'm11', 'm12', 'm13',
-                           'm20', 'm21', 'm22', 'm23'])
+  w.writerow(['t', 'm00', 'm01', 'm02', 'm03',
+                   'm10', 'm11', 'm12', 'm13',
+                   'm20', 'm21', 'm22', 'm23'])
+  # First time point (0) gets the identity transform
+  w.writerow([0] + [1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0])
+  # Write affine matrices for all other time points
   for ti, pointmatches in ti_pointmatches.iteritems():
     model = RigidModel3D()
     inliers = [] # good point matches, to be filled in by model.filterRansac
@@ -154,8 +159,8 @@ with open("/tmp/rigid-models.csv", "wb") as csvfile:
       if modelFound:
         ti_inliers[ti] = inliers
         print ti, "inliers:", len(inliers)
-        # Write model into csv file
-        w.writerow([ti] + list(model.getMatrix(zeros(12, 'd'))))
+        # Write timepoints and model affine matrix into csv file
+        w.writerow([ti -1, ti] + list(model.getMatrix(zeros(12, 'd'))))
     except NotEnoughDataPointsException, e:
       print e
 
@@ -169,4 +174,56 @@ with open("/tmp/rigid-models.csv", "wb") as csvfile:
 # [1, 0, 0, -0.11,
 #  0, 1, 0, -0.02,
 #  0, 0, 1,  0.3]
+
+
+# Open the 4D series again, this time virtually registered
+from net.imglib2.realtransform import RealViews, AffineTransform3D
+from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
+from net.imglib2.util import Intervals
+from net.imglib2.img import ImgView
+
+class KLBTransformLoader(CacheLoader):
+  def __init__(self, transforms):
+    self.transforms = transforms
+    self.klb = KLB.newInstance()
+  def get(self, path):
+    img = self.klb.readFull(path)
+    imgE = Views.extendZero(img)
+    imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
+    imgT = RealViews.transform(imgI, self.transforms[path])
+    # In this data set, the transformation barely alters the image,
+    # so view it within the same bounds:
+    imgB = Views.interval(imgT, Intervals.minAsLongArray(img),
+                                Intervals.maxAsLongArray(img))
+    # View a RandomAccessibleInterval as an Img, required by Load.lazyStack
+    return ImgView.wrap(imgB, img.factory())
+
+
+# Read affine matrices for each time point
+# into a dictionary of file paths vs AffineTransform3D
+# where each AffineTransform3D is chained to all previous transforms.
+# This is necessary because the matrices in the CSV file
+# only describe the transform from one timepoint to the previous one,
+# whereas we want the transform of any time point to the first time point.
+with open("/tmp/rigid-models.csv", "r") as csvfile:
+  reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+  header = reader.next() # advance reader by one line
+  transforms = {}
+  previous = AffineTransform3D()
+  previous.identity() # set to a diagonal of 1s
+  for row in reader:
+    affine = AffineTransform3D()
+    ti = int(row[0])
+    matrix = imap(float, row[1:])
+    affine.set(*matrix) # expand into 12 arguments
+    # chain the previous transform
+    affine.preConcatenate(previous)
+    previous = affine
+    # Store
+    transforms[timepoint_paths[ti]] = affine
+
+# Load the 4D series with each time point 3D volume transformed
+vol4d_registered = Load.lazyStack(timepoint_paths, KLBTransformLoader(transforms))
+
+IL.wrap(vol4d_registered, "vol4d registered").show()
 
