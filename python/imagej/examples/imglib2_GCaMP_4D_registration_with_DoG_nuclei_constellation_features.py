@@ -5,8 +5,6 @@ from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.view import Views
 from net.imglib2 import KDTree
 from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
-from ij import ImageListener, ImagePlus
-from ij.gui import PointRoi
 from org.janelia.simview.klb import KLB
 from org.scijava.vecmath import Vector3f
 from mpicbg.imagefeatures import FloatArray2DSIFT, FloatArray2D
@@ -40,10 +38,11 @@ vol4d = Load.lazyStack(timepoint_paths, KLBLoader())
 
 IL.wrap(vol4d, "vol4d").show()
 
-# Parameters for a Difference of Gaussian to detect nuclei positions
+# Parameters for a Difference of Gaussian to detect soma positions
+somaDiameter = 10 # in pixels
 calibration = [1.0 for i in range(vol4d.numDimensions())] # no calibration: identity
-sigmaSmaller = 2.5 # in pixels: a quarter of the radius of a neuron nuclei
-sigmaLarger = 5  # pixels: half the radius of a neuron nuclei
+sigmaSmaller = somaDiameter / 4.0 # in pixels: a quarter of the radius of a neuron soma
+sigmaLarger = somaDiameter / 2.0  # pixels: half the radius of a neuron soma
 minPeakValue = 100 # Maybe raise it to 120
 
 def createDoG(img, calibration, sigmaSmaller, sigmaLarger, minPeakValue):
@@ -66,12 +65,12 @@ def getDoGPeaks(timepoint_index, print_count=True):
   return peaks
 
 # A map of timepoint indices and collections of DoG peaks in local 3D coordinates
-nuclei_detections = {ti: getDoGPeaks(ti) for ti in xrange(vol4d.dimension(3))}
+soma_detections = {ti: getDoGPeaks(ti) for ti in xrange(vol4d.dimension(3))}
 
 
-# Extract features from the detected nuclei:
-# Each feature is a constellation of a nuclei position and two other nearby nuclei.
-# Features are comparable by comparing the angles and distances with the two neighbor nuclei.
+# Extract features from the detected soma:
+# Each feature is a constellation of a soma position and two other nearby somas.
+# Features are comparable by comparing the angles and distances with the two neighbor somas.
 
 class Constellation:
   def __init__(self, center, p1, d1, p2, d2):
@@ -105,7 +104,7 @@ class Constellation:
 
 # Dictionary of time point index vs search
 searches = {ti: RadiusNeighborSearchOnKDTree(KDTree(peaks, peaks))
-            for ti, peaks in nuclei_detections.iteritems()}
+            for ti, peaks in soma_detections.iteritems()}
 
 def extractFeatures(peaks, search, radius):
   for peak in peaks:
@@ -119,12 +118,12 @@ def extractFeatures(peaks, search, radius):
 # Dictionary of time point index vs list of Constellation instances
 radius = sigmaLarger * 10 # 5 soma diameters
 features = {ti: list(extractFeatures(peaks, searches[ti], radius))
-            for ti, peaks in nuclei_detections.iteritems()}
+            for ti, peaks in soma_detections.iteritems()}
 
 # Compare constellation features from one time point to the next
 # to extract candidate PointMatch instances
 angle_epsilon = 0.05 # in radians, 1/20th
-len_epsilon_sq = pow(sigmaLarger, 2) # in pixels, squared: half a nucleus diameter^2
+len_epsilon_sq = pow(somaDiameter / 2.0, 2) # in pixels, squared: half a soma diameter^2
 timepoints = sorted(features.keys())
 ti_pointmatches = defaultdict(list)
 
