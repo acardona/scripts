@@ -137,6 +137,8 @@ if modelFound:
   
   p = zeros(2, 'd')
 
+  # The translation offset: the transformed imp2 layes mostly outside
+  # of imp1, so shift x,y coordinates to be able to render it within target
   xoffset = 0 if xtopleft > 0 else xtopleft
   yoffset = 0 if ytopleft > 0 else ytopleft
 
