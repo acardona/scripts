@@ -15,6 +15,8 @@ def test_for_loop(img):
 def test_deque_imap(img):
   deque(imap(GenericByteType.setOne, img), maxlen=0)
 
+def test_deque_generator(img):
+  deque(t.setOne() for t in img, maxlen=0)
 
 def run(fn, args, msg="", n_iterations=20):
   timings = []
@@ -36,6 +38,8 @@ img = ArrayImgs.unsignedBytes([100, 100, 100])
 run(test_for_loop, [img], msg="for loop:")
 
 run(test_deque_imap, [img], msg="deque imap:")
+
+run(test_deque_generator, [img], msg="deque generator:")
 
 # Results: same
 # for loop: min: 405987873 max: 480388258 avg: 438218245.25
