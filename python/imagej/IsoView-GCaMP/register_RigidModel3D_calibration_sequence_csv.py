@@ -1,17 +1,13 @@
 from __future__ import with_statement
 from net.imglib2.algorithm.dog import DogDetection
-from net.imglib2.img.io import Load
-from net.imglib2.cache import CacheLoader
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.view import Views
 from net.imglib2 import KDTree
 from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
-from net.imglib2.img.array import ArrayImgs
 from net.imglib2.realtransform import RealViews, AffineTransform3D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from org.scijava.vecmath import Vector3f
-from mpicbg.imagefeatures import FloatArray2DSIFT, FloatArray2D
-from mpicbg.models import Point, PointMatch, InterpolatedAffineModel3D, AffineModel3D, RigidModel3D, NotEnoughDataPointsException
+from mpicbg.models import Point, PointMatch, RigidModel3D, NotEnoughDataPointsException
 from itertools import imap, izip, product
 from jarray import array, zeros
 from java.util import ArrayList
@@ -21,98 +17,11 @@ from ij import IJ
 import os, csv, sys
 from synchronize import make_synchronized
 
-def dropSlices(img, nth):
-  """ Drop every nth slice. Calibration is to be multipled by nth for Z.
-      Counts slices 1-based so as to preserve the first slice (index zero).
-  """
-  return Views.stack([Views.hyperSlice(img, 2, i)
-                      for i in xrange(img.dimension(2)) if 0 == (i+1) % nth])
-
-# Grap the current image
-img = IL.wrap(IJ.getImage())
-
-# Cut out a cube
-img1 = Views.zeroMin(Views.interval(img, [39, 49, 0],
-                                         [39 + 378 -1, 49 + 378 -1, 378 -1]))
-
-# Rotate the cube on the Y axis to the left
-img2 = Views.zeroMin(Views.rotate(img1, 2, 0)) # zeroMin is CRITICAL
-
-# Totate the cube on the X axis to the top
-img3 = Views.zeroMin(Views.rotate(img1, 2, 1))
-
-# Reduce Z resolution: make them anisotropic but in a different direction
-nth = 1
-#img1 = dropSlices(img1, nth)
-#img2 = dropSlices(img2, nth)
-#img3 = dropSlices(img3, nth)
-
-# The sequence of images to transform, one relative to the previous
-images = [img1, img2, img3]
-
-#IL.wrap(img1, "cube").show()
-#IL.wrap(img2, "cube rotated Y").show()
-#IL.wrap(img3, "cube rotated X").show()
-
-
-# PARAMETERS
-calibrations = {0: [1.0, 1.0, 1.0 * nth],
-                1: [1.0, 1.0, 1.0 * nth],
-                2: [1.0, 1.0, 1.0 * nth]}
-
-# Pretend file names:
-img_filenames = ["img1", "img2", "img3"]
-
-# Pretend loader:
-class ImgLoader():
-  def load(self, img_filename):
-    return globals()[img_filename]
-
-img_loader = ImgLoader()
-
-# Pretend calibration getter
-def getCalibration(img_filename):
-  return calibrations[img_filenames.index(img_filename)]
-
-
-# Parameters for DoG difference of Gaussian to detect soma positions
-somaDiameter = 8 * calibrations[0][0]
-paramsDoG = {
-  "minPeakValue": 30, # Determined by hand
-  "sigmaSmaller": somaDiameter / 4.0, # in calibrated units: 1/4 soma
-  "sigmaLarger": somaDiameter / 2.0, # in calibrated units: 1/2 soma
-}
-
-paramsFeatures = {
-  # Parameters for features
-  "radius": somaDiameter * 5, # for searching nearby peaks
-  "min_angle": 1.57, # in radians, between vectors to p1 and p2
-  "max_per_peak": 3, # maximum number of constellations to create per peak
-
-  # Parameters for comparing constellations to find point matches
-  "angle_epsilon": 0.02, # in radians. 0.05 is 2.8 degrees, 0.02 is 1.1 degrees
-  "len_epsilon_sq": pow(somaDiameter, 2), # in calibrated units, squared
-}
-
-# RANSAC parameters: reduce list of pointmatches to a spatially coherent subset
-paramsModel = {
-  "maxEpsilon": somaDiameter, # / 2 # max allowed alignment error in calibrated units (a distance)
-  "minInlierRatio": 0.0000001, # ratio inliers/candidates
-  "minNumInliers": 5, # minimum number of good matches to accept the result
-  "n_iterations": 2000, # for estimating the model
-  "maxTrust": 4, # for rejecting candidates
-}
-
-# Joint dictionary of parameters
-params = {}
-params.update(paramsDoG)
-params.update(paramsFeatures)
-params.update(paramsModel)
-
 
 @make_synchronized
 def syncPrint(msg):
   print msg
+
 
 def createDoG(img, calibration, sigmaSmaller, sigmaLarger, minPeakValue):
   """ Create difference of Gaussian peak detection instance.
@@ -127,6 +36,7 @@ def createDoG(img, calibration, sigmaSmaller, sigmaLarger, minPeakValue):
   return DogDetection(imgE, img, calibration, sigmaLarger, sigmaSmaller,
     extremaType, minPeakValue, normalizedMinPeakValue)
 
+
 def getDoGPeaks(img, calibration, sigmaSmaller, sigmaLarger, minPeakValue):
   """ Return a list of peaks as net.imglib2.RealPoint instances, calibrated. """
   dog = createDoG(img, calibration, sigmaSmaller, sigmaLarger, minPeakValue)
@@ -136,6 +46,7 @@ def getDoGPeaks(img, calibration, sigmaSmaller, sigmaLarger, minPeakValue):
     for d, cal in enumerate(calibration):
       peak.setPosition(peak.getFloatPosition(d) * cal, d)
   return peaks
+
 
 # A custom feature, comparable with other features
 class Constellation:
@@ -147,10 +58,8 @@ class Constellation:
     self.position = Point(array(coords, 'd'))
 
   def matches(self, other, angle_epsilon, len_epsilon_sq):
-    """
-       Compare the angles, if less than epsilon, compare the vector lengths.
-       Return True when deemed similar within measurement error brackets.
-    """
+    """ Compare the angles, if less than epsilon, compare the vector lengths.
+       Return True when deemed similar within measurement error brackets. """
     return abs(self.angle - other.angle) < angle_epsilon \
        and abs(self.len1 - other.len1) + abs(self.len2 - other.len2) < len_epsilon_sq
 
@@ -161,13 +70,11 @@ class Constellation:
 
   @staticmethod
   def fromSearch(center, p1, d1, p2, d2):
-    """
-       center, p1, p2 are 3 RealLocalizable, with center being the peak
-       and p1, p2 being the wings (the other two points).
-       p1 is always closer to center than p2 (d1 < d2).
-       d1, d2 are the square distances from center to p1, p2
-       (could be computed here, but RadiusNeighborSearchOnKDTree did it).
-    """
+    """ center, p1, p2 are 3 RealLocalizable, with center being the peak
+        and p1, p2 being the wings (the other two points).
+        p1 is always closer to center than p2 (d1 < d2).
+        d1, d2 are the square distances from center to p1, p2
+        (could be computed here, but RadiusNeighborSearchOnKDTree did it). """
     pos = tuple(center.getFloatPosition(d) for d in xrange(center.numDimensions()))
     v1 = Vector3f(Constellation.subtract(p1, center))
     v2 = Vector3f(Constellation.subtract(p2, center))
@@ -245,15 +152,6 @@ class PointMatches():
   @staticmethod
   def asRow(pm):
     return tuple(pm.getP1().getW()) + tuple(pm.getP2().getW())
-
-
-# A wrapper for executing functions in concurrent threads
-class Task(Callable):
-  def __init__(self, fn, *args):
-    self.fn = fn
-    self.args = args
-  def call(self):
-    return self.fn(*self.args)
 
 
 def saveFeatures(img_filename, directory, features, params):
@@ -366,14 +264,8 @@ def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.
     return None
 
 
-class Getter(Future):
-  def __init__(self, ob):
-    self.ob = ob
-  def get(self):
-    return self.ob
-
-
 def makeFeatures(img_filename, img_loader, csv_dir, params):
+  """ Helper function to extract features from an image. """
   img = img_loader.load(img_filename)
   # Find a list of peaks by difference of Gaussian
   peaks = getDoGPeaks(img, getCalibration(img_filename),
@@ -387,6 +279,13 @@ def makeFeatures(img_filename, img_loader, csv_dir, params):
   # Store features in a CSV file
   saveFeatures(img_filename, csv_dir, features, params)
   return features
+
+# Partial implementation of a Future, to simulate it
+class Getter(Future):
+  def __init__(self, ob):
+    self.ob = ob
+  def get(self):
+    return self.ob
 
 
 def findPointMatches(img1_filename, img2_filename, csv_dir, exe, params):
@@ -404,6 +303,7 @@ def findPointMatches(img1_filename, img2_filename, csv_dir, exe, params):
   feature_params = {k: params[k] for k in names}
   csv_features = [loadFeatures(img1_filename, csv_dir, feature_params)
                   for img_filename in img_filenames]
+  # If features were loaded, just return them, otherwise compute them (and save them to CSV files)
   futures = [Getter(fs) if fs
              else exe.submit(Task(makeFeatures, img_filename, img_loader, csv_dir, feature_params))
              for fs, img_filename in izip(csv_features, img_filenames)]
@@ -436,8 +336,7 @@ def ensureFeatures(img_filename, img_loader, csv_dir, params):
   if not loadFeatures(img_filename, csv_dir, feature_params, validateOnly=True):
     # Create features from scratch, which overwrites any CSV files
     makeFeatures(img_filename, img_loader, csv_dir, params)
-    # Delete CSV files for pointmatches, if any
-    # TODO
+    # TODO: Delete CSV files for pointmatches, if any
 
 
 def fit(model, pointmatches, n_iterations, maxEpsilon,
@@ -468,50 +367,68 @@ def fitModel(img1_filename, img2_filename, csv_dir, model, exe, params):
                 0, 0, 1, 0])
   return model
 
+# A wrapper for executing functions in concurrent threads
+class Task(Callable):
+  def __init__(self, fn, *args):
+    self.fn = fn
+    self.args = args
+  def call(self):
+    return self.fn(*self.args)
 
-n_threads = Runtime.getRuntime().availableProcessors()
-exe = Executors.newFixedThreadPool(n_threads)
-csv_dir = "/tmp/"
 
-try:
-  # Ensure features exist in CSV files, or create them
-  futures = [exe.submit(Task(ensureFeatures, img_filename, img_loader, csv_dir, params))
-             for img_filename in img_filenames]
-  # Wait until all complete
-  for f in futures:
-    f.get()
+def computeForwardTransforms(img_filenames, csv_dir, exe, params):
+  """ Compute transforms from image i to image i+1,
+      returning an identity transform for the first image,
+      and with each transform being from i to i+1 (forward transforms).
+      Returns a list of affine 3D matrices, each a double[] with 12 values.
+  """
+  try:
+    # Ensure features exist in CSV files, or create them
+    futures = [exe.submit(Task(ensureFeatures, img_filename, img_loader, csv_dir, params))
+               for img_filename in img_filenames]
+    # Wait until all complete
+    for f in futures:
+      f.get()
 
-  # Create models: ensures first that pointmatches exist in CSV files, or creates them
-  futures = [exe.submit(Task(fitModel, img1_filename, img2_filename, csv_dir,
-                             RigidModel3D(), exe, params))
-             for img1_filename, img2_filename in izip(img_filenames, img_filenames[1:])]
-  # Wait until all complete
-  models = [f.get() for f in futures]
+    # Create models: ensures first that pointmatches exist in CSV files, or creates them
+    futures = [exe.submit(Task(fitModel, img1_filename, img2_filename, csv_dir,
+                               RigidModel3D(), exe, params))
+               for img1_filename, img2_filename in izip(img_filenames, img_filenames[1:])]
+    # Wait until all complete
+    models = [f.get() for f in futures]
+  
+    # First image gets identity
+    matrices = [array([1, 0, 0, 0,
+                       0, 1, 0, 0,
+                       0, 0, 1, 0], 'd')] + [model.getMatrix(zeros(12, 'd')) for model in models]
 
-  # First image gets identity
-  matrices = [[1, 0, 0, 0,
-               0, 1, 0, 0,
-               0, 0, 1, 0]] + [list(model.getMatrix(zeros(12, 'd'))) for model in models]
+    return matrices
 
-finally:
-  exe.shutdown()
+  finally:
+    exe.shutdown()
 
-# Invert and concatenate transforms
-aff_previous = AffineTransform3D()
-aff_previous.identity() # set to identity
-affines = [aff_previous] # first image at index 0
 
-for matrix in matrices[1:]: # skip zero
-  aff = AffineTransform3D()
-  aff.set(*matrix)
-  aff = aff.inverse() # transform defines img1 -> img2, we want the opposite
-  aff.preConcatenate(aff_previous) # Make relative to prior image
-  affines.append(aff) # Store
-  aff_previous = aff # next iteration
+def asBackwardAffineTransforms(matrices):
+    """ Transforms are img1 -> img2, and we want the opposite: so invert each.
+        Also, each image was registered to the previous, so must concatenate all previous transforms. """
+    aff_previous = AffineTransform3D()
+    aff_previous.identity() # set to identity
+    affines = [aff_previous] # first image at index 0
+
+    for matrix in matrices[1:]: # skip zero
+      aff = AffineTransform3D()
+      aff.set(*matrix)
+      aff = aff.inverse() # transform defines img1 -> img2, we want the opposite
+      aff.preConcatenate(aff_previous) # Make relative to prior image
+      affines.append(aff) # Store
+      aff_previous = aff # next iteration
+
+    return affines
 
 
 def viewTransformed(img, calibration, affine):
-  # Correct calibration
+  """ View img transformed to isotropy (via the calibration)
+      and transformed by the affine. """
   scale3d = AffineTransform3D()
   scale3d.set(calibration[0], 0, 0, 0,
               0, calibration[1], 0, 0,
@@ -527,12 +444,122 @@ def viewTransformed(img, calibration, affine):
   imgB = Views.interval(imgT, minC, maxC)
   return imgB
 
-# View registered 4D stack
-registered4D = Views.stack([viewTransformed(images[i], calibrations[i], affines[i])
-                            for i in xrange(len(images))])
 
-#for i, img in enumerate(images):
-#  imgT = viewTransformed(images[i], calibrations[i], affines[i])
-#  IL.wrap(imgT, "transformed " + str(i)).show()
+def registeredView(img_filenames, csv_dir, exe, params):
+  """ img_filenames: a list of file names
+      csv_dir: directory for CSV files
+      exe: an ExecutorService for concurrent execution of tasks
+      params: dictionary of parameters
+      returns a stack view of all registered images, e.g. 3D volumes as a 4D. """
+  matrices = computeForwardTransforms(img_filenames, csv_dir, exe, params)
+  affines = asBackwardAffineTransforms(matrices)
+  #
+  for i, affine in enumerate(affines):
+    matrix = affine.getRowPackedCopy()
+    print i, "matrix: [", matrix[0:4]
+    print "          ", matrix[4:8]
+    print "          ", matrix[8:12], "]"
+  #
+  registered = Views.stack([viewTransformed(img, getCalibration(img_filename), affine)
+                            for img, img_filename, affine
+                            in izip(images, img_filenames, affines)])
+  return registered
 
-IL.wrap(registered4D, "Registered 4D").show()
+
+# Test
+
+# Prepare test data
+def dropSlices(img, nth):
+  """ Drop every nth slice. Calibration is to be multipled by nth for Z.
+      Counts slices 1-based so as to preserve the first slice (index zero).
+  """
+  return Views.stack([Views.hyperSlice(img, 2, i)
+                      for i in xrange(img.dimension(2)) if 0 == (i+1) % nth])
+
+# Grap the current image
+img = IL.wrap(IJ.getImage())
+
+# Cut out a cube
+img1 = Views.zeroMin(Views.interval(img, [39, 49, 0],
+                                         [39 + 378 -1, 49 + 378 -1, 378 -1]))
+
+# Rotate the cube on the Y axis to the left
+img2 = Views.zeroMin(Views.rotate(img1, 2, 0)) # zeroMin is CRITICAL
+
+# Rotate the cube on the X axis to the top
+img3 = Views.zeroMin(Views.rotate(img1, 2, 1))
+
+# Reduce Z resolution: make them anisotropic but in a different direction
+nth = 2
+img1 = dropSlices(img1, nth)
+img2 = dropSlices(img2, nth)
+img3 = dropSlices(img3, nth)
+
+# The sequence of images to transform, each relative to the previous
+images = [img1, img2, img3]
+
+IL.wrap(Views.stack(images), "unregistered").show()
+
+
+# PARAMETERS
+calibrations = [[1.0, 1.0, 1.0 * nth],
+                [1.0, 1.0, 1.0 * nth],
+                [1.0, 1.0, 1.0 * nth]]
+
+# Pretend file names:
+img_filenames = ["img1", "img2", "img3"]
+
+# Pretend loader:
+class ImgLoader():
+  def load(self, img_filename):
+    return globals()[img_filename]
+
+img_loader = ImgLoader()
+
+# Pretend calibration getter
+def getCalibration(img_filename):
+  return calibrations[img_filenames.index(img_filename)]
+
+
+# Parameters for DoG difference of Gaussian to detect soma positions
+somaDiameter = 8 * calibrations[0][0]
+paramsDoG = {
+  "minPeakValue": 30, # Determined by hand
+  "sigmaSmaller": somaDiameter / 4.0, # in calibrated units: 1/4 soma
+  "sigmaLarger": somaDiameter / 2.0, # in calibrated units: 1/2 soma
+}
+
+paramsFeatures = {
+  # Parameters for features
+  "radius": somaDiameter * 5, # for searching nearby peaks
+  "min_angle": 1.57, # in radians, between vectors to p1 and p2
+  "max_per_peak": 3, # maximum number of constellations to create per peak
+
+  # Parameters for comparing constellations to find point matches
+  "angle_epsilon": 0.02, # in radians. 0.05 is 2.8 degrees, 0.02 is 1.1 degrees
+  "len_epsilon_sq": pow(somaDiameter, 2), # in calibrated units, squared
+}
+
+# RANSAC parameters: reduce list of pointmatches to a spatially coherent subset
+paramsModel = {
+  "maxEpsilon": somaDiameter, # max allowed alignment error in calibrated units (a distance)
+  "minInlierRatio": 0.0000001, # ratio inliers/candidates
+  "minNumInliers": 5, # minimum number of good matches to accept the result
+  "n_iterations": 2000, # for estimating the model
+  "maxTrust": 4, # for rejecting candidates
+}
+
+# Joint dictionary of parameters
+params = {}
+params.update(paramsDoG)
+params.update(paramsFeatures)
+params.update(paramsModel)
+
+
+n_threads = Runtime.getRuntime().availableProcessors()
+exe = Executors.newFixedThreadPool(n_threads)
+csv_dir = "/tmp/"
+
+registered = registeredView(img_filenames, csv_dir, exe, params)
+
+IL.wrap(registered, "registered").show()
