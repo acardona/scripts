@@ -376,7 +376,7 @@ class Task(Callable):
     return self.fn(*self.args)
 
 
-def computeForwardTransforms(img_filenames, csv_dir, exe, params):
+def computeForwardTransforms(img_filenames, img_loader, csv_dir, exe, params):
   """ Compute transforms from image i to image i+1,
       returning an identity transform for the first image,
       and with each transform being from i to i+1 (forward transforms).
@@ -445,13 +445,13 @@ def viewTransformed(img, calibration, affine):
   return imgB
 
 
-def registeredView(img_filenames, csv_dir, exe, params):
+def registeredView(img_filenames, img_loader, csv_dir, exe, params):
   """ img_filenames: a list of file names
       csv_dir: directory for CSV files
       exe: an ExecutorService for concurrent execution of tasks
       params: dictionary of parameters
       returns a stack view of all registered images, e.g. 3D volumes as a 4D. """
-  matrices = computeForwardTransforms(img_filenames, csv_dir, exe, params)
+  matrices = computeForwardTransforms(img_filenames, img_loader, csv_dir, exe, params)
   affines = asBackwardAffineTransforms(matrices)
   #
   for i, affine in enumerate(affines):
@@ -560,6 +560,6 @@ n_threads = Runtime.getRuntime().availableProcessors()
 exe = Executors.newFixedThreadPool(n_threads)
 csv_dir = "/tmp/"
 
-registered = registeredView(img_filenames, csv_dir, exe, params)
+registered = registeredView(img_filenames, img_loader, csv_dir, exe, params)
 
 IL.wrap(registered, "registered").show()
