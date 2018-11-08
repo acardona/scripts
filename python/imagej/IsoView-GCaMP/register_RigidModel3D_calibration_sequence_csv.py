@@ -264,9 +264,10 @@ def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.
     return None
 
 
-def makeFeatures(img_filename, img_loader, csv_dir, params):
+def makeFeatures(img_filename, img_loader, getCalibration, csv_dir, params):
   """ Helper function to extract features from an image. """
   img = img_loader.load(img_filename)
+  syncPrint("img name: %s, instance: %s" % (img_filename, str(img)))
   # Find a list of peaks by difference of Gaussian
   peaks = getDoGPeaks(img, getCalibration(img_filename),
                       params['sigmaSmaller'], params['sigmaLarger'],
@@ -288,7 +289,7 @@ class Getter(Future):
     return self.ob
 
 
-def findPointMatches(img1_filename, img2_filename, csv_dir, exe, params):
+def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, exe, params):
   """ Attempt to load them from a CSV file, otherwise compute them and save them. """
   # Attempt to load pointmatches from CSV file
   pointmatches = loadPointMatches(img1_filename, img2_filename, csv_dir, params)
@@ -305,7 +306,7 @@ def findPointMatches(img1_filename, img2_filename, csv_dir, exe, params):
                   for img_filename in img_filenames]
   # If features were loaded, just return them, otherwise compute them (and save them to CSV files)
   futures = [Getter(fs) if fs
-             else exe.submit(Task(makeFeatures, img_filename, img_loader, csv_dir, feature_params))
+             else exe.submit(Task(makeFeatures, img_filename, img_loader, getCalibration, csv_dir, feature_params))
              for fs, img_filename in izip(csv_features, img_filenames)]
   features = [f.get() for f in futures]
   
@@ -329,13 +330,13 @@ def findPointMatches(img1_filename, img2_filename, csv_dir, exe, params):
   return pm.pointmatches
 
 
-def ensureFeatures(img_filename, img_loader, csv_dir, params):
+def ensureFeatures(img_filename, img_loader, getCalibration, csv_dir, params):
   names = set(["minPeakValue", "sigmaSmaller", "sigmaLarger",
                "radius", "min_angle", "max_per_peak"])
   feature_params = {k: params[k] for k in names}
   if not loadFeatures(img_filename, csv_dir, feature_params, validateOnly=True):
     # Create features from scratch, which overwrites any CSV files
-    makeFeatures(img_filename, img_loader, csv_dir, params)
+    makeFeatures(img_filename, img_loader, getCalibration, csv_dir, params)
     # TODO: Delete CSV files for pointmatches, if any
 
 
@@ -352,8 +353,8 @@ def fit(model, pointmatches, n_iterations, maxEpsilon,
   return modelFound, inliers
 
 
-def fitModel(img1_filename, img2_filename, csv_dir, model, exe, params):
-  pointmatches = findPointMatches(img1_filename, img2_filename, csv_dir, exe, params)
+def fitModel(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, model, exe, params):
+  pointmatches = findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, exe, params)
   modelFound, inliers = fit(model, pointmatches, params["n_iterations"],
                             params["maxEpsilon"], params["minInlierRatio"],
                             params["minNumInliers"], params["maxTrust"])
@@ -376,7 +377,7 @@ class Task(Callable):
     return self.fn(*self.args)
 
 
-def computeForwardTransforms(img_filenames, img_loader, csv_dir, exe, params):
+def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, params):
   """ Compute transforms from image i to image i+1,
       returning an identity transform for the first image,
       and with each transform being from i to i+1 (forward transforms).
@@ -384,15 +385,15 @@ def computeForwardTransforms(img_filenames, img_loader, csv_dir, exe, params):
   """
   try:
     # Ensure features exist in CSV files, or create them
-    futures = [exe.submit(Task(ensureFeatures, img_filename, img_loader, csv_dir, params))
+    futures = [exe.submit(Task(ensureFeatures, img_filename, img_loader, getCalibration, csv_dir, params))
                for img_filename in img_filenames]
     # Wait until all complete
     for f in futures:
       f.get()
 
     # Create models: ensures first that pointmatches exist in CSV files, or creates them
-    futures = [exe.submit(Task(fitModel, img1_filename, img2_filename, csv_dir,
-                               RigidModel3D(), exe, params))
+    futures = [exe.submit(Task(fitModel, img1_filename, img2_filename, img_loader,
+                               getCalibration, csv_dir, RigidModel3D(), exe, params))
                for img1_filename, img2_filename in izip(img_filenames, img_filenames[1:])]
     # Wait until all complete
     models = [f.get() for f in futures]
@@ -445,13 +446,13 @@ def viewTransformed(img, calibration, affine):
   return imgB
 
 
-def registeredView(img_filenames, img_loader, csv_dir, exe, params):
+def registeredView(img_filenames, img_loader, getCalibration, csv_dir, exe, params):
   """ img_filenames: a list of file names
       csv_dir: directory for CSV files
       exe: an ExecutorService for concurrent execution of tasks
       params: dictionary of parameters
       returns a stack view of all registered images, e.g. 3D volumes as a 4D. """
-  matrices = computeForwardTransforms(img_filenames, img_loader, csv_dir, exe, params)
+  matrices = computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, params)
   affines = asBackwardAffineTransforms(matrices)
   #
   for i, affine in enumerate(affines):
@@ -460,6 +461,8 @@ def registeredView(img_filenames, img_loader, csv_dir, exe, params):
     print "          ", matrix[4:8]
     print "          ", matrix[8:12], "]"
   #
+  # TODO: should use a lazy loader for the stack
+  images = [img_loader.load(img_filename) for img_filename in img_filenames]
   registered = Views.stack([viewTransformed(img, getCalibration(img_filename), affine)
                             for img, img_filename, affine
                             in izip(images, img_filenames, affines)])
@@ -560,6 +563,6 @@ n_threads = Runtime.getRuntime().availableProcessors()
 exe = Executors.newFixedThreadPool(n_threads)
 csv_dir = "/tmp/"
 
-registered = registeredView(img_filenames, img_loader, csv_dir, exe, params)
+registered = registeredView(img_filenames, img_loader, getCalibration, csv_dir, exe, params)
 
 IL.wrap(registered, "registered").show()
