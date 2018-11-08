@@ -12,7 +12,7 @@ from itertools import imap, izip, product
 from jarray import array, zeros
 from java.util import ArrayList
 from java.util.concurrent import Executors, Callable, Future
-from java.lang import Runtime
+from java.lang import Runtime, Class
 from ij import IJ
 import os, csv, sys
 from synchronize import make_synchronized
@@ -360,13 +360,16 @@ def fitModel(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, 
                             params["minNumInliers"], params["maxTrust"])
   if modelFound:
     syncPrint("Found %i inliers for:\n    %s\n    %s" % (len(inliers), img1_filename, img2_filename))
+    # 2-dimensional native double array
+    a = array((zeros(4, 'd'), zeros(4, 'd'), zeros(4, 'd')), Class.forName("[D"))
+    model.toMatrix(a)
+    return a[0] + a[1] + a[2] # Flatten to 1-dimensional array:
   else:
     syncPrint("Model not found for:\n    %s\n    %s" % (img1_filename, img2_filename))
     # Return identity
-    model.set(*[1, 0, 0, 0,
-                0, 1, 0, 0,
-                0, 0, 1, 0])
-  return model
+    return array([1, 0, 0, 0,
+                  0, 1, 0, 0,
+                  0, 0, 1, 0], 'd')
 
 # A wrapper for executing functions in concurrent threads
 class Task(Callable):
@@ -377,10 +380,12 @@ class Task(Callable):
     return self.fn(*self.args)
 
 
-def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, params):
+def computeForwardTransforms(img_filenames, img_loader, getCalibration, modelclass, csv_dir, exe, params):
   """ Compute transforms from image i to image i+1,
       returning an identity transform for the first image,
       and with each transform being from i to i+1 (forward transforms).
+      The modelclass implements mpicbg.models.Affine3D (offering the toArray method)
+      such as TranslationModel3D, RigidModel3D, SimilarityModel3D, AffineTransform3D and InterpolationModel3D.
       Returns a list of affine 3D matrices, each a double[] with 12 values.
   """
   try:
@@ -393,15 +398,13 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
 
     # Create models: ensures first that pointmatches exist in CSV files, or creates them
     futures = [exe.submit(Task(fitModel, img1_filename, img2_filename, img_loader,
-                               getCalibration, csv_dir, RigidModel3D(), exe, params))
+                               getCalibration, csv_dir, modelclass(), exe, params))
                for img1_filename, img2_filename in izip(img_filenames, img_filenames[1:])]
     # Wait until all complete
-    models = [f.get() for f in futures]
-  
     # First image gets identity
     matrices = [array([1, 0, 0, 0,
                        0, 1, 0, 0,
-                       0, 0, 1, 0], 'd')] + [model.getMatrix(zeros(12, 'd')) for model in models]
+                       0, 0, 1, 0], 'd')] + [f.get() for f in futures]
 
     return matrices
 
@@ -446,13 +449,13 @@ def viewTransformed(img, calibration, affine):
   return imgB
 
 
-def registeredView(img_filenames, img_loader, getCalibration, csv_dir, exe, params):
+def registeredView(img_filenames, img_loader, getCalibration, modelclass, csv_dir, exe, params):
   """ img_filenames: a list of file names
       csv_dir: directory for CSV files
       exe: an ExecutorService for concurrent execution of tasks
       params: dictionary of parameters
       returns a stack view of all registered images, e.g. 3D volumes as a 4D. """
-  matrices = computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, params)
+  matrices = computeForwardTransforms(img_filenames, img_loader, getCalibration, modelclass, csv_dir, exe, params)
   affines = asBackwardAffineTransforms(matrices)
   #
   for i, affine in enumerate(affines):
@@ -558,11 +561,14 @@ params.update(paramsDoG)
 params.update(paramsFeatures)
 params.update(paramsModel)
 
+# The model type to fit. Could also be:
+# TranslationModel3D, SimilarityModel3D, AffineModel3D
+modelclass = RigidModel3D
 
 n_threads = Runtime.getRuntime().availableProcessors()
 exe = Executors.newFixedThreadPool(n_threads)
 csv_dir = "/tmp/"
 
-registered = registeredView(img_filenames, img_loader, getCalibration, csv_dir, exe, params)
+registered = registeredView(img_filenames, img_loader, getCalibration, modelclass, csv_dir, exe, params)
 
 IL.wrap(registered, "registered").show()
