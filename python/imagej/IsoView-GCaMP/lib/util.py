@@ -1,7 +1,7 @@
 from synchronize import make_synchronized
 from java.util.concurrent import Callable, Future
 from java.lang.reflect.Array import newInstance as newArray
-from java.lang import Double, Float, Byte, Short, Integer, Long, Boolean, Character
+from java.lang import Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character
 
 
 @make_synchronized
@@ -32,6 +32,9 @@ class Task(Callable):
     self.fn = fn
     self.args = args
   def call(self):
+    t = Thread.currentThread()
+    if t.isInterrupted() or not t.isAlive():
+        return None
     return self.fn(*self.args)
 
 
