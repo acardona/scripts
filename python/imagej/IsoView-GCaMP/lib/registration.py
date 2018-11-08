@@ -8,7 +8,7 @@ from itertools import izip, imap
 from java.lang import Runtime
 from java.util.concurrent import Executors
 # local lib functions:
-from util import syncPrint, Task
+from util import syncPrint, Task, nativeArray
 from features import findPointMatches, ensureFeatures
 
 
@@ -26,14 +26,20 @@ def fit(model, pointmatches, n_iterations, maxEpsilon,
 
 
 def fitModel(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, model, exe, params):
-  """ Returns the transformation matrix, which is the identity if no model found. """
+  """ The model can be any subclass of mpicbg.models.Affine3D, such as:
+        TranslationModel3D, RigidModel3D, SimilarityModel3D,
+        AffineModel3D, InterpolatedAffineModel3D
+      Returns the transformation matrix as a 1-dimensional array of doubles,
+      which is the identity when the model cannot be fit. """
   pointmatches = findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, exe, params)
   modelFound, inliers = fit(model, pointmatches, params["n_iterations"],
                             params["maxEpsilon"], params["minInlierRatio"],
                             params["minNumInliers"], params["maxTrust"])
   if modelFound:
     syncPrint("Found %i inliers for:\n    %s\n    %s" % (len(inliers), img1_filename, img2_filename))
-    return model.getMatrix(zeros(12, 'd'))
+    a = nativeArray('d', [3, 4])
+    model.toMatrix(a) # Can't use model.toArray: different order of elements
+    return a[0] + a[1] + a[2] # Concat: flatten to 1-dimensional array:
   else:
     syncPrint("Model not found for:\n    %s\n    %s" % (img1_filename, img2_filename))
     # Return identity
