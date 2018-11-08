@@ -11,7 +11,7 @@ from mpicbg.imagefeatures import FloatArray2DSIFT, FloatArray2D
 from mpicbg.models import Point, PointMatch, RigidModel3D, NotEnoughDataPointsException
 from collections import defaultdict
 from operator import sub
-from itertools import izip, product
+from itertools import imap, izip, product
 from jarray import array, zeros
 import os, csv
 
@@ -181,6 +181,7 @@ from net.imglib2.realtransform import RealViews, AffineTransform3D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2.util import Intervals
 from net.imglib2.img import ImgView
+from itertools import imap
 
 class KLBTransformLoader(CacheLoader):
   def __init__(self, transforms):
@@ -212,14 +213,13 @@ with open("/tmp/rigid-models.csv", "r") as csvfile:
   previous = AffineTransform3D()
   previous.identity() # set to a diagonal of 1s
   for row in reader:
-    affine = AffineTransform3D()
-    ti = int(row[0])
+    ti = int(row[0]) # timepoint index
     matrix = imap(float, row[1:])
+    affine = AffineTransform3D()
     affine.set(*matrix) # expand into 12 arguments
-    # chain the previous transform
+    # Chain the previous transform
     affine.preConcatenate(previous)
     previous = affine
-    # Store
     transforms[timepoint_paths[ti]] = affine
 
 # Load the 4D series with each time point 3D volume transformed
