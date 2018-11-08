@@ -1,7 +1,7 @@
 from __future__ import with_statement
 from org.scijava.vecmath import Vector3f
 from mpicbg.models import Point, PointMatch
-from net.imglib2 import KDTree
+from net.imglib2 import KDTree, RealPoint
 from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
 from itertools import imap, izip, product
 from jarray import array
@@ -95,6 +95,25 @@ class PointMatches():
     return PointMatches([PointMatch(c1.position, c2.position)
                          for c1, c2 in product(features1, features2)
                          if c1.matches(c2, angle_epsilon, len_epsilon_sq)])
+
+  @staticmethod
+  def fromNearbyFeatures(radius, features1, features2, angle_epsilon, len_epsilon_sq):
+    """ Compare each feature in features1 to those features in features2
+        that fall within the radius, using the search2 (a RadiusNeighborSearchOnKDTree). """
+    # Construct log(n) search
+    # (Uses RealPoint.wrap to avoid copying the double[] from getW())
+    positions2 = [RealPoint.wrap(c2.position.getW()) for c2 in features2]
+    search2 = RadiusNeighborSearchOnKDTree(KDTree(features2, positions2))
+    pointmatches = []
+
+    for c1 in features1:
+      search2.search(RealPoint.wrap(c1.position.getW()), radius, False) # no need to sort
+      pointmatches.extend(PointMatch(c1.position, c2.position)
+                          for c2 in (search2.getSampler(i).get()
+                                     for i in xrange(search2.numNeighbors()))
+                          if c1.matches(c2, angle_epsilon, len_epsilon_sq))
+    #
+    return PointMatches(pointmatches)
 
   def toRows(self):
     return [tuple(p1.getW()) + tuple(p2.getW())
@@ -272,8 +291,17 @@ def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, c
     syncPrint("Found %i constellation features in image %s" % (len(fs), img_filename))
 
   # Compare all possible pairs of constellation features: the PointMatches
-  pm = PointMatches.fromFeatures(features[0], features[1],
-                                 params["angle_epsilon"], params["len_epsilon_sq"])
+  if params.get('pointmatches_nearby', False):
+    # Use a RadiusNeighborSearchOnKDTree
+    pm = PointMatches.fromNearbyFeatures(
+        params['pointmatches_search_radius'],
+        features[0], features[1],
+        params["angle_epsilon"], params["len_epsilon_sq"])
+  else:
+    # All to all
+    pm = PointMatches.fromFeatures(
+        features[0], features[1],
+        params["angle_epsilon"], params["len_epsilon_sq"])
 
   syncPrint("Found %i point matches between:\n    %s\n    %s" % \
             (len(pm.pointmatches), img1_filename, img2_filename))
