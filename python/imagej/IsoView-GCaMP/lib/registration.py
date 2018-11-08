@@ -7,6 +7,7 @@ from jarray import array, zeros
 from itertools import izip, imap
 from java.lang import Runtime
 from java.util.concurrent import Executors
+import os, sys, csv
 # local lib functions:
 from util import syncPrint, Task, nativeArray
 from features import findPointMatches, ensureFeatures
@@ -48,6 +49,39 @@ def fitModel(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, 
                   0, 0, 1, 0], 'd')
 
 
+def saveMatrices(name, matrices, csv_dir):
+  """ Store all matrices in a CSV file named <name>.csv """
+  path = os.path.join(csv_dir, name + ".csv")
+  try:
+    with open(path, 'w') as csvfile:
+      w = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
+      # Write header: 12 m<i><j> names
+      w.writerow(tuple("m%i%i" % (i,j) for i in (0,1,2) for j in (0,1,2,3)))
+      for matrix in matrices:
+        w.writerow(map(str, matrix))
+      csvfile.flush()
+      os.fsync(csvfile.fileno())
+  except:
+    syncPrint("Failed to save matrices at path %s" % path)
+    syncPrint(str(sys.exc_info()))
+
+
+def loadMatrices(name, csv_dir):
+  """ Load all matrices as a list of arrays of doubles
+      from a CSV file named <name>.csv """
+  path = os.path.join(csv_dir, name + ".csv")
+  if not os.path.exists(path):
+    return None
+  try:
+    with open(path, 'r') as csvfile:
+      reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+      reader.next() # skip header
+      matrices = [array(imap(float, row), 'd') for row in reader]
+      return matrices
+  except:
+    syncPrint("Could not load matrices from path %s" % path)
+    syncPrint(str(sys.exc_info()))
+
 def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params):
   """ Compute transforms from image i to image i+1,
       returning an identity transform for the first image,
@@ -78,10 +112,10 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
     exe.shutdown()
 
 
-def asBackwardAffineTransforms(matrices):
+def asBackwardConcatTransforms(matrices, transformclass=AffineTransform3D):
     """ Transforms are img1 -> img2, and we want the opposite: so invert each.
         Also, each image was registered to the previous, so must concatenate all previous transforms. """
-    aff_previous = AffineTransform3D()
+    aff_previous = transformclass()
     aff_previous.identity() # set to identity
     affines = [aff_previous] # first image at index 0
 
@@ -124,7 +158,7 @@ def registeredView(img_filenames, img_loader, getCalibration, csv_dir, modelclas
   if not exe:
     exe = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
   matrices = computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params)
-  affines = asBackwardAffineTransforms(matrices)
+  affines = asBackwardConcatTransforms(matrices)
   #
   for i, affine in enumerate(affines):
     matrix = affine.getRowPackedCopy()
