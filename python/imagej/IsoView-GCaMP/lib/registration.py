@@ -26,19 +26,20 @@ def fit(model, pointmatches, n_iterations, maxEpsilon,
 
 
 def fitModel(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, model, exe, params):
+  """ Returns the transformation matrix, which is the identity if no model found. """
   pointmatches = findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, exe, params)
   modelFound, inliers = fit(model, pointmatches, params["n_iterations"],
                             params["maxEpsilon"], params["minInlierRatio"],
                             params["minNumInliers"], params["maxTrust"])
   if modelFound:
     syncPrint("Found %i inliers for:\n    %s\n    %s" % (len(inliers), img1_filename, img2_filename))
+    return model.getMatrix(zeros(12, 'd'))
   else:
     syncPrint("Model not found for:\n    %s\n    %s" % (img1_filename, img2_filename))
     # Return identity
-    model.set(*[1, 0, 0, 0,
-                0, 1, 0, 0,
-                0, 0, 1, 0])
-  return model
+    return array([1, 0, 0, 0,
+                  0, 1, 0, 0,
+                  0, 0, 1, 0], 'd')
 
 
 def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params):
@@ -60,12 +61,10 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
                                getCalibration, csv_dir, modelclass(), exe, params))
                for img1_filename, img2_filename in izip(img_filenames, img_filenames[1:])]
     # Wait until all complete
-    models = [f.get() for f in futures]
-  
     # First image gets identity
     matrices = [array([1, 0, 0, 0,
                        0, 1, 0, 0,
-                       0, 0, 1, 0], 'd')] + [model.getMatrix(zeros(12, 'd')) for model in models]
+                       0, 0, 1, 0], 'd')] + [f.get() for f in futures]
 
     return matrices
 
