@@ -1,2 +1,8 @@
 *~
 *.pyc
+*.class
+*.zip
+*.gz
+*.klb
+*.swp
+*.im
