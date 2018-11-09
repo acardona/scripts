@@ -6,6 +6,7 @@ from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
 from itertools import imap, izip, product
 from jarray import array
 import os, sys, csv
+from os.path import basename
 # local lib functions:
 from dogpeaks import getDoGPeaks
 from util import syncPrint, Task, Getter
@@ -136,7 +137,7 @@ class PointMatches():
 
 
 def saveFeatures(img_filename, directory, features, params):
-  path = os.path.join(directory, img_filename) + ".features.csv"
+  path = os.path.join(directory, basename(img_filename)) + ".features.csv"
   try:
     with open(path, 'w') as csvfile:
       w = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
@@ -166,7 +167,7 @@ def loadFeatures(img_filename, directory, params, validateOnly=False, epsilon=0.
       epsilon: allowed error when comparing floating-point values.
       validateOnly: if True, return after checking that parameters match. """
   try:
-    csvpath = os.path.join(directory, img_filename + ".features.csv")
+    csvpath = os.path.join(directory, basename(img_filename) + ".features.csv")
     if os.path.exists(csvpath):
       with open(csvpath, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
@@ -192,7 +193,7 @@ def loadFeatures(img_filename, directory, params, validateOnly=False, epsilon=0.
 
 
 def savePointMatches(img_filename1, img_filename2, pointmatches, directory, params):
-  filename = img_filename1 + '.' + img_filename2 + ".pointmatches.csv"
+  filename = basename(img_filename1) + '.' + basename(img_filename2) + ".pointmatches.csv"
   path = os.path.join(directory, filename)
   try:
     with open(path, 'w') as csvfile:
@@ -223,7 +224,7 @@ def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.
               In case of mismatch, return None.
       epsilon: allowed error when comparing floating-point values. """
   try:
-    csvpath = os.path.join(directory, img1_filename + '.' + img2_filename + ".pointmatches.csv")
+    csvpath = os.path.join(directory, basename(img1_filename) + '.' + basename(img2_filename) + ".pointmatches.csv")
     if not os.path.exists(csvpath):
       syncPrint("No stored pointmatches found at %s" % csvpath)
       return None
