@@ -116,7 +116,9 @@ def asBackwardConcatTransforms(matrices, transformclass=AffineTransform3D):
     """ Transforms are img1 -> img2, and we want the opposite: so invert each.
         Also, each image was registered to the previous, so must concatenate all previous transforms. """
     aff_previous = transformclass()
-    aff_previous.identity() # set to identity
+    if hasattr(aff_previous, "identity"):
+      # Necessary for e.g. AffineTransform3D, but not for e.g. Translation3D
+      aff_previous.identity() # set to identity
     affines = [aff_previous] # first image at index 0
 
     for matrix in matrices[1:]: # skip zero
