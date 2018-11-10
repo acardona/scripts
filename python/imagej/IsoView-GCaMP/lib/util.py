@@ -1,7 +1,8 @@
 from synchronize import make_synchronized
-from java.util.concurrent import Callable, Future
+from java.util.concurrent import Callable, Future, Executors, ThreadFactory
+from java.util.concurrent.atomic import AtomicInteger
 from java.lang.reflect.Array import newInstance as newArray
-from java.lang import Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character
+from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character
 
 
 @make_synchronized
@@ -71,4 +72,28 @@ def nativeArray(stype, dimensions):
     'z': boolean
     """
     return newArray(__nativeClass[stype].TYPE, dimensions)
+
+
+class ThreadFactorySameGroup(ThreadFactory):
+  def __init__(self, name):
+    self.name = name
+    self.group = Thread.currentThread().getThreadGroup()
+    self.counter = AtomicInteger(0)
+  def newThread(self, runnable):
+    title = "%s-%i" % (self.name, self.counter.incrementAndGet())
+    t = Thread(self.group, runnable, title)
+    t.setPriority(Thread.NORM_PRIORITY)
+    return t
+
+def newFixedThreadPool(n_threads=0, name="jython-worker"):
+  """ Return an ExecutorService whose Thread instances belong
+      to the same group as the caller's Thread, and therefore will
+      be interrupted when the caller is.
+      n_threads: number of threads to use.
+                 If zero, use as many as available CPUs.
+                 If negative, use as many as available CPUs minus that number,
+                 but at least one. """
+  if n_threads <= 0:
+    n_threads = max(1, Runtime.getRuntime().availableProcessors() + n_threads)
+  return Executors.newFixedThreadPool(n_threads, ThreadFactorySameGroup(name))
 
