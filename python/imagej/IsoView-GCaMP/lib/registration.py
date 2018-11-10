@@ -1,7 +1,7 @@
 from mpicbg.models import NotEnoughDataPointsException
 from java.util import ArrayList
 from net.imglib2.view import Views
-from net.imglib2.realtransform import RealViews, AffineTransform3D
+from net.imglib2.realtransform import RealViews, AffineTransform3D, Scale3D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from jarray import array, zeros
 from itertools import izip, imap
@@ -33,9 +33,12 @@ def fitModel(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, 
       Returns the transformation matrix as a 1-dimensional array of doubles,
       which is the identity when the model cannot be fit. """
   pointmatches = findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, exe, params)
-  modelFound, inliers = fit(model, pointmatches, params["n_iterations"],
-                            params["maxEpsilon"], params["minInlierRatio"],
-                            params["minNumInliers"], params["maxTrust"])
+  if 0 == len(pointmatches):
+    modelFound = False
+  else:
+    modelFound, inliers = fit(model, pointmatches, params["n_iterations"],
+                              params["maxEpsilon"], params["minInlierRatio"],
+                              params["minNumInliers"], params["maxTrust"])
   if modelFound:
     syncPrint("Found %i inliers for:\n    %s\n    %s" % (len(inliers), img1_filename, img2_filename))
     a = nativeArray('d', [3, 4])
@@ -116,8 +119,8 @@ def asBackwardConcatTransforms(matrices, transformclass=AffineTransform3D):
     """ Transforms are img1 -> img2, and we want the opposite: so invert each.
         Also, each image was registered to the previous, so must concatenate all previous transforms. """
     aff_previous = transformclass()
-    if hasattr(aff_previous, "identity"):
-      # Necessary for e.g. AffineTransform3D, but not for e.g. Translation3D
+    if transformclass == AffineTransform3D:
+      # It's puzzling that AffineTransform3D is not initialized to identity
       aff_previous.identity() # set to identity
     affines = [aff_previous] # first image at index 0
 
@@ -132,18 +135,22 @@ def asBackwardConcatTransforms(matrices, transformclass=AffineTransform3D):
     return affines
 
 
-def viewTransformed(img, calibration, affine):
+def viewTransformed(img, calibration, transform):
   """ View img transformed to isotropy (via the calibration)
       and transformed by the affine. """
-  scale3d = AffineTransform3D()
-  scale3d.set(calibration[0], 0, 0, 0,
-              0, calibration[1], 0, 0,
-              0, 0, calibration[2], 0)
-  transform = affine.copy()
-  transform.concatenate(scale3d)
   imgE = Views.extendZero(img)
   imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
-  imgT = RealViews.transform(imgI, transform)
+  if type(transform) == AffineTransform3D:
+    scale3d = AffineTransform3D()
+    scale3d.set(calibration[0], 0, 0, 0,
+                0, calibration[1], 0, 0,
+                0, 0, calibration[2], 0)
+    affine = transform.copy()
+    affine.concatenate(scale3d)
+    imgT = RealViews.transform(imgI, affine)
+  else:
+    imgT = RealViews.transform(imgI, Scale3D(*calibration))
+    imgT = RealViews.transform(imgT, transform)
   # dimensions
   minC = [0, 0, 0]
   maxC = [int(img.dimension(d) * cal) -1 for d, cal in enumerate(calibration)]

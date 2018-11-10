@@ -253,12 +253,17 @@ def makeFeatures(img_filename, img_loader, getCalibration, csv_dir, params):
   peaks = getDoGPeaks(img, getCalibration(img_filename),
                       params['sigmaSmaller'], params['sigmaLarger'],
                       params['minPeakValue'])
-  # Create a KDTree-based search for nearby peaks
-  search = makeRadiusSearch(peaks)
-  # Create list of Constellation features
-  features = extractFeatures(peaks, search,
-                             params['radius'], params['min_angle'], params['max_per_peak'])
-  # Store features in a CSV file
+  if 0 == len(peaks):
+    features = []
+  else:
+    # Create a KDTree-based search for nearby peaks
+    search = makeRadiusSearch(peaks)
+    # Create list of Constellation features
+    features = extractFeatures(peaks, search,
+                               params['radius'], params['min_angle'], params['max_per_peak'])
+  if 0 == len(features):
+    syncPrint("No peaks found for %s" % img_filename)
+  # Store features in a CSV file (even if without features)
   saveFeatures(img_filename, csv_dir, features, params)
   return features
 
