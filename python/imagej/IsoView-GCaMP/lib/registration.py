@@ -5,11 +5,9 @@ from net.imglib2.realtransform import RealViews, AffineTransform3D, Scale3D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from jarray import array, zeros
 from itertools import izip, imap
-from java.lang import Runtime
-from java.util.concurrent import Executors
 import os, sys, csv
 # local lib functions:
-from util import syncPrint, Task, nativeArray
+from util import syncPrint, Task, nativeArray, newFixedThreadPool
 from features import findPointMatches, ensureFeatures
 
 
@@ -165,7 +163,7 @@ def registeredView(img_filenames, img_loader, getCalibration, csv_dir, modelclas
       params: dictionary of parameters
       returns a stack view of all registered images, e.g. 3D volumes as a 4D. """
   if not exe:
-    exe = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
+    exe = newFixedThreadPool()
   matrices = computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params)
   affines = asBackwardConcatTransforms(matrices)
   #
