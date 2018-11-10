@@ -41,13 +41,16 @@ def fitModel(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, 
     syncPrint("Found %i inliers for:\n    %s\n    %s" % (len(inliers), img1_filename, img2_filename))
     a = nativeArray('d', [3, 4])
     model.toMatrix(a) # Can't use model.toArray: different order of elements
-    return a[0] + a[1] + a[2] # Concat: flatten to 1-dimensional array:
+    matrix = a[0] + a[1] + a[2] # Concat: flatten to 1-dimensional array:
   else:
     syncPrint("Model not found for:\n    %s\n    %s" % (img1_filename, img2_filename))
     # Return identity
-    return array([1, 0, 0, 0,
-                  0, 1, 0, 0,
-                  0, 0, 1, 0], 'd')
+    matrix = array([1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0], 'd')
+  syncPrint("found %i pointmatches, with matrix:\n[%s]\nbetween \n    %s\n    %s" % \
+            (len(pointmatches), ", ".join("%.2f" % v for v in matrix), basename(img1_filename), basename(img2_filename)))
+  return matrix
 
 
 def saveMatrices(name, matrices, csv_dir):
