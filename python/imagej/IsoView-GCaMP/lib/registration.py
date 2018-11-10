@@ -59,7 +59,7 @@ def saveMatrices(name, matrices, csv_dir):
       # Write header: 12 m<i><j> names
       w.writerow(tuple("m%i%i" % (i,j) for i in (0,1,2) for j in (0,1,2,3)))
       for matrix in matrices:
-        w.writerow(map(str, matrix))
+        w.writerow(matrix)
       csvfile.flush()
       os.fsync(csvfile.fileno())
   except:
