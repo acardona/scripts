@@ -324,7 +324,7 @@ def ensureFeatures(img_filename, img_loader, getCalibration, csv_dir, params):
   feature_params = {k: params[k] for k in names}
   if not loadFeatures(img_filename, csv_dir, feature_params, validateOnly=True):
     # Create features from scratch, which overwrites any CSV files
-    makeFeatures(img_filename, img_loader, getCalibration, csv_dir, params)
+    makeFeatures(img_filename, img_loader, getCalibration, csv_dir, feature_params)
     # TODO: Delete CSV files for pointmatches, if any
 
 
