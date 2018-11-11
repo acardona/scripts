@@ -6,6 +6,7 @@ from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from jarray import array, zeros
 from itertools import izip, imap
 import os, sys, csv
+from os.path import basename
 # local lib functions:
 from util import syncPrint, Task, nativeArray, newFixedThreadPool
 from features import findPointMatches, ensureFeatures
@@ -38,7 +39,8 @@ def fitModel(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, 
                               params["maxEpsilon"], params["minInlierRatio"],
                               params["minNumInliers"], params["maxTrust"])
   if modelFound:
-    syncPrint("Found %i inliers for:\n    %s\n    %s" % (len(inliers), img1_filename, img2_filename))
+    syncPrint("Found %i inliers for:\n    %s\n    %s" % (len(inliers),
+      basename(img1_filename), basename(img2_filename)))
     a = nativeArray('d', [3, 4])
     model.toMatrix(a) # Can't use model.toArray: different order of elements
     return a[0] + a[1] + a[2] # Concat: flatten to 1-dimensional array:

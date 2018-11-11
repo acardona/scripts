@@ -294,7 +294,7 @@ def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, c
   features = [f.get() for f in futures]
   
   for img_filename, fs in izip(img_filenames, features):
-    syncPrint("Found %i constellation features in image %s" % (len(fs), img_filename))
+    syncPrint("Found %i constellation features in image %s" % (len(fs), basename(img_filename)))
 
   # Compare all possible pairs of constellation features: the PointMatches
   if params.get('pointmatches_nearby', False):
@@ -310,7 +310,7 @@ def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, c
         params["angle_epsilon"], params["len_epsilon_sq"])
 
   syncPrint("Found %i point matches between:\n    %s\n    %s" % \
-            (len(pm.pointmatches), img1_filename, img2_filename))
+            (len(pm.pointmatches), basename(img1_filename), basename(img2_filename)))
 
   # Store as CSV file
   savePointMatches(img1_filename, img2_filename, pm.pointmatches, csv_dir, pm_params)
