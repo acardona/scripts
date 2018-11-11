@@ -6,6 +6,7 @@ from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from jarray import array, zeros
 from itertools import izip, imap
 import os, sys, csv
+from os.path import basename
 # local lib functions:
 from util import syncPrint, Task, nativeArray, newFixedThreadPool
 from features import findPointMatches, ensureFeatures
