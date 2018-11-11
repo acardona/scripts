@@ -285,7 +285,7 @@ def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, c
   names = set(["minPeakValue", "sigmaSmaller", "sigmaLarger",
                 "radius", "min_angle", "max_per_peak"])
   feature_params = {k: params[k] for k in names}
-  csv_features = [loadFeatures(img1_filename, csv_dir, feature_params)
+  csv_features = [loadFeatures(img_filename, csv_dir, feature_params)
                   for img_filename in img_filenames]
   # If features were loaded, just return them, otherwise compute them (and save them to CSV files)
   futures = [Getter(fs) if fs
