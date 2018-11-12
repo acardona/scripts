@@ -118,11 +118,24 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
 def asBackwardConcatTransforms(matrices, transformclass=AffineTransform3D):
     """ Transforms are img1 -> img2, and we want the opposite: so invert each.
         Also, each image was registered to the previous, so must concatenate all previous transforms. """
+    # Special-case for speed
+    if transformclass == Translation3D:
+      tx, ty, tz = 0.0, 0.0, 0.0
+      translations = []
+      for matrix in matrices:
+        # Subtract: same as inverse
+        tx -= matrix[3]
+        ty -= matrix[7]
+        tz -= matrix[11]
+        translations.append(Translation3D(tx, ty, tz))
+
+      return translations
+
+    # Else, use AffineTransform3D
     aff_previous = transformclass()
-    if transformclass == AffineTransform3D:
-      # It's puzzling that AffineTransform3D is not initialized to identity
-      aff_previous.identity() # set to identity
-    affines = [aff_previous] # first image at index 0
+    # It's puzzling that AffineTransform3D is not initialized to identity
+    aff_previous.identity() # set to identity
+    affines = [aff_previous] # first image at index 0 gets identity
 
     for matrix in matrices[1:]: # skip zero
       aff = AffineTransform3D()
