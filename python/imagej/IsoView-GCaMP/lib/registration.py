@@ -85,7 +85,7 @@ def loadMatrices(name, csv_dir):
     syncPrint("Could not load matrices from path %s" % path)
     syncPrint(str(sys.exc_info()))
 
-def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params):
+def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params, exe_shutdown=True):
   """ Compute transforms from image i to image i+1,
       returning an identity transform for the first image,
       and with each transform being from i to i+1 (forward transforms).
@@ -112,7 +112,8 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
     return matrices
 
   finally:
-    exe.shutdown()
+    if exe_shutdown:
+      exe.shutdown()
 
 
 def asBackwardConcatTransforms(matrices, transformclass=AffineTransform3D):
