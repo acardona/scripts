@@ -7,13 +7,13 @@ from itertools import imap
 from lib.asm import initClass, initMethod, initConstructor, CustomClassLoader
 
 
-def createSamplerConverter(fromType,
+def defineSamplerConverter(fromType,
                            toType,
                            classname="",
                            toAccess=None,
                            fromMethod="getRealFloat",
                            toMethod="setReal"):
-  """ A SamplerConverter in asm for high-performance (25x jython's speed).
+  """ A class implementing SamplerConverter, in asm for high-performance (25x jython's speed).
 
       fromType: the source type to convert like e.g. UnsignedByteType.
       toType: the target type, like e.g. FloatType.
@@ -172,5 +172,10 @@ def createSamplerConverter(fromType,
   accessClass = loader.defineClass(access_classname, facc.toByteArray())
   samplerClass = loader.defineClass(classname, cw.toByteArray())
 
-  return samplerClass.newInstance()
+  return samplerClass
 
+
+def createSamplerConverter(*args, **kwargs):
+  """ Returns a new instance of the newly defined class implementing the SamplerConverter interface.
+      See defineSamplerConverter for all argument details. """
+  return defineSamplerConverter(*args, **kwargs).newInstance()
