@@ -12,7 +12,9 @@ def defineSamplerConverter(fromType,
                            classname="",
                            toAccess=None,
                            fromMethod="getRealFloat",
-                           toMethod="setReal"):
+                           fromMethodReturnType="F", # F: native float; if a class, use: "L%s;" % Type.getInternalName(TheClass)
+                           toMethod="setReal",
+                           toMethodArgType="F"): # F: native float
   """ A class implementing SamplerConverter, in asm for high-performance (25x jython's speed).
 
       fromType: the source type to convert like e.g. UnsignedByteType.
@@ -41,7 +43,7 @@ def defineSamplerConverter(fromType,
   facc = initClass(access_classname,
                    access=Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL,
                    interfaces=[toAccess],
-                   interfaces_parameters={toAccess: ['']},
+                   interfaces_parameters={},
                    with_default_constructor=False)
 
   # private final "sampler" field
@@ -71,7 +73,7 @@ def defineSamplerConverter(fromType,
   gv = initMethod(facc,
                   "getValue",
                   access=Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL,
-                  descriptor="(I)F")
+                  descriptor="(I)%s" % toMethodArgType) # e.g. "F" for native float
   gv.visitVarInsn(Opcodes.ALOAD, 0)
   gv.visitFieldInsn(Opcodes.GETFIELD, field["classname"], field["name"], field["descriptor"])
   gv.visitMethodInsn(Opcodes.INVOKEINTERFACE,
@@ -83,16 +85,26 @@ def defineSamplerConverter(fromType,
   gv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                     Type.getInternalName(fromType),
                     fromMethod, # e.g. getRealFloat
-                    "()F",
+                    "()%s" % fromMethodReturnType, # e.g. F for native float
                     False)
-  gv.visitInsn(Opcodes.FRETURN) # native float return
+  # Figure out the return and the loading instructions: primitive or object class
+  if fromMethodReturnType in ["I", "L", "F", "D"]: # I for integer and smaller; L for long, F for float, D for double
+    ret = fromMethodReturnType + "RETURN"
+    load = fromMethodReturnType + "LOAD"
+  elif 1 == len(fromMethodReturnType): # char, byte, boolean, short
+    ret = "IRETURN"
+    load = "ILOAD"
+  else:
+    ret = "ARETURN" # object class
+    load = "ALOAD"
+  gv.visitInsn(Opcodes.__getattribute__(Opcodes, ret)._doget(Opcodes)) # Opcodes.FRETURN: native float return
   gv.visitMaxs(1, 2)
   gv.visitEnd()
 
   sv = initMethod(facc,
                   "setValue",
                   access=Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL,
-                  descriptor="(IF)V")
+                  descriptor="(I%s)V" % toMethodArgType) # e.g. "F" for native float
   sv.visitVarInsn(Opcodes.ALOAD, 0)
   sv.visitFieldInsn(Opcodes.GETFIELD, field["classname"], field["name"], field["descriptor"])
   sv.visitMethodInsn(Opcodes.INVOKEINTERFACE,
@@ -101,11 +113,11 @@ def defineSamplerConverter(fromType,
                     "()L%s;" % Type.getInternalName(Object), # isn't this weird? Why Object?
                     True)
   sv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(fromType))
-  sv.visitVarInsn(Opcodes.FLOAD, 2)
+  sv.visitVarInsn(Opcodes.__getattribute__(Opcodes, load)._doget(Opcodes), 2) # e.g. Opcodes.FLOAD
   sv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                     Type.getInternalName(fromType),
                     toMethod, # e.g. setReal
-                    "(F)V",
+                    "(%s)V" % toMethodArgType, # e.g. 'F' for native float
                     False)
   sv.visitInsn(Opcodes.RETURN)
   sv.visitMaxs(2, 3)
