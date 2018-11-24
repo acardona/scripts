@@ -63,7 +63,7 @@ def initClass(name,
     ips = []
     for interface in interfaces:
       ip = "L%s" % Type.getInternalName(interface)
-      types = interfaces_parameters[interface]
+      types = interfaces_parameters.get(interface, None)
       if types:
         ip += "<" + "".join("%s" % makeType(t) for t in types) + ">"
       ip += ";"
