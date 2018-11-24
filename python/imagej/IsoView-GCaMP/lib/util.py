@@ -2,7 +2,7 @@ from synchronize import make_synchronized
 from java.util.concurrent import Callable, Future, Executors, ThreadFactory
 from java.util.concurrent.atomic import AtomicInteger
 from java.lang.reflect.Array import newInstance as newArray
-from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character
+from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character, System
 
 
 @make_synchronized
@@ -97,3 +97,12 @@ def newFixedThreadPool(n_threads=0, name="jython-worker"):
     n_threads = max(1, Runtime.getRuntime().availableProcessors() + n_threads)
   return Executors.newFixedThreadPool(n_threads, ThreadFactorySameGroup(name))
 
+
+def timeit(n_iterations, fn, *args, **kwargs):
+  times = []
+  for i in xrange(n_iterations):
+    t0 = System.nanoTime()
+    imp = fn(*args, **kwargs)
+    t1 = System.nanoTime()
+    times.append(t1 - t0)
+  print "min: %.2f ms, max: %.2f ms, mean: %.2f ms" % (min(times) / 1000000.0, max(times) / 1000000.0, sum(times)/(len(times) * 1000000.0))
