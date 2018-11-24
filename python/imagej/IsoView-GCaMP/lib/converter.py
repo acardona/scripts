@@ -24,6 +24,7 @@ def defineSamplerConverter(fromType,
                   Defaults to "getRealFloat" from the RealType interface.
       fromMethodReturnType: a single letter, like:
         'F': float, 'D': double, 'C': char, 'B': byte, 'Z': boolean, 'S': short, 'I': integer, 'J': long
+        See: https://gitlab.ow2.org/asm/asm/blob/master/asm/src/main/java/org/objectweb/asm/Frame.java
       toMethod: the name of the toType class method for setting the value.
                 Defaults to "setReal" from the RealType interface.
       toMethodArgType: a single letter, like:
