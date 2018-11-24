@@ -15,13 +15,11 @@ sampler_conv_doubles = createSamplerConverter(UnsignedByteType, DoubleType,
             toMethod="setReal",
             toMethodArgType="D")
 
-""" # Fails mysteriously with a java.lang.StringIndexOutOfBoundsException: String index out of range: -1 at converters.py:85
 sampler_conv_longs = createSamplerConverter(UnsignedShortType, UnsignedLongType,
             fromMethod="getIntegerLong",
-            fromMethodReturnType="L",
-            toMethod="setInteger",
-            toMethodArgType="L")
-"""
+            fromMethodReturnType="J", # 'J' is for primitive long
+            toMethod="set",
+            toMethodArgType="J")
 
 
 
@@ -39,6 +37,11 @@ c = img1.cursor()
 while c.hasNext():
   c.next().setOne()
 
+img1s = ArrayImgs.unsignedShorts(dimensions)
+c = img1s.cursor()
+while c.hasNext():
+  c.next().setOne()
+
 
 def testASMFloats():
   img2 = ArrayImgs.floats(dimensions)
@@ -50,9 +53,10 @@ def testASMDoubles():
 
 def testASMLongs():
   img2 = ArrayImgs.unsignedLongs(dimensions)
-  ImgUtil.copy(ImgView.wrap(Converters.convertRandomAccessibleIterableInterval(img1, sampler_conv_longs), img1.factory()), img2)
+  ImgUtil.copy(ImgView.wrap(Converters.convertRandomAccessibleIterableInterval(img1s, sampler_conv_longs), img1.factory()), img2)
 
 timeit(20, testASMFloats)
 timeit(20, testASMDoubles)
+timeit(20, testASMLongs)
 
   
