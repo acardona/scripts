@@ -191,3 +191,126 @@ def createSamplerConverter(*args, **kwargs):
   """ Returns a new instance of the newly defined class implementing the SamplerConverter interface.
       See defineSamplerConverter for all argument details. """
   return defineSamplerConverter(*args, **kwargs).newInstance()
+
+
+def defineConverter(fromType,
+                    toType,
+                    classname="",
+                    fromMethod="getRealFloat",
+                    fromMethodReturnType="F", # e.g. "F" for native float
+                    toMethod="setReal",
+                    toMethodArgType="F"):
+  """ Create a new Converter fromType toType.
+  
+      fromType: the net.imglib2.Type to see as transformed into toType.
+      toType: the net.imglib2.Type to see.
+      classname: optional, will be made up if not defined.
+      fromMethod: the method for reading the value from the fromType.
+                  Defaults to getRealFloat form the RealType interface. 
+      toMethod: the method for setting the value to the toType.
+                Defaults to setReal from the RealType interface. """
+
+  if "" == classname:
+    classname = "asm/converters/%sTo%sConverter" % (fromType.getSimpleName(), toType.getSimpleName())
+
+  class_object = Type.getInternalName(Object)
+
+  # Type I for fromType
+  # Type O for toType
+  # Object for superclass
+  # Converter<I, O> for interface
+  class_signature = "<I:L%s;O:L%s;>L%s;L%s<TI;TO;>;" % \
+    tuple(imap(Type.getInternalName, (fromType, toType, Object, Converter)))
+
+  # Two arguments, one parameter for each: one for I, and another for O
+  # void return type: V
+  method_signature = "(TI;TO;)V;"
+
+  cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
+  cw.visit(Opcodes.V1_8,                      # java version
+           Opcodes.ACC_PUBLIC,                # public class
+           class_name,                        # package and class name
+           class_signature,                   # signature (None means not generic)
+           class_object,                      # superclass
+           [Type.getInternalName(Converter)]) # array of interfaces
+
+  # Default constructor
+  constructor = cw.visitMethod(Opcodes.ACC_PUBLIC,  # public
+                               "<init>",            # method name
+                               "()V",               # descriptor
+                               None,                # signature
+                               None)                # Exceptions (array of String)
+
+  # ... has to invoke the super() for Object
+  constructor.visitCode()
+  constructor.visitVarInsn(Opcodes.ALOAD, 0) # load "this" onto the stack: the first local variable is "this"
+  constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, # invoke an instance method (non-virtual)
+                              class_object,          # class on which the method is defined
+                              "<init>",              # name of the method (the default constructor of Object)
+                              "()V",                 # descriptor of the default constructor of Object
+                              False)                 # not an interface
+  constructor.visitInsn(Opcodes.RETURN) # End the constructor method
+  constructor.visitMaxs(1, 1) # The maximum number of stack slots (1) and local vars (1: "this")
+
+  # The convert(I, O) method from the Converter interface
+  method = cw.visitMethod(Opcodes.ACC_PUBLIC, # public method
+                          "convert",          # name of the interface method we are implementing
+                          "(L%s;L%s;)V" % tuple(imap(Type.getInternalName, (fromType, toType))), # descriptor
+                          "(TI;TO;)",         # signature
+                          None)               # Exceptions (array of String)
+
+  method.visitCode()
+  method.visitVarInsn(Opcodes.ALOAD, 2) # Load second argument onto stack: the FloatType
+  method.visitVarInsn(Opcodes.ALOAD, 1) # Load first argument onto stack: the UnsignedByteType
+  method.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                         Type.getInternalName(fromType),
+                         fromMethod, # e.g. "getRealFloat"
+                         "()%s" % fromMethodReturnType, # descriptor: no arguments # e.g. "F" for native float
+                         False)
+  method.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                         Type.getInternalName(toType),
+                         toMethod, # e.g. "setReal"
+                         "(%s)V" % toMethodArgType, # e.g. "F" for native float
+                         False)
+  method.visitInsn(Opcodes.RETURN)
+  method.visitMaxs(2, 3) # 2 stack slots: the two ALOAD calls. And 3 local variables: this, and two method arguments.
+  method.visitEnd()
+
+  # Now the public volatile bridge, because the above method uses generics.
+  # Does not seem to be necessary to run the convert method.
+  # This method takes an (Object, Object) as arguments and casts them to the expected types,
+  # and then invokes the above typed version of the "convert" method.
+  # The only reason I am adding it here is because I saw it when I printed the class byte code,
+  # after writing the converter in java and using this command to see the asm code:
+  # $ java -classpath /home/albert/Programming/fiji-new/Fiji.app/jars/imglib2-5.1.0.jar:/home/albert/Programming/fiji-new/Fiji.app/jars/asm-5.0.4.jar://home/albert/Programming/fiji-new/Fiji.app/jars/asm-util-4.0.jar org.objectweb.asm.util.Textifier my/UnsignedByteToFloatConverter.class
+
+  bridge = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE,
+                          "convert",
+                          "(L%s;L%s;)V" % tuple(repeat(class_object, 2)),
+                          "(L%s;L%s;)V" % tuple(repeat(class_object, 2)),
+                          None)
+  bridge.visitCode()
+  bridge.visitVarInsn(Opcodes.ALOAD, 0)
+  bridge.visitVarInsn(Opcodes.ALOAD, 1)
+  bridge.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(fromType))
+  bridge.visitVarInsn(Opcodes.ALOAD, 2)
+  bridge.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(toType))
+  bridge.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                         class_name,
+                         "convert",
+                         "(L%s;L%s;)V" % tuple(imap(Type.getInternalName, (fromType, toType))), # descriptor
+                         False)
+  bridge.visitInsn(Opcodes.RETURN)
+  bridge.visitMaxs(3, 3)
+  bridge.visitEnd()
+
+  loader = CustomClassLoader()
+  converterClass = loader.defineClass(classname, cw.toByteArray())
+
+  return converterClass
+
+
+def createConverter(*args, **kwargs):
+  """ Returns a new instance of the newly defined class implementing the Converter interface.
+      See defineConverter for all argument details. """
+  return defineSConverter(*args, **kwargs).newInstance()
