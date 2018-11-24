@@ -22,8 +22,12 @@ def defineSamplerConverter(fromType,
       classname: optional, the fully qualified name for the new class implementing SamplerConverter.
       fromMethod: the name of the fromType class method to use for getting its value.
                   Defaults to "getRealFloat" from the RealType interface.
+      fromMethodReturnType: a single letter, like:
+        'F': float, 'D': double, 'C': char, 'B': byte, 'Z': boolean, 'S': short, 'I': integer, 'J': long
       toMethod: the name of the toType class method for setting the value.
                 Defaults to "setReal" from the RealType interface.
+      toMethodArgType: a single letter, like:
+        'F': float, 'D': double, 'C': char, 'B': byte, 'Z': boolean, 'S': short, 'I': integer, 'J': long
       toAccess: the interface to implement, such as FloatAccess. Optional, will be guessed. """
 
   if toAccess is None:
@@ -82,16 +86,21 @@ def defineSamplerConverter(fromType,
                     "()L%s;" % Type.getInternalName(Object), # isn't this weird? Why Object?
                     True)
   gv.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(fromType))
+  print Type.getInternalName(fromType), fromMethod, fromMethodReturnType
   gv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
                     Type.getInternalName(fromType),
                     fromMethod, # e.g. getRealFloat
                     "()%s" % fromMethodReturnType, # e.g. F for native float
                     False)
   # Figure out the return and the loading instructions: primitive or object class
-  if fromMethodReturnType in ["I", "L", "F", "D"]: # I for integer and smaller; L for long, F for float, D for double
+  # (NOTE: will not work for array, that starts with '[')
+  if fromMethodReturnType in ["F", "D"]: # 'F' for float, 'D' for double
     ret = fromMethodReturnType + "RETURN"
     load = fromMethodReturnType + "LOAD"
-  elif 1 == len(fromMethodReturnType): # char, byte, boolean, short
+  elif 'J' == fromMethodReturnType: # 'J' is for long
+    ret = "LRETURN"
+    load = "LLOAD"
+  elif fromMethodReturnType in ["S", "I", "B", "C", "Z"]: # 'C': char, 'B': byte, 'Z', boolean, 'S', short, 'I': integer
     ret = "IRETURN"
     load = "ILOAD"
   else:
