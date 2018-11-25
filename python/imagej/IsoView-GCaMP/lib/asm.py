@@ -1,7 +1,10 @@
-from org.objectweb.asm import ClassWriter, Opcodes, Type
+from org.objectweb.asm import ClassWriter, Opcodes, Type, ClassReader
 from java.lang import Object, ClassLoader, Class, String, Integer
 from itertools import imap, izip
 import sys
+from org.objectweb.asm.util import Printer, ASMifier, TraceClassVisitor
+from java.io import PrintWriter, ByteArrayOutputStream
+
 
 def initClass(name,
               signature=None,
@@ -187,6 +190,11 @@ def initMethod(cw,
 
 class CustomClassLoader(ClassLoader):
   def defineClass(self, name, bytes):
+    """
+       name: the fully qualified (i.e. with packages) name of the class to load.
+       bytes: a byte[] (a byte array) containing the class bytecode.
+       Invokes the defineClass of the parent ClassLoader, which is a protected method.
+    """
     # Inheritance of protected methods is complicated in jython
     m = super(ClassLoader, self).__thisclass__.getDeclaredMethod("defineClass", String, Class.forName("[B"), Integer.TYPE, Integer.TYPE)
     m.setAccessible(True)
@@ -195,3 +203,16 @@ class CustomClassLoader(ClassLoader):
     except:
       print sys.exc_info()
 
+
+def asmify(clazz, skipdebug=False):
+  """ Print the ASM java code calls necessary to construct the clazz on the fly.
+      Works only for classes loaded by the Fiji startup ClassLoader from .class files.
+      See org.objectweb.asm.util.Printer.main method at: https://gitlab.ow2.org/asm/asm/blob/master/asm-util/src/main/java/org/objectweb/asm/util/Printer.java#L1225
+      
+      To see the ASM java code calls for an arbitrary .class file, run instead:
+      
+      $ java --classpath .:/path/to/Fiji.app/jars/asm-5.0.4.jar:/path/to/Fiji.app/jars/asm-util.4.0.jar org.objectweb.asm.util.ASMfier <package>/classname.class  """
+  baos = ByteArrayOutputStream() # expands size as needed
+  tcv = TraceClassVisitor(None, ASMifier(), PrintWriter(baos))
+  ClassReader(clazz).accept(tcv, ClassReader.SKIP_DEBUG if skipdebug else 0)
+  return baos.toString()
