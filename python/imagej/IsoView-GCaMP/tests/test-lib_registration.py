@@ -1,7 +1,7 @@
 import sys
-sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/lib/")
+sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 
-from registration import registeredView
+from lib.registration import registeredView
 
 from net.imglib2.view import Views
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
