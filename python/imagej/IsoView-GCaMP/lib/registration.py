@@ -1,7 +1,7 @@
 from mpicbg.models import NotEnoughDataPointsException
 from java.util import ArrayList
 from net.imglib2.view import Views
-from net.imglib2.realtransform import RealViews, AffineTransform3D, Scale3D
+from net.imglib2.realtransform import RealViews, AffineTransform3D, Scale3D, Translation3D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from jarray import array, zeros
 from itertools import izip, imap
