@@ -10,9 +10,9 @@ from os.path import basename
 # local lib functions:
 from dogpeaks import getDoGPeaks
 from util import syncPrint, Task, Getter
-from features_asm import createNativeConstellationClass
+from features_asm import initNativeClasses
 
-Constellation = createNativeConstellationClass()
+Constellation, PointMatches = initNativeClasses()
 
 # A custom feature, comparable with other features of the same kind
 #class Constellation:
@@ -90,55 +90,55 @@ def makeRadiusSearch(peaks):
 extractFeatures = Constellation.extractFeatures
 
 
-class PointMatches():
-  def __init__(self, pointmatches):
-    self.pointmatches = pointmatches
-  
-  @staticmethod
-  def fromFeatures(features1, features2, angle_epsilon, len_epsilon_sq):
-    """ Compare all features of one image to all features of the other image,
-        to identify matching features and then create PointMatch instances. """
-    return PointMatches([PointMatch(c1.position, c2.position)
-                         for c1, c2 in product(features1, features2)
-                         if c1.matches(c2, angle_epsilon, len_epsilon_sq)])
-
-  @staticmethod
-  def fromNearbyFeatures(radius, features1, features2, angle_epsilon, len_epsilon_sq):
-    """ Compare each feature in features1 to those features in features2
-        that fall within the radius, using the search2 (a RadiusNeighborSearchOnKDTree). """
-    # Construct log(n) search
-    # (Uses RealPoint.wrap to avoid copying the double[] from getW())
-    positions2 = [RealPoint.wrap(c2.position.getW()) for c2 in features2]
-    search2 = RadiusNeighborSearchOnKDTree(KDTree(features2, positions2))
-    pointmatches = []
-
-    for c1 in features1:
-      search2.search(RealPoint.wrap(c1.position.getW()), radius, False) # no need to sort
-      pointmatches.extend(PointMatch(c1.position, c2.position)
-                          for c2 in (search2.getSampler(i).get()
-                                     for i in xrange(search2.numNeighbors()))
-                          if c1.matches(c2, angle_epsilon, len_epsilon_sq))
-    #
-    return PointMatches(pointmatches)
-
-  def toRows(self):
-    return [tuple(p1.getW()) + tuple(p2.getW())
-            for p1, p2 in self.pointmatches]
-
-  @staticmethod
-  def fromRows(rows):
-    """ rows: from a CSV file, as lists of strings. """
-    return PointMatches([PointMatch(Point(array(imap(float, row[0:3]), 'd')),
-                                    Point(array(imap(float, row[3:6]), 'd')))
-                         for row in rows])
-
-  @staticmethod
-  def csvHeader():
-    return ["x1", "y1", "z1", "x2", "y2", "z2"]
-
-  @staticmethod
-  def asRow(pm):
-    return tuple(pm.getP1().getW()) + tuple(pm.getP2().getW())
+#class PointMatches():
+#  def __init__(self, pointmatches):
+#    self.pointmatches = pointmatches
+#  
+#  @staticmethod
+#  def fromFeatures(features1, features2, angle_epsilon, len_epsilon_sq):
+#    """ Compare all features of one image to all features of the other image,
+#        to identify matching features and then create PointMatch instances. """
+#    return PointMatches([PointMatch(c1.position, c2.position)
+#                         for c1, c2 in product(features1, features2)
+#                         if c1.matches(c2, angle_epsilon, len_epsilon_sq)])
+#
+#  @staticmethod
+#  def fromNearbyFeatures(radius, features1, features2, angle_epsilon, len_epsilon_sq):
+#    """ Compare each feature in features1 to those features in features2
+#        that fall within the radius, using the search2 (a RadiusNeighborSearchOnKDTree). """
+#    # Construct log(n) search
+#    # (Uses RealPoint.wrap to avoid copying the double[] from getW())
+#    positions2 = [RealPoint.wrap(c2.position.getW()) for c2 in features2]
+#    search2 = RadiusNeighborSearchOnKDTree(KDTree(features2, positions2))
+#    pointmatches = []
+#
+#    for c1 in features1:
+#      search2.search(RealPoint.wrap(c1.position.getW()), radius, False) # no need to sort
+#      pointmatches.extend(PointMatch(c1.position, c2.position)
+#                          for c2 in (search2.getSampler(i).get()
+#                                     for i in xrange(search2.numNeighbors()))
+#                          if c1.matches(c2, angle_epsilon, len_epsilon_sq))
+#    #
+#    return PointMatches(pointmatches)
+#
+#  def toRows(self):
+#    return [tuple(p1.getW()) + tuple(p2.getW())
+#            for p1, p2 in self.pointmatches]
+#
+#  @staticmethod
+#  def fromRows(rows):
+#    """ rows: from a CSV file, as lists of strings. """
+#    return PointMatches([PointMatch(Point(array(imap(float, row[0:3]), 'd')),
+#                                    Point(array(imap(float, row[3:6]), 'd')))
+#                         for row in rows])
+#
+#  @staticmethod
+#  def csvHeader():
+#    return ["x1", "y1", "z1", "x2", "y2", "z2"]
+#
+#  @staticmethod
+#  def asRow(pm):
+#    return tuple(pm.getP1().getW()) + tuple(pm.getP2().getW())
 
 
 def saveFeatures(img_filename, directory, features, params):
