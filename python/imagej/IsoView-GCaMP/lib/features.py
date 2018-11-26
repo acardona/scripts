@@ -10,51 +10,54 @@ from os.path import basename
 # local lib functions:
 from dogpeaks import getDoGPeaks
 from util import syncPrint, Task, Getter
+from features_asm import createNativeConstellationClass
+
+Constellation = createNativeConstellationClass()
 
 # A custom feature, comparable with other features of the same kind
-class Constellation:
-  """ Expects 3 scalars and an iterable of scalars. """
-  def __init__(self, angle, len1, len2, coords):
-    self.angle = angle
-    self.len1 = len1
-    self.len2 = len2
-    self.position = Point(array(coords, 'd'))
-
-  def matches(self, other, angle_epsilon, len_epsilon_sq):
-    """ Compare the angles, if less than epsilon, compare the vector lengths.
-       Return True when deemed similar within measurement error brackets. """
-    return abs(self.angle - other.angle) < angle_epsilon \
-       and abs(self.len1 - other.len1) + abs(self.len2 - other.len2) < len_epsilon_sq
-
-  @staticmethod
-  def subtract(loc1, loc2):
-    return (loc1.getFloatPosition(d) - loc2.getFloatPosition(d)
-            for d in xrange(loc1.numDimensions()))
-
-  @staticmethod
-  def fromSearch(center, p1, d1, p2, d2):
-    """ center, p1, p2 are 3 RealLocalizable, with center being the peak
-        and p1, p2 being the wings (the other two points).
-        p1 is always closer to center than p2 (d1 < d2).
-        d1, d2 are the square distances from center to p1, p2
-        (could be computed here, but RadiusNeighborSearchOnKDTree did it). """
-    pos = tuple(center.getFloatPosition(d) for d in xrange(center.numDimensions()))
-    v1 = Vector3f(Constellation.subtract(p1, center))
-    v2 = Vector3f(Constellation.subtract(p2, center))
-    return Constellation(v1.angle(v2), d1, d2, pos)
-
-  @staticmethod
-  def fromRow(row):
-    """ Expects: row = [angle, len1, len2, x, y, z] """
-    return Constellation(row[0], row[1], row[2], row[3:])
-
-  def asRow(self):
-    "Returns: [angle, len1, len2, position.x, position,y, position.z"
-    return (self.angle, self.len1, self.len2) + tuple(self.position.getW())
-
-  @staticmethod
-  def csvHeader():
-    return ["angle", "len1", "len2", "x", "y", "z"]
+#class Constellation:
+#  """ Expects 3 scalars and an iterable of scalars. """
+#  def __init__(self, angle, len1, len2, coords):
+#    self.angle = angle
+#    self.len1 = len1
+#    self.len2 = len2
+#    self.position = Point(array(coords, 'd'))
+# 
+#  def matches(self, other, angle_epsilon, len_epsilon_sq):
+#    """ Compare the angles, if less than epsilon, compare the vector lengths.
+#       Return True when deemed similar within measurement error brackets. """
+#    return abs(self.angle - other.angle) < angle_epsilon \
+#       and abs(self.len1 - other.len1) + abs(self.len2 - other.len2) < len_epsilon_sq
+# 
+#  @staticmethod
+#  def subtract(loc1, loc2):
+#    return (loc1.getFloatPosition(d) - loc2.getFloatPosition(d)
+#            for d in xrange(loc1.numDimensions()))
+# 
+#  @staticmethod
+#  def fromSearch(center, p1, d1, p2, d2):
+#    """ center, p1, p2 are 3 RealLocalizable, with center being the peak
+#        and p1, p2 being the wings (the other two points).
+#        p1 is always closer to center than p2 (d1 < d2).
+#        d1, d2 are the square distances from center to p1, p2
+#        (could be computed here, but RadiusNeighborSearchOnKDTree did it). """
+#    pos = tuple(center.getFloatPosition(d) for d in xrange(center.numDimensions()))
+#    v1 = Vector3f(Constellation.subtract(p1, center))
+#    v2 = Vector3f(Constellation.subtract(p2, center))
+#    return Constellation(v1.angle(v2), d1, d2, pos)
+# 
+#  @staticmethod
+#  def fromRow(row):
+#    """ Expects: row = [angle, len1, len2, x, y, z] """
+#    return Constellation(row[0], row[1], row[2], row[3:])
+# 
+#  def asRow(self):
+#    """ Returns: [angle, len1, len2, position.x, position,y, position.z] """
+#    return (self.angle, self.len1, self.len2) + tuple(self.position.getW())
+# 
+#  @staticmethod
+#  def csvHeader():
+#    return ["angle", "len1", "len2", "x", "y", "z"]
 
 
 def makeRadiusSearch(peaks):
@@ -63,26 +66,28 @@ def makeRadiusSearch(peaks):
   return RadiusNeighborSearchOnKDTree(KDTree(peaks, peaks))
 
 
-def extractFeatures(peaks, search, radius, min_angle, max_per_peak):
-  """ Construct up to max_per_peak constellation features with furthest peaks. """
-  constellations = []
-  for peak in peaks:
-    search.search(peak, radius, True) # sorted
-    n = search.numNeighbors()
-    if n > 2:
-      yielded = 0
-      # 0 is itself: skip from range of indices
-      for i, j in izip(xrange(n -2, 0, -1), xrange(n -1, 0, -1)):
-        if yielded == max_per_peak:
-          break
-        p1, d1 = search.getPosition(i), search.getSquareDistance(i)
-        p2, d2 = search.getPosition(j), search.getSquareDistance(j)
-        cons = Constellation.fromSearch(peak, p1, d1, p2, d2)
-        if cons.angle >= min_angle:
-          yielded += 1
-          constellations.append(cons)
-  #
-  return constellations
+#def extractFeatures(peaks, search, radius, min_angle, max_per_peak):
+#  """ Construct up to max_per_peak constellation features with furthest peaks. """
+#  constellations = []
+#  for peak in peaks:
+#    search.search(peak, radius, True) # sorted
+#    n = search.numNeighbors()
+#    if n > 2:
+#      yielded = 0
+#      # 0 is itself: skip from range of indices
+#      for i, j in izip(xrange(n -2, 0, -1), xrange(n -1, 0, -1)):
+#        if yielded == max_per_peak:
+#          break
+#        p1, d1 = search.getPosition(i), search.getSquareDistance(i)
+#        p2, d2 = search.getPosition(j), search.getSquareDistance(j)
+#        cons = Constellation.fromSearch(peak, p1, d1, p2, d2)
+#        if cons.angle >= min_angle:
+#          yielded += 1
+#          constellations.append(cons)
+#  #
+#  return constellations
+
+extractFeatures = Constellation.extractFeatures
 
 
 class PointMatches():
