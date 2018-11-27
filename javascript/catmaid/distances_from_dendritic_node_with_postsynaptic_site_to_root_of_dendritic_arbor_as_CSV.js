@@ -1,6 +1,7 @@
 // Compute distances from each dendritic node with a postsynatic site
 // to the root of the dendritic arbor, here defined as the dendritic node 
-// with a postsynaptic site that is closest to the root node of the arbor.
+// that is the nearest common ancestor to all dendritic arbor nodes with
+// a postsynaptic site.
 
 // ASSUMES axon and dendrite coloring mode, so that the "axon" variable exists.
 
@@ -14,7 +15,7 @@ var sks = w.space.content.skeletons;
 Object.keys(sks).forEach(function(skid) {
   var sk = sks[skid];
   var arbor = sk.createArbor();
-  var smooth_positions = arbor.smoothPositions(sk.getPositions(), 200); // sigma of 200 n
+  var smooth_positions = arbor.smoothPositions(sk.getPositions(), 200); // sigma of 200 nm
   var distanceFn = (function(child, paren) {
      return this[child].distanceTo(this[paren]);
   }).bind(smooth_positions);
