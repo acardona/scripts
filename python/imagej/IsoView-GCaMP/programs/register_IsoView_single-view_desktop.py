@@ -2,7 +2,7 @@ from __future__ import with_statement
 import sys, os, csv
 sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import computeForwardTransforms, asBackwardConcatTransforms, viewTransformed, saveMatrices, loadMatrices
-from lib.util import newFixedThreadPool
+from lib.util import newFixedThreadPool, syncPrint
 from org.janelia.simview.klb import KLB
 from collections import defaultdict
 from net.imglib2.cache import CacheLoader
@@ -93,7 +93,7 @@ def register(view_index, filepaths, modelclass, csv_dir, params, n_threads=0, wo
       identity_indices = [i for i, m in enumerate(matrices) if 1.0 == m[0] and 0.0 == m[1] and 0.0 == m[2] and 0.0 == m[3]
                                                            and 0.0 == m[4] and 1.0 == m[5] and 0.0 == m[6] and 0.0 == m[7]
                                                            and 0.0 == m[8] and 0.0 == m[9] and 1.0 == m[10] and 0.0 == m[11]]
-      syncPrint("View %i: identity matrices at [%s]" % (view_index, ", ".join(identity_indices))) 
+      syncPrint("View %i: identity matrices at [%s]" % (view_index, ", ".join(str(index) for index in identity_indices)))
       saveMatrices(name, matrices, csv_dir)
   finally:
     exe.shutdown()
