@@ -1,13 +1,13 @@
-from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.img import ImgView
 from net.imglib2.util import Intervals, ImgUtil
 from net.imglib2.realtransform import Scale3D, AffineTransform3D
-from ij import IJ
+from net.imglib2.img.io import Load
 import os, re, sys
-from util import newFixedThreadPool, Task, syncPrint
+from itertools import izip, chain
+from util import newFixedThreadPool, Task
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
-from registration import computeForwardTransforms, saveMatrices, loadMatrices
+from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms
 from deconvolution import multiviewDeconvolution
 
 
@@ -129,7 +129,9 @@ def registerDeconvolvedTimePoints(srcDir,
       expects deconvolved images to exist under targetDir/deconvolved/,
       with a name pattern like: TM_\d+_CM0\d_CM0\d-deconvolved.zip
       
-      Tests if files exist first, if not, will stop execution. """
+      Tests if files exist first, if not, will stop execution.
+      
+      Returns an imglib2 4D img with the registered deconvolved 3D stacks. """
 
   csv_dir = os.path.join(target_dir, "deconvolved/csvs/")
   if not os.path.exists(csv_dir):
@@ -175,6 +177,7 @@ def registerDeconvolvedTimePoints(srcDir,
       futures.append(exe.submit(Task, computeForwardTransforms, pair_filepaths, ImageJLoader(), getCalibration,
                                 deconcolved_csv_dir, exe, modelclass, params, exe_shutdown=False))
     matrices_2_3 = []
+    # Invert and concatenate the transforms
     for i, f in enumerate(futures):
       _, matrix_2_3_fwd = f.get() # first one is the identity
       aff_0_1 = AffineTransform3D()
@@ -184,13 +187,24 @@ def registerDeconvolvedTimePoints(srcDir,
       aff_2_3 = aff_2_3.inverse()
       aff_2_3.preConcatenate(aff_0_1)
       matrices_2_3.append(aff_2_3.getRowPackedCopy())
-    saveMatrices(matrices_2_3_name, matrices_2_3, csv_dir)  
+    saveMatrices(matrices_2_3_name, matrices_2_3, csv_dir)
 
-  # TODO then show the registered deconvolved series as a 4D volume.
+  # Show the registered deconvolved series as a 4D volume.
+  affines = []
+  for pair in izip(matrices_0_1, matrices_2_3):
+    for matrix in pair:
+      aff = AffineTransform3D()
+      aff.set(*matrix_0_1)
+      affines.append(aff)
+
+  filepaths = list(chain.from_iterable(izip(deconvolved_filepaths_0_1, deconvolved_filepaths_2_3)))
+  img = Load.lazyStack(filepaths, TransformedLoader(ImageJLoader(), dict(izip(filepaths, affines))))
+  return img
 
 
 def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
-                        cmIsotropicTransforms, roi, params, modelclass, kernel, exe):
+                        cmIsotropicTransforms, roi, params, modelclass, kernel,
+                        exe, write=writeZip):
   """ filepaths is a dictionary of camera index vs filepath to a KLB file.
       This function will generate two deconvolved views, one for each channel,
       where CHN00 is made of CM00 + CM01, and
@@ -208,7 +222,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
   if os.path.exists(os.path.join(csv_dir, matrices_name)):
     matrices = loadMatrices(matrices_name, csv_dir)
   else:
-    transforming_loader = TransformedLoader(klb_loader, dict(zip(filepaths, cmIsotropicTransforms)), roi)
+    transforming_loader = TransformedLoader(klb_loader, dict(zip(filepaths, cmIsotropicTransforms)), roi=roi)
     futures = []
     # Each task will use two additional threads
     futures.append(exe.submit(Task, computeForwardTransforms, filepaths[:2], transforming_loader, getCalibration,
@@ -234,7 +248,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
                 cmIsotropicTransforms[2],
                 concat(cmIsotropicTransforms[3], matrices[1])]
   
-  transforming_loader2 = TransformedLoader(klb_loader, dict(zip(filepaths, transforms)), roi)
+  transforming_loader2 = TransformedLoader(klb_loader, dict(zip(filepaths, transforms)), roi=roi)
 
   def intoArrayImg(index):
     img = transforming_loader2.get(filepaths[index])
@@ -253,7 +267,11 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       # Deconvolve: merge two views into a single volume
       n_iterations = params["CM_%i_%i_n_iterations" % indices]
       img = multiviewDeconvolution(images, params["blockSize"], kernel, n_iterations, exe=exe)
+<<<<<<< f44d515f9771fb7187c143ff395a9b125fe480d3
       writeZip(img, path, title=filename)
+=======
+      write(img, path, title=filename)
+>>>>>>> lib/isoview.py: functions to register and deconvolve IsoView 4-camera 4D series.
 
   deconvolveAndSave([0, 1])
   deconvolveAndSave([2, 3])

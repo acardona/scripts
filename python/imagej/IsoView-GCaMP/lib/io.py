@@ -81,19 +81,21 @@ class KLBLoader(CacheLoader):
 
 
 class TransformedLoader(CacheLoader):
-  def __init__(self, klb_loader, transformsDict, roi):
-    self.klb_loader = klb_loader
+  def __init__(self, loader, transformsDict, roi=None):
+    self.loader = loader
     self.transformsDict = transformsDict
     self.roi = roi
   def load(self, path):
     return self.get(path)
   def get(self, path):
     transform = self.transformsDict[path]
-    img = self.klb_loader.get(path)
+    img = self.loader.get(path)
     imgE = Views.extendZero(img)
     imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
     imgT = RealViews.transform(imgI, transform)
-    return Views.zeroMin(Views.interval(imgT, self.roi[0], self.roi[1]))
+    minC = self.roi[0] if self.roi else [0] * img.numDimensions()
+    maxC = self.roi[1] if self.roi else [img.dimension(d) for d in xrange(img.numDimensions())]
+    return Views.zeroMin(Views.interval(imgT, minC, maxC))
 
 
 class ImageJLoader(CacheLoader):
