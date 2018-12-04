@@ -22,6 +22,7 @@ def fit(model, pointmatches, n_iterations, maxEpsilon,
                                     maxEpsilon, minInlierRatio, minNumInliers, maxTrust)
   except NotEnoughDataPointsException, e:
     syncPrint(str(e))
+    return False, inliers
   return modelFound, inliers
 
 
