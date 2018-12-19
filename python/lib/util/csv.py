@@ -48,7 +48,7 @@ def parseLabeledMatrix(filename, cast=int, separator=","):
     row_names = []
     column_names = None
 
-    with open(filename) as f:
+    with open(filename, 'r') as f:
         for i, line in enumerate(f):
             # First line contains names of postsynaptic neurons
             if 0 == i:
