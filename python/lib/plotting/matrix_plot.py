@@ -16,7 +16,7 @@ import matplotlib
 def show_values(pc, fmt="%.2f", hideZeros=True, **kw):
     """
       Show the numeric values of each matrix cell inside the cell.
-      'pc': the value returned from ax.pcolor(...)
+      'pc': the value returned from ax.pcolor(...), a PolyCollection.
       'fmt': the format of the number, defaults to float with 2 decimal points. Can also be a function that returns a string.
       Additional keyword arguments are passed verbatim to the ax.text function.
     """
@@ -59,7 +59,9 @@ def matrix_plot(
         fmt='%.2f',
         hideZeros=True,
         value_range=(0.0, 1.0),
-        cm_dimensions=(40, 20)):
+        cm_dimensions=(40, 20),
+        shrink=0.2,
+        fontsize=8):
     """
      'matrix': numpy 2d-shaped array with the values to plot.
      'title': string, optional (can be None)
@@ -75,6 +77,8 @@ def matrix_plot(
      'hideZeros': boolean, whether to avoid showing text in cells where the value is zero.
      'value_range': default to a tuple (0.0, 1.0) defining the min and max values to use for the color bar. 
      'cm_dimensions': default to a tuple of (40, 20) cm.
+     'shrink': defaults to 0.2 (one fifth), proportion of the color bar relative to the height of the graph.
+     'fontsize': defaults to 8, for the font of the numeric values inside the matrix.
     """
     # Plot it out
     fig, ax = plt.subplots()    
@@ -121,10 +125,10 @@ def matrix_plot(
     ax.invert_yaxis()
 
     # Add color bar
-    plt.colorbar(c)
+    plt.colorbar(c, shrink=shrink)
 
     # Add text in each cell 
-    if with_values: show_values(c, fmt=fmt, hideZeros=hideZeros)
+    if with_values: show_values(c, fmt=fmt, hideZeros=hideZeros, fontsize=fontsize)
 
     # resize 
     fig = plt.gcf()
