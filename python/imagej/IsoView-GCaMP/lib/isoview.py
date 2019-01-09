@@ -4,8 +4,9 @@ from net.imglib2.util import Intervals, ImgUtil
 from net.imglib2.realtransform import Scale3D, AffineTransform3D
 from net.imglib2.img.io import Load
 import os, re, sys
+from pprint import pprint
 from itertools import izip, chain
-from util import newFixedThreadPool, Task
+from util import newFixedThreadPool, Task, syncPrint
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms
 from deconvolution import multiviewDeconvolution
@@ -18,7 +19,8 @@ def deconvolveTimePoints(srcDir,
                          cameraTransformations,
                          params,
                          modelclass,
-                         roi):
+                         roi,
+                         subrange=None):
   """
      Main program entry point.
      For each time point folder TM\d+, find the KLB files of the 4 cameras,
@@ -46,6 +48,7 @@ def deconvolveTimePoints(srcDir,
              finding pointmatches and transformation model estimation.
      modelclass: the class of the transformation model for registering the camera views.
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
+     subrange: defaults to None. Can be a list specifying the indices of time points to deconvolve.
   """
   kernel = readFloats(kernel_filepath, [19, 19, 25], header=434)
   klb_loader = KLBLoader()
@@ -66,25 +69,36 @@ def deconvolveTimePoints(srcDir,
         continue
       filepaths = {}
       tm_dir = os.path.join(srcDir, dirname)
-      for filename in os.listdir(tm_dir):
+      for filename in sorted(os.listdir(tm_dir)):
         r = re.match(pattern, filename)
         if r:
           camera_index = int(r.groups()[0])
-          filepaths[camera_index].append(os.path.join(tm_dir, filename))
+          filepaths[camera_index] = os.path.join(tm_dir, filename)
       yield filepaths
+
+  if subrange:
+    indices = set(subrange)
+    TMs = [tm for i, tm in enumerate(iterTMs()) if i in indices]
+  else:
+    TMs = list(iterTMs())
   
   # Validate folders
-  for filepaths in iterTMs():
+  for filepaths in TMs:
     if 4 != len(filepaths):
       print "Folder %s has problems: found %i KLB files in it instead of 4." % (tm_dir, len(filepaths))
       print "Address the issues and rerun."
       return
 
+  print "Will process these timepoints:",
+  for i, TM in enumerate(TMs):
+    print i
+    pprint(TM)
+
   # All OK, submit all timepoint folders for registration and deconvolution 
   
   # Prepare coarse transforms
   def prepareCoarseTransforms():
-    first = iterTMs().next() # filepaths for first set of 4 KLB images
+    first = TMs[0] # filepaths for first set of 4 KLB images
     images = [klb_loader.get(first[i]) for i in sorted(first.keys())]
     scale3D = AffineTransform3D()
     scale3D.set(calibration[0], 0.0, 0.0, 0.0,
@@ -93,7 +107,7 @@ def deconvolveTimePoints(srcDir,
     cmTransforms = cameraTransformations(images[0], images[1], images[2], images[3], calibration)
     cmIsotropicTransforms = []
     for camera_index in sorted(cmTransforms.keys()):
-      aff = AffineTransform()
+      aff = AffineTransform3D()
       aff.set(*cmTransforms[camera_index])
       aff.concatenate(scale3D)
       cmIsotropicTransforms.append(aff)
@@ -108,7 +122,8 @@ def deconvolveTimePoints(srcDir,
   # Submit for registration + deconvolution
   # The registration uses 2 parallel threads, and deconvolution all possible available threads.
   # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
-  for filenames in iterTMs():
+  for i, filepaths in enumerate(TMs):
+    syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
     deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration, cmIsotropicTransforms,
                         roi, params, modelclass, kernel, exe)
   
@@ -209,7 +224,6 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       This function will generate two deconvolved views, one for each channel,
       where CHN00 is made of CM00 + CM01, and
             CHNO1 is made of CM02 + CM03. """
-
   # Step 0: create csv_dir if not there
   tm_dirname = filepaths[0][filepaths[0].rfind("_TM") + 1:filepaths[0].rfind("_CM")]
   csv_dir = os.path.join(targetDir, tm_dirname + "-csv")
@@ -222,13 +236,13 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
   if os.path.exists(os.path.join(csv_dir, matrices_name)):
     matrices = loadMatrices(matrices_name, csv_dir)
   else:
-    transforming_loader = TransformedLoader(klb_loader, dict(zip(filepaths, cmIsotropicTransforms)), roi=roi)
+    transforming_loader = TransformedLoader(klb_loader, {filepaths[k]: cmIsotropicTransforms[k] for k in xrange(4)}, roi=roi)
     futures = []
     # Each task will use two additional threads
-    futures.append(exe.submit(Task, computeForwardTransforms, filepaths[:2], transforming_loader, getCalibration,
-                                                              csv_dir, exe, modelclass, params, exe_shutdown=False))
-    futures.append(exe.submit(Task, computeForwardTransforms, filepaths[2:], transforming_loader, getCalibration,
-                                                              csv_dir, exe, modelclass, params, exe_shutdown=False))
+    futures.append(exe.submit(Task(computeForwardTransforms, [filepaths[0], filepaths[1]], transforming_loader, getCalibration,
+                                                             csv_dir, exe, modelclass, params, exe_shutdown=False)))
+    futures.append(exe.submit(Task(computeForwardTransforms, [filepaths[2], filepaths[3]], transforming_loader, getCalibration,
+                                                             csv_dir, exe, modelclass, params, exe_shutdown=False)))
     _, matrix_0_1 = futures[0].get() # the _ is an identity transform
     _, matrix_2_3 = futures[1].get()
     matrices = [matrix_0_1, matrix_2_3]
@@ -238,7 +252,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
   def concat(aff, matrix):
     t = AffineTransform3D()
     t.set(aff)
-    aff1 = AffineTransform()
+    aff1 = AffineTransform3D()
     aff1.set(*matrix)
     t.preConcatenate(aff1)
     return t
@@ -248,7 +262,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
                 cmIsotropicTransforms[2],
                 concat(cmIsotropicTransforms[3], matrices[1])]
   
-  transforming_loader2 = TransformedLoader(klb_loader, dict(zip(filepaths, transforms)), roi=roi)
+  transforming_loader2 = TransformedLoader(klb_loader, {filepaths[k]: transforms[k] for k in xrange(4)}, roi=roi)
 
   def intoArrayImg(index):
     img = transforming_loader2.get(filepaths[index])
@@ -267,14 +281,10 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       # Deconvolve: merge two views into a single volume
       n_iterations = params["CM_%i_%i_n_iterations" % indices]
       img = multiviewDeconvolution(images, params["blockSize"], kernel, n_iterations, exe=exe)
-<<<<<<< f44d515f9771fb7187c143ff395a9b125fe480d3
       writeZip(img, path, title=filename)
-=======
-      write(img, path, title=filename)
->>>>>>> lib/isoview.py: functions to register and deconvolve IsoView 4-camera 4D series.
 
-  deconvolveAndSave([0, 1])
-  deconvolveAndSave([2, 3])
+  deconvolveAndSave((0, 1))
+  deconvolveAndSave((2, 3))
 
   
 
