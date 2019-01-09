@@ -6,13 +6,13 @@ from mpicbg.models import RigidModel3D
 
 # The folder with the sequence of TM\d+ folders, one per time point in the 4D series.
 # Each folder should contain 4 KLB files, one per camera view of the IsoView microscope.
-srcDir = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/"
+srcDir = "/groups/zlatic/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/"
 
 # A folder to save deconvolved images in, and CSV files describing features, point matches and transformations
-targetDir = "/home/albert/shares/cardonalab/Albert/deconvolved/"
+targetDir = "/groups/cardona/cardonalab/Albert/2017-05-10_1038/"
 
 # Path to the volume describing the point spread function (PSF)
-kernelPath = "/home/albert/lab/Raghav-IsoView-PSF/PSF-19x19x25.tif"
+kernelPath = "/groups/cardona/cardonalab/Albert/Raghav-IsoView-PSF/PSF-19x19x25.tif"
 
 # The calibration is [0.40625, 0.40625, 2.03125]
 # To preserve XY pixels, expand Z only:
@@ -90,7 +90,7 @@ roi = ([1, 228, 0], # top-left coordinates
 modelclass = RigidModel3D
 
 deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
-                    cameraTransformations, params, modelclass, roi)
+                    cameraTransformations, params, modelclass, roi, subrange=range(0, 10))
 
 
 
