@@ -1,6 +1,6 @@
 import sys
-sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
-from lib.lsm.isoview import deconvolveTimePoints
+sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")
+from lib.isoview import deconvolveTimePoints
 from mpicbg.models import RigidModel3D
 
 
@@ -24,7 +24,7 @@ def cameraTransformations(img1, img2, img3, img4, calibration):
     0: [1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0],
-    1: [-1.0, 0.0, 0.0, img1.dimension(0) * calibration(0) - 195,
+    1: [-1.0, 0.0, 0.0, img1.dimension(0) * calibration[0] - 195,
          0.0, 1.0, 0.0, 54.0,
          0.0, 0.0, 1.0,  8.0],
     2: [ 0.0, 0.0, 1.0,  0.0,
@@ -83,7 +83,7 @@ params.update(paramsDeconvolution)
 
 # A region of interest for each camera view, for cropping after registration but prior to deconvolution
 roi = ([1, 228, 0], # top-left coordinates
-       [1 + 406 -1, 228 + 465 -1, 325 -1]) # bottom-right coordinates (inclusive, hence the -1)
+       [1 + 406 -1, 228 + 465 -1, 0 + 325 -1]) # bottom-right coordinates (inclusive, hence the -1)
 
 
 # The transformation model for registering views onto each other
