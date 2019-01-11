@@ -18,7 +18,8 @@ def deconvolveTimePoints(srcDir,
                          cameraTransformations,
                          params,
                          modelclass,
-                         roi):
+                         roi,
+                         subrange=None):
   """
      Main program entry point.
      For each time point folder TM\d+, find the KLB files of the 4 cameras,
@@ -46,6 +47,7 @@ def deconvolveTimePoints(srcDir,
              finding pointmatches and transformation model estimation.
      modelclass: the class of the transformation model for registering the camera views.
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
+     subrange: defaults to None. Can be a list specifying the indices of time points to deconvolve.
   """
   kernel = readFloats(kernel_filepath, [19, 19, 25], header=434)
   klb_loader = KLBLoader()
@@ -72,9 +74,15 @@ def deconvolveTimePoints(srcDir,
           camera_index = int(r.groups()[0])
           filepaths[camera_index].append(os.path.join(tm_dir, filename))
       yield filepaths
+
+  if subrange:
+    indices = set(subrange)
+    TMs = [tm for i, tm in enumerate(iterTMs()) if i in indices] 
+  else:
+    TMs = list(iterTMs())
   
   # Validate folders
-  for filepaths in iterTMs():
+  for filepaths in TMs:
     if 4 != len(filepaths):
       print "Folder %s has problems: found %i KLB files in it instead of 4." % (tm_dir, len(filepaths))
       print "Address the issues and rerun."
@@ -84,7 +92,7 @@ def deconvolveTimePoints(srcDir,
   
   # Prepare coarse transforms
   def prepareCoarseTransforms():
-    first = iterTMs().next() # filepaths for first set of 4 KLB images
+    first = TMs[0] # filepaths for first set of 4 KLB images
     images = [klb_loader.get(first[i]) for i in sorted(first.keys())]
     scale3D = AffineTransform3D()
     scale3D.set(calibration[0], 0.0, 0.0, 0.0,
@@ -108,7 +116,7 @@ def deconvolveTimePoints(srcDir,
   # Submit for registration + deconvolution
   # The registration uses 2 parallel threads, and deconvolution all possible available threads.
   # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
-  for filenames in iterTMs():
+  for filenames in TMs:
     deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration, cmIsotropicTransforms,
                         roi, params, modelclass, kernel, exe)
   
