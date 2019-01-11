@@ -36,6 +36,22 @@ public final class PointMatchesFast
 		return new PointMatchesFast(pointmatches);
 	}
 
+	static public final PointMatchesFast fromFeaturesScaleInvariant(
+			final List<ConstellationFast> features1,
+			final List<ConstellationFast> features2,
+			final double angle_epsilon,
+			final double len_epsilon)
+	{
+		final List<PointMatch> pointmatches = new ArrayList<PointMatch>();
+		for (final ConstellationFast c1: features1) {
+			for (final ConstellationFast c2: features2) {
+				if (c1.matchesScaleInvariant(c2, angle_epsilon, len_epsilon)) {
+					pointmatches.add(new PointMatch(c1.position, c2.position));
+				}
+			}
+		}
+		return new PointMatchesFast(pointmatches);
+	}
 
 	static public final PointMatchesFast fromNearbyFeatures(
 			final double radius,

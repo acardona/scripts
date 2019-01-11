@@ -11,7 +11,8 @@ public final class ConstellationFast
 {
   private final double angle,
                        len1,
-                       len2;
+                       len2,
+											 len_ratio;
   public final Point position; // ACC_PUBLIC for trivial access
 
   public ConstellationFast(
@@ -23,6 +24,7 @@ public final class ConstellationFast
     this.angle = angle;
     this.len1 = len1;
     this.len2 = len2;
+		this.len_ratio = len1 / (len1 + len2); // between 0 and 1
     this.position = new Point(coords);
   }
 
@@ -33,6 +35,15 @@ public final class ConstellationFast
   {
     return Math.abs(this.angle - other.angle) < angle_epsilon
       && Math.abs(this.len1 - other.len1) + Math.abs(this.len2 - other.len2) < len_epsilon_sq;
+  }
+
+  public final boolean matchesScaleInvariant(
+      final ConstellationFast other,
+      final double angle_epsilon,
+      final double len_epsilon)
+  {
+    return Math.abs(this.angle - other.angle) < angle_epsilon
+			&& Math.abs(this.len_ratio - other.len_ratio) < len_epsilon;
   }
 
   /*j
