@@ -1,18 +1,18 @@
 import sys
-sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
-from lib.lsm.isoview import deconvolveTimePoints
+sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")
+from lib.isoview import deconvolveTimePoints
 from mpicbg.models import RigidModel3D
 
 
 # The folder with the sequence of TM\d+ folders, one per time point in the 4D series.
 # Each folder should contain 4 KLB files, one per camera view of the IsoView microscope.
-srcDir = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/"
+srcDir = "/groups/zlatic/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/"
 
 # A folder to save deconvolved images in, and CSV files describing features, point matches and transformations
-targetDir = "/home/albert/shares/cardonalab/Albert/deconvolved/"
+targetDir = "/groups/cardona/cardonalab/Albert/2017-05-10_1038/"
 
 # Path to the volume describing the point spread function (PSF)
-kernelPath = "/home/albert/lab/Raghav-IsoView-PSF/PSF-19x19x25.tif"
+kernelPath = "/groups/cardona/cardonalab/Albert/Raghav-IsoView-PSF/PSF-19x19x25.tif"
 
 # The calibration is [0.40625, 0.40625, 2.03125]
 # To preserve XY pixels, expand Z only:
@@ -24,7 +24,7 @@ def cameraTransformations(img1, img2, img3, img4, calibration):
     0: [1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0],
-    1: [-1.0, 0.0, 0.0, img1.dimension(0) * calibration(0) - 195,
+    1: [-1.0, 0.0, 0.0, img1.dimension(0) * calibration[0] - 195,
          0.0, 1.0, 0.0, 54.0,
          0.0, 0.0, 1.0,  8.0],
     2: [ 0.0, 0.0, 1.0,  0.0,
@@ -83,14 +83,14 @@ params.update(paramsDeconvolution)
 
 # A region of interest for each camera view, for cropping after registration but prior to deconvolution
 roi = ([1, 228, 0], # top-left coordinates
-       [1 + 406 -1, 228 + 465 -1, 325 -1]) # bottom-right coordinates (inclusive, hence the -1)
+       [1 + 406 -1, 228 + 465 -1, 0 + 325 -1]) # bottom-right coordinates (inclusive, hence the -1)
 
 
 # The transformation model for registering views onto each other
 modelclass = RigidModel3D
 
 deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
-                    cameraTransformations, params, modelclass, roi)
+                    cameraTransformations, params, modelclass, roi, subrange=range(0, 10))
 
 
 

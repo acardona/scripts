@@ -12,6 +12,7 @@ from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from ij.io import FileSaver
 from ij import ImagePlus, IJ
 from synchronize import make_synchronized
+from util import syncPrint
 try:
   # Needs 'SiMView' Fiji update site enabled
   from org.janelia.simview.klb import KLB

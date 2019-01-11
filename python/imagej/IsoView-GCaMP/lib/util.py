@@ -29,14 +29,15 @@ class Getter(Future):
 
 class Task(Callable):
   """ A wrapper for executing functions in concurrent threads. """
-  def __init__(self, fn, *args):
+  def __init__(self, fn, *args, **kwargs):
     self.fn = fn
     self.args = args
+    self.kwargs = kwargs
   def call(self):
     t = Thread.currentThread()
     if t.isInterrupted() or not t.isAlive():
         return None
-    return self.fn(*self.args)
+    return self.fn(*self.args, **self.kwargs)
 
 
 def ndarray(classtype, dimensions):
