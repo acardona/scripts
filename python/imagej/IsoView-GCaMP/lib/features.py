@@ -5,7 +5,7 @@ from net.imglib2 import KDTree, RealPoint
 from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
 from itertools import imap, izip, product
 from jarray import array
-import os, sys, csv
+import os, sys, csv, types
 from os.path import basename
 # local lib functions:
 from dogpeaks import getDoGPeaks
@@ -163,6 +163,36 @@ def saveFeatures(img_filename, directory, features, params):
     syncPrint(str(sys.exc_info()))
 
 
+def checkParams(params, names, values, epsilon):
+  """ params: the actual parameters to use.
+      names: names of parameters in the CSV file.
+      values: values (as strings) of parameters in the CSV file. """
+  def report(name, value):
+    syncPrint("Mismatching parameters: '%s' :: %s != %s" % (name, str(params[name]), str(value)))
+  
+  for name, value in izip(names, values):
+    value1 = params.get(name, None)
+    if value1 is None: # parameter in the CSV file header does not exist in params
+      return report(name, value)
+    t1 = type(params[name])
+    t1 = types.FloatType if t1 == types.IntType else t1 # Make all numbers look like floats
+    t2 = types.ListType if '[' == value[0] else types.FloatType
+    if t1 != t2:
+      return report(name, value)
+    if t1 == types.FloatType:
+      if abs(params[name] - float(value)) > epsilon:
+        return report(name, value)
+    elif t1 == types.ListType:
+      # both are lists
+      for a, b in izip(params[name], imap(float, value[1:-1].split(","))):
+        if abs(a - b) > epsilon:
+          return report(name, value)
+    else:
+      syncPrint("Don't know how to compare type %s with %s" % (str(t1), str(t2)))
+      return False
+  return True
+
+
 def loadFeatures(img_filename, directory, params, validateOnly=False, epsilon=0.00001):
   """ Attempts to load features from filename + ".features.csv" if it exists,
       returning a list of Constellation features or None.
@@ -177,11 +207,8 @@ def loadFeatures(img_filename, directory, params, validateOnly=False, epsilon=0.
       with open(csvpath, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         # First line contains parameter names, second line their values
-        paramsF = dict(izip(reader.next(), imap(float, reader.next())))
-        for name in paramsF:
-          if abs(params[name] - paramsF[name]) > 0.00001:
-            syncPrint("Mismatching parameters: '%s' - %f != %f" % (name, params[name], paramsF[name]))
-            return None
+        if not checkParams(params, reader.next(), reader.next(), epsilon):
+          return None
         if validateOnly:
           return True # would return None above, which is falsy
         reader.next() # skip header with column names
@@ -236,11 +263,8 @@ def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.
     with open(csvpath, 'r') as csvfile:
       reader = csv.reader(csvfile, delimiter=',', quotechar='"')
       # First line contains parameter names, second line their values
-      paramsF = dict(izip(reader.next(), imap(float, reader.next())))
-      for name in paramsF:
-        if abs(params[name] - paramsF[name]) > 0.00001:
-          syncPrint("Mismatching parameters: '%s' - %f != %f" % (name, params[name], paramsF[name]))
-          return None
+      if not checkParams(params, reader.next(), reader.next(), epsilon):
+        return None
       reader.next() # skip header with column names
       pointmatches = PointMatches.fromRows(reader).pointmatches
       syncPrint("Loaded %i pointmatches for %s, %s" % (len(pointmatches), img1_filename, img2_filename))
@@ -255,9 +279,16 @@ def makeFeatures(img_filename, img_loader, getCalibration, csv_dir, params):
   """ Helper function to extract features from an image. """
   img = img_loader.load(img_filename)
   # Find a list of peaks by difference of Gaussian
-  peaks = getDoGPeaks(img, getCalibration(img_filename),
-                      params['sigmaSmaller'], params['sigmaLarger'],
-                      params['minPeakValue'])
+  peaks = []
+  sigmaSmaller = params["sigmaSmaller"]
+  sigmaLarger = params["sigmaLarger"]
+  if type(sigmaSmaller) == types.FloatType:
+    sigmaSmaller = [sigmaSmaller]
+    sigmaLarger = [sigmaLarger]
+  for ss, sl in izip(sigmaSmaller, sigmaLarger):
+    peaks.extend(getDoGPeaks(img, getCalibration(img_filename),
+                             ss, sl, params['minPeakValue']))
+  #
   if 0 == len(peaks):
     features = []
   else:
@@ -302,15 +333,20 @@ def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, c
     syncPrint("Found %i constellation features in image %s" % (len(fs), basename(img_filename)))
 
   # Compare all possible pairs of constellation features: the PointMatches
-  if params.get('pointmatches_nearby', False):
+  pointmatches_nearby = params.get('pointmatches_nearby', 0)
+  if 1 == pointmatches_nearby:
     # Use a RadiusNeighborSearchOnKDTree
     pm = PointMatches.fromNearbyFeatures(
         params['pointmatches_search_radius'],
         features[0], features[1],
         params["angle_epsilon"], params["len_epsilon_sq"])
   else:
+    if 2 == pointmatches_nearby:
+      method = PointMatches.fromFeaturesScaleInvariant
+    else: # 0
+      method = PointMatches.fromFeatures
     # All to all
-    pm = PointMatches.fromFeatures(
+    pm = method(
         features[0], features[1],
         params["angle_epsilon"], params["len_epsilon_sq"])
 
