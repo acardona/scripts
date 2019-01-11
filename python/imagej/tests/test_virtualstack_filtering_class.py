@@ -19,12 +19,16 @@ class FilterVirtualStack(VirtualStack):
     imp = IJ.openImage(filepath)
     # Filter it:
     ip = imp.getProcessor()
+    """
     blockRadiusX = self.params["blockRadiusX"]
     blockRadiusY = self.params["blockRadiusY"]
     stds = self.params["stds"]
     center = self.params["center"]
     stretch = self.params["stretch"]
     NormalizeLocalContrast.run(ip, blockRadiusX, blockRadiusY, stds, center, stretch)
+    """
+    NormalizeLocalContrast.run(ip, *[params.get(k) for k in ["blockRadiusX", "blockRadiusY",
+                                                             "stds", "center", "stretch"]])
     return ip
 
 # Parameters for the NormalizeLocalContrast plugin
