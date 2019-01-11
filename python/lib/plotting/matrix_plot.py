@@ -81,7 +81,7 @@ def matrix_plot(
      'fontsize': defaults to 8, for the font of the numeric values inside the matrix.
     """
     # Plot it out
-    fig, ax = plt.subplots()    
+    fig, ax = plt.subplots()
     c = ax.pcolor(matrix, edgecolors='k', linestyle='dashed', linewidths=0.2, cmap=cmap, vmin=value_range[0], vmax=value_range[1])
 
     # put the major ticks at the middle of each cell
