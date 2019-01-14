@@ -277,8 +277,8 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       for index in indices:
         img = prepareImgForDeconvolution(klb_loader.get(filepaths[index]), transforms[index], interval)
         # Copy transformed view into ArrayImg for best performance
-        imgA = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img))
-        ImgUtil.copy(img, imgA.factory(), imgA)
+        imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(img))
+        ImgUtil.copy(ImgView.wrap(img, imgA.factory()), imgA)
         images.append(imgA)
       # DEBUG: save the images
       #for i, img in zip(indices, images):
