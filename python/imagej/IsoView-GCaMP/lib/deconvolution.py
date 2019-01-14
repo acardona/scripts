@@ -7,14 +7,17 @@ from net.preibisch.mvrecon.process.deconvolution.iteration.sequential import Com
 from net.preibisch.mvrecon.process.deconvolution.init import PsiInitBlurredFusedFactory
 from net.preibisch.mvrecon.process.deconvolution.DeconViewPSF import PSFTYPE
 from net.preibisch.mvrecon.process.fusion.transformed import TransformView
-from net.preibisch.mvrecon.process.cuda.CUDAFourierConvolution
+from net.preibisch.mvrecon.process.cuda import CUDAFourierConvolution, CUDATools #, NativeLibraryTools
+from com.sun.jna import Native
 from bdv.util import ConstantRandomAccessible
+from java.util import ArrayList, HashMap
 from itertools import repeat, izip
 # local lib functions:
 from util import newFixedThreadPool, syncPrint
+import os
 
 
-def setupEngine(use_cuda=True):
+def setupEngine(use_cuda=True, askForMultipleDevices=False):
   """
   Attempt to load the CUDA libraries. Otherwise use CPU threads.
   Return a function that creates the ComputeBlockSeqThread(CPU|CUDA)Factory.
@@ -41,21 +44,30 @@ def setupEngine(use_cuda=True):
   devices = []
   idToCudaDevice = {}
   if use_cuda:
-    cuda = NativeLibraryTools.loadNativeLibrary(["fftCUDA", "FourierConvolutionCuda"], CUDAFourierConvolution)
+    so_path = "/usr/local/lib/libFourierConvolutionCUDALib.so"
+    if os.path.exists(so_path):
+      # Still opens a dialog to ask for the one and only existing library
+      #cuda = NativeLibraryTools.loadNativeLibrary(ArrayList(["FourierConvolutionCuda"]), File(so_path), CUDAFourierConvolution)
+      cuda = Native.loadLibrary(so_path, CUDAFourierConvolution)
+    else:
+      # Fire up file dialogs:
+      cuda = NativeLibraryTools.loadNativeLibrary(ArrayList(["fftCUDA", "FourierConvolutionCuda"]), CUDAFourierConvolution)
     if not cuda:
       syncPrint("Could not load CUDA JNA library for FFT convolution.")
     else:
       syncPrint("Will use CUDA for FFT convolution.")
-      devices = CUDATools.queryCUDADetails(cuda, True)
+      devices = CUDATools.queryCUDADetails(cuda, askForMultipleDevices)
       idToCudaDevice = {index: device for index, device in enumerate(devices)}
   # Return function
-  def createFactory(exe, lambda_val, blockSize, factory=None):
-    factory = factory if factory else ArrayImgFactory(FloatType())
+  def createFactoryFn(exe, lambda_val, blockSize):
     if use_cuda and cuda:
-      return ComputeBlockSeqThreadCUDAFactory(exe, lambda_val, blockSize, factory, cuda, idToCudaDevice)
+      return ComputeBlockSeqThreadCUDAFactory(exe, MultiViewDeconvolution.minValue, lambda_val, blockSize, cuda, HashMap(idToCudaDevice))
     else:
-      return ComputeBlockSeqThreadCPUFactory(exe, lambda_val, blockSize, factory)
+      return ComputeBlockSeqThreadCPUFactory(exe, MultiViewDeconvolution.minValue, lambda_val, blockSize, ArrayImgFactory(FloatType()))
 
+  return createFactoryFn
+
+# Define function, having potentially loaded the native CUDA library
 createFactory = setupEngine()
 
 
@@ -94,13 +106,12 @@ def multiviewDeconvolution(images, blockSize, PSF_kernel, n_iterations, lambda_v
         printFn("PSF kernel dimension %i is not odd." % d)
         return None
 
-    factory = ArrayImgFactory(FloatType())
-    cptf = createFactory(exe, lambda_val, blockSize, factory)
+    cptf = createFactory(exe, lambda_val, blockSize)
     filterBlocksForContent = False # Run once with True, none were removed
     decon_views = DeconViews([DeconView(mvd_exe, img, weight, PSF_kernel, PSF_type, blockSize, 1, filterBlocksForContent)
                               for img, weight in izip(images, mvd_weights)],
                              exe)
-    decon = MultiViewDeconvolutionSeq(decon_views, n_iterations, PsiInitBlurredFusedFactory(), cptf, factory)
+    decon = MultiViewDeconvolutionSeq(decon_views, n_iterations, PsiInitBlurredFusedFactory(), cptf, ArrayImgFactory(FloatType()))
     if not decon.initWasSuccessful():
       printFn("Something went wrong initializing MultiViewDeconvolution")
       return None
