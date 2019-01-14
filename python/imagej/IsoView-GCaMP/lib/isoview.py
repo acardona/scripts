@@ -1,3 +1,4 @@
+from net.imglib2 import FinalInterval
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.img import ImgView
 from net.imglib2.util import Intervals, ImgUtil
@@ -9,7 +10,7 @@ from itertools import izip, chain
 from util import newFixedThreadPool, Task, syncPrint
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms
-from deconvolution import multiviewDeconvolution
+from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution
 
 
 def deconvolveTimePoints(srcDir,
@@ -223,7 +224,10 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
   """ filepaths is a dictionary of camera index vs filepath to a KLB file.
       This function will generate two deconvolved views, one for each channel,
       where CHN00 is made of CM00 + CM01, and
-            CHNO1 is made of CM02 + CM03. """
+            CHNO1 is made of CM02 + CM03.
+      Will take the camera registrations (cmIsotropicTransforms), which are coarse,
+      and run a finer registration by extracting features and computing a modelclass (like RigidModel3D).
+      If the deconvolved images exist, it will neither compute it nor write it."""
   # Step 0: create csv_dir if not there
   tm_dirname = filepaths[0][filepaths[0].rfind("_TM") + 1:filepaths[0].rfind("_CM")]
   csv_dir = os.path.join(targetDir, tm_dirname + "-csv")
@@ -261,23 +265,29 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
                 concat(cmIsotropicTransforms[1], matrices[0]),
                 cmIsotropicTransforms[2],
                 concat(cmIsotropicTransforms[3], matrices[1])]
-  
-  transforming_loader2 = TransformedLoader(klb_loader, {filepaths[k]: transforms[k] for k in xrange(4)}, roi=roi)
-
-  def intoArrayImg(index):
-    img = transforming_loader2.get(filepaths[index])
-    imgA = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img))
-    ImgUtil.copy(ImgView.wrap(img, imgA.factory()), imgA)
-    return imgA
 
   # Step 4: deconvolution
   def deconvolveAndSave(indices):
     name = "CM0%i-CM0%i-deconvolved" % indices
     filename = tm_dirname + "_" + name + ".zip"
     path = os.path.join(targetDir, "deconvolved/" + filename)
+    interval = FinalInterval(roi[0], roi[1]) # for cropping
     if not os.path.exists(path):
-      # Materialize each transfomed image view into an ArrayImg
-      images = map(intoArrayImg, indices)
+      images = []
+      for index in indices:
+        img = prepareImgForDeconvolution(klb_loader.get(filepaths[index]), transforms[index], interval)
+        # Copy transformed view into ArrayImg for best performance
+        imgA = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img))
+        ImgUtil.copy(img, imgA.factory(), imgA)
+        images.append(imgA)
+      # DEBUG: save the images
+      #for i, img in zip(indices, images):
+      #  try:
+      #    writeZip(img, "/tmp/" + "pre_deconv__" + tm_dirname + "_CM0" + str(i) + "-PREPARED.zip", title="CM" + str(i))
+      #  except:
+      #    print sys.exc_info()
+      #if True:
+      #  return None # DEBUG
       # Deconvolve: merge two views into a single volume
       n_iterations = params["CM_%i_%i_n_iterations" % indices]
       img = multiviewDeconvolution(images, params["blockSize"], kernel, n_iterations, exe=exe)

@@ -2,7 +2,7 @@ from net.imglib2 import FinalInterval
 from net.imglib2.img.array import ArrayImgFactory
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.view import Views
-from net.preibisch.mvrecon.process.deconvolution import MultiViewDeconvolutionSeq, DeconView, DeconViews
+from net.preibisch.mvrecon.process.deconvolution import MultiViewDeconvolutionSeq, DeconView, DeconViews, MultiViewDeconvolution
 from net.preibisch.mvrecon.process.deconvolution.iteration.sequential import ComputeBlockSeqThreadCPUFactory, ComputeBlockSeqThreadCUDAFactory
 from net.preibisch.mvrecon.process.deconvolution.init import PsiInitBlurredFusedFactory
 from net.preibisch.mvrecon.process.deconvolution.DeconViewPSF import PSFTYPE
@@ -112,3 +112,13 @@ def multiviewDeconvolution(images, blockSize, PSF_kernel, n_iterations, lambda_v
     if not exe:
       mvd_exe.shutdownNow()
 
+
+def prepareImgForDeconvolution(img, affine3D, interval):
+  """
+  Transform the img for deconvolution, taking care of pixels with zero value within the image
+  and setting the appropriate values for outside the image, and cropping to the interval.
+  """
+  return TransformView.transformView(img, affine3D, interval,
+                                     MultiViewDeconvolution.minValueImg,
+                                     MultiViewDeconvolution.outsideValueImg,
+                                     1)
