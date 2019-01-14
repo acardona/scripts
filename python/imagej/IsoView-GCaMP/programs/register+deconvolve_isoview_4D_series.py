@@ -9,7 +9,7 @@ from mpicbg.models import RigidModel3D
 srcDir = "/groups/zlatic/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/"
 
 # A folder to save deconvolved images in, and CSV files describing features, point matches and transformations
-targetDir = "/groups/cardona/cardonalab/Albert/2017-05-10_1038/"
+targetDir = "/groups/cardona/cardonalab/Albert/2017-05-10_1018/"
 
 # Path to the volume describing the point spread function (PSF)
 kernelPath = "/groups/cardona/cardonalab/Albert/Raghav-IsoView-PSF/PSF-19x19x25.tif"
