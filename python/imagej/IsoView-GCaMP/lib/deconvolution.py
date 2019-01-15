@@ -8,6 +8,7 @@ from net.preibisch.mvrecon.process.deconvolution.iteration.sequential import Com
 from net.preibisch.mvrecon.process.deconvolution.init import PsiInitBlurredFusedFactory
 from net.preibisch.mvrecon.process.deconvolution.DeconViewPSF import PSFTYPE
 from net.preibisch.mvrecon.process.fusion.transformed import TransformView
+from net.preibisch.mvrecon.process.psf import PSFExtraction
 from net.preibisch.mvrecon.process.cuda import CUDAFourierConvolution, CUDATools #, NativeLibraryTools
 from com.sun.jna import Native
 from bdv.util import ConstantRandomAccessible
@@ -138,3 +139,9 @@ def prepareImgForDeconvolution(img, affine3D, interval):
                                      MultiViewDeconvolution.minValueImg,
                                      MultiViewDeconvolution.outsideValueImg,
                                      1)
+
+def transformPSFKernelToView(kernelImg, affine3D):
+  """ Return a PSF kernel as an ArrayImg, transformed with the affine3D of the view.
+      The center pixel of the PSF remains the same, and the dimensions as well.
+  """
+  return PSFExtraction.transformPSF(kernelImg, affine3D)
