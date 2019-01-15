@@ -135,10 +135,10 @@ def prepareImgForDeconvolution(img, affine3D, interval):
   Transform the img for deconvolution, taking care of pixels with zero value within the image
   and setting the appropriate values for outside the image, and cropping to the interval.
   """
-  return TransformView.transformView(img, affine3D, interval,
-                                     MultiViewDeconvolution.minValueImg,
-                                     MultiViewDeconvolution.outsideValueImg,
-                                     1)
+  return Views.zeroMin(TransformView.transformView(img, affine3D, interval,
+                                                   MultiViewDeconvolution.minValueImg,
+                                                   MultiViewDeconvolution.outsideValueImg,
+                                                   1)) # 1: linear interpolation
 
 def transformPSFKernelToView(kernelImg, affine3D):
   """ Return a PSF kernel as an ArrayImg, transformed with the affine3D of the view.
