@@ -4,6 +4,7 @@ from net.imglib2.img import ImgView
 from net.imglib2.util import Intervals, ImgUtil
 from net.imglib2.realtransform import Scale3D, AffineTransform3D
 from net.imglib2.img.io import Load
+from net.imglib2.view import Views
 import os, re, sys
 from pprint import pprint
 from itertools import izip, chain, repeat
@@ -286,22 +287,17 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
         imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(img))
         ImgUtil.copy(ImgView.wrap(img, imgA.factory()), imgA)
         images.append(imgA)
-        # Prepare the block size for parallel execution
-        if params["blockSize"] is None:
-          blockSizes.append(Intervals.dimensionsAsIntArray(imgA))
-        else:
-          blockSizes.append(params["blockSize"])
         # Transform the kernel just like the img: needs translation to the center of the img.
         # Then copy the transformed kernel into an ArrayImg
-        translation = AffineTransform3D()
-        translation.identity()
-        translation.setTranslation(*[(imgA.dimension(d) - kernel.dimension(d)) / 2.0 for d in imgA.numDimensions()])
+        offset = AffineTransform3D()
+        offset.identity()
+        offset.setTranslation(*[(imgA.dimension(d) - kernel.dimension(d)) / 2.0 for d in xrange(imgA.numDimensions())])
         t = AffineTransform3D()
         t.set(transforms[index])
-        t.preConcatenate(translation)
+        t.preConcatenate(offset)
         t_kernel = Views.zeroMin(viewTransformed(kernel, [1, 1, 1], t))
-        kernelA = ArrayImg.floats(Intervals.dimensionsAsLongArray(t_kernel))
-        ImgUtil.copy(ImgView.wrap(t_kernel, ArrayImgFactory(FloatType())), kernelA)
+        kernelA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(t_kernel))
+        ImgUtil.copy(ImgView.wrap(t_kernel, kernelA.factory()), kernelA)
         PSF_kernels.append(kernelA)
 
       # DEBUG: save the images
@@ -314,7 +310,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       #  return None # DEBUG
       # Deconvolve: merge two views into a single volume
       n_iterations = params["CM_%i_%i_n_iterations" % indices]
-      img = multiviewDeconvolution(images, blockSizes, kernels, n_iterations, exe=exe)
+      img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
       writeZip(img, path, title=filename)
 
   deconvolveAndSave((0, 1))

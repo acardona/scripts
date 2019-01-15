@@ -72,16 +72,16 @@ def setupEngine(use_cuda=True, askForMultipleDevices=False):
 createFactory = setupEngine()
 
 
-def multiviewDeconvolution(images, blockSizes, PSF_kernels, n_iterations, lambda_val=0.0006, weights=None,
+def multiviewDeconvolution(images, blockSize, PSF_kernels, n_iterations, lambda_val=0.0006, weights=None,
                            filterBlocksForContent=False, PSF_type=PSFTYPE.INDEPENDENT, exe=None, printFn=syncPrint):
   """
   Apply Bayesian-based multi-view deconvolution to the list of images,
   returning the deconvolved image. Uses Stephan Preibisch's library,
   currently available with the BigStitcher Fiji update site.
 
-  images: a list of images, registered and with the same dimensions.
-  blockSizes: how to chop up the volume of each image for parallel processing.
-              When None, a single block with the image dimensions is used.
+  images: a list of images, registered and all with the same dimensions.
+  blockSize: how to chop up the volume of each image for parallel processing.
+             When None, a single block with the image dimensions is used.
   PSF_kernels: the images containing the point spread function for each input image. Requirement: the dimensions must be an odd number.
   n_iterations: the number of iterations for the deconvolution. A number between 10 and 50 is desirable. The more iterations, the higher the computational cost.
   lambda_val: default is 0.0006 as recommended by Preibisch.
@@ -103,18 +103,19 @@ def multiviewDeconvolution(images, blockSizes, PSF_kernels, n_iterations, lambda
     if not weights:
       mvd_weights = repeat(Views.interval(ConstantRandomAccessible(FloatType(1), images[0].numDimensions()), FinalInterval(images[0])))
 
-    for d in xrange(PSF_kernel.numDimensions()):
-      if 0 == PSF_kernel.dimension(d) % 2:
-        printFn("PSF kernel dimension %i is not odd." % d)
-        return None
+    for i, PSF_kernel in enumerate(PSF_kernels):
+      for d in xrange(PSF_kernel.numDimensions()):
+        if 0 == PSF_kernel.dimension(d) % 2:
+          printFn("for image at index %i, PSF kernel dimension %i is not odd." % (i, d))
+          return None
 
-    if not blockSizes:
-      blockSizes = map(Intervals.dimensionsAsIntArray, images)
+    if not blockSize:
+      blockSize = Intervals.dimensionsAsIntArray(images[0])
 
     cptf = createFactory(exe, lambda_val, blockSize)
     filterBlocksForContent = False # Run once with True, none were removed
     dviews = [DeconView(mvd_exe, img, weight, PSF_kernel, PSF_type, blockSize, 1, filterBlocksForContent)
-              for img, weight, PSF_kernel, blockSizes in izip(images, mvd_weights, PSF_kernels, blockSizes)]
+              for img, weight, PSF_kernel in izip(images, mvd_weights, PSF_kernels)]
     decon = MultiViewDeconvolutionSeq(DeconViews(dviews, exe), n_iterations, PsiInitBlurredFusedFactory(), cptf, ArrayImgFactory(FloatType()))
     if not decon.initWasSuccessful():
       printFn("Something went wrong initializing MultiViewDeconvolution")
