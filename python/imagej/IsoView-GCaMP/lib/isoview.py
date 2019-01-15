@@ -21,7 +21,8 @@ def deconvolveTimePoints(srcDir,
                          params,
                          modelclass,
                          roi,
-                         subrange=None):
+                         subrange=None,
+                         n_threads=0): # 0 means all
   """
      Main program entry point.
      For each time point folder TM\d+, find the KLB files of the 4 cameras,
@@ -60,7 +61,7 @@ def deconvolveTimePoints(srcDir,
   # Regular expression pattern describing KLB files to include
   pattern = re.compile("^SPM00_TM\d+_CM(\d+)_CHN0[01]\.klb$")
 
-  exe = newFixedThreadPool()
+  exe = newFixedThreadPool(n_threads=n_threads)
 
   # Find all time point folders with pattern TM\d{6} (a TM followed by 6 digits)
   def iterTMs():
