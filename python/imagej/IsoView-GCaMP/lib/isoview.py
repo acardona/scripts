@@ -230,8 +230,8 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       #    print sys.exc_info()
       #if True:
       #  return None # DEBUG
-      # Deconvolve: merge two views into a single volume
       
+      # Deconvolve: merge two views into a single volume
       n_iterations = params["CM_%i_%i_n_iterations" % indices]
       img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
       writeZip(img, path, title=filename)
