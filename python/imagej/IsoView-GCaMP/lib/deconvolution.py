@@ -2,6 +2,7 @@ from net.imglib2 import FinalInterval
 from net.imglib2.img.array import ArrayImgFactory
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.view import Views
+from net.imglib2.util import Intervals
 from net.preibisch.mvrecon.process.deconvolution import MultiViewDeconvolutionSeq, DeconView, DeconViews, MultiViewDeconvolution
 from net.preibisch.mvrecon.process.deconvolution.iteration.sequential import ComputeBlockSeqThreadCPUFactory, ComputeBlockSeqThreadCUDAFactory
 from net.preibisch.mvrecon.process.deconvolution.init import PsiInitBlurredFusedFactory
@@ -71,7 +72,7 @@ def setupEngine(use_cuda=True, askForMultipleDevices=False):
 createFactory = setupEngine()
 
 
-def multiviewDeconvolution(images, blockSize, PSF_kernel, n_iterations, lambda_val=0.0006, weights=None,
+def multiviewDeconvolution(images, blockSizes, PSF_kernels, n_iterations, lambda_val=0.0006, weights=None,
                            filterBlocksForContent=False, PSF_type=PSFTYPE.INDEPENDENT, exe=None, printFn=syncPrint):
   """
   Apply Bayesian-based multi-view deconvolution to the list of images,
@@ -79,8 +80,9 @@ def multiviewDeconvolution(images, blockSize, PSF_kernel, n_iterations, lambda_v
   currently available with the BigStitcher Fiji update site.
 
   images: a list of images, registered and with the same dimensions.
-  blockSize: how to chop up the volume for parallel processing.
-  PSF_kernel: the image containing the point spread function. Requirement: its dimensions must be an odd number.
+  blockSizes: how to chop up the volume of each image for parallel processing.
+              When None, a single block with the image dimensions is used.
+  PSF_kernels: the images containing the point spread function for each input image. Requirement: the dimensions must be an odd number.
   n_iterations: the number of iterations for the deconvolution. A number between 10 and 50 is desirable. The more iterations, the higher the computational cost.
   lambda_val: default is 0.0006 as recommended by Preibisch.
   weights: a list of FloatType images with the weight for every pixel. If None, then all pixels get a value of 1.
@@ -106,12 +108,14 @@ def multiviewDeconvolution(images, blockSize, PSF_kernel, n_iterations, lambda_v
         printFn("PSF kernel dimension %i is not odd." % d)
         return None
 
+    if not blockSizes:
+      blockSizes = map(Intervals.dimensionsAsIntArray, images)
+
     cptf = createFactory(exe, lambda_val, blockSize)
     filterBlocksForContent = False # Run once with True, none were removed
-    decon_views = DeconViews([DeconView(mvd_exe, img, weight, PSF_kernel, PSF_type, blockSize, 1, filterBlocksForContent)
-                              for img, weight in izip(images, mvd_weights)],
-                             exe)
-    decon = MultiViewDeconvolutionSeq(decon_views, n_iterations, PsiInitBlurredFusedFactory(), cptf, ArrayImgFactory(FloatType()))
+    dviews = [DeconView(mvd_exe, img, weight, PSF_kernel, PSF_type, blockSize, 1, filterBlocksForContent)
+              for img, weight, PSF_kernel, blockSizes in izip(images, mvd_weights, PSF_kernels, blockSizes)]
+    decon = MultiViewDeconvolutionSeq(DeconViews(dviews, exe), n_iterations, PsiInitBlurredFusedFactory(), cptf, ArrayImgFactory(FloatType()))
     if not decon.initWasSuccessful():
       printFn("Something went wrong initializing MultiViewDeconvolution")
       return None

@@ -6,10 +6,10 @@ from net.imglib2.realtransform import Scale3D, AffineTransform3D
 from net.imglib2.img.io import Load
 import os, re, sys
 from pprint import pprint
-from itertools import izip, chain
+from itertools import izip, chain, repeat
 from util import newFixedThreadPool, Task, syncPrint
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
-from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms
+from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution
 
 
@@ -275,12 +275,35 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
     interval = FinalInterval(roi[0], roi[1]) # for cropping
     if not os.path.exists(path):
       images = []
+      blockSizes = []
+      PSF_kernels = []
       for index in indices:
+        # Prepare the img:
+        # 1. Ensure its pixel values conform to expectations (no zeros inside)
+        # 2. Copy it into an ArrayImg for faster recurrent retrieval of same pixels
         img = prepareImgForDeconvolution(klb_loader.get(filepaths[index]), transforms[index], interval)
         # Copy transformed view into ArrayImg for best performance
         imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(img))
         ImgUtil.copy(ImgView.wrap(img, imgA.factory()), imgA)
         images.append(imgA)
+        # Prepare the block size for parallel execution
+        if params["blockSize"] is None:
+          blockSizes.append(Intervals.dimensionsAsIntArray(imgA))
+        else:
+          blockSizes.append(params["blockSize"])
+        # Transform the kernel just like the img: needs translation to the center of the img.
+        # Then copy the transformed kernel into an ArrayImg
+        translation = AffineTransform3D()
+        translation.identity()
+        translation.setTranslation(*[(imgA.dimension(d) - kernel.dimension(d)) / 2.0 for d in imgA.numDimensions()])
+        t = AffineTransform3D()
+        t.set(transforms[index])
+        t.preConcatenate(translation)
+        t_kernel = Views.zeroMin(viewTransformed(kernel, [1, 1, 1], t))
+        kernelA = ArrayImg.floats(Intervals.dimensionsAsLongArray(t_kernel))
+        ImgUtil.copy(ImgView.wrap(t_kernel, ArrayImgFactory(FloatType())), kernelA)
+        PSF_kernels.append(kernelA)
+
       # DEBUG: save the images
       #for i, img in zip(indices, images):
       #  try:
@@ -291,7 +314,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       #  return None # DEBUG
       # Deconvolve: merge two views into a single volume
       n_iterations = params["CM_%i_%i_n_iterations" % indices]
-      img = multiviewDeconvolution(images, params["blockSize"], kernel, n_iterations, exe=exe)
+      img = multiviewDeconvolution(images, blockSizes, kernels, n_iterations, exe=exe)
       writeZip(img, path, title=filename)
 
   deconvolveAndSave((0, 1))
