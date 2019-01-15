@@ -212,7 +212,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
         # Prepare the img:
         # 1. Ensure its pixel values conform to expectations (no zeros inside)
         # 2. Copy it into an ArrayImg for faster recurrent retrieval of same pixels
-        img = prepareImgForDeconvolution(klb_loader.get(filepaths[index]), transforms[index], interval)
+        img = Views.zeroMin(prepareImgForDeconvolution(klb_loader.get(filepaths[index]), transforms[index], interval))
         # Copy transformed view into ArrayImg for best performance
         imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(img))
         ImgUtil.copy(ImgView.wrap(img, imgA.factory()), imgA)
