@@ -207,7 +207,6 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
     interval = FinalInterval(roi[0], roi[1]) # for cropping
     if not os.path.exists(path):
       images = []
-      blockSizes = []
       PSF_kernels = []
       for index in indices:
         # Prepare the img:
