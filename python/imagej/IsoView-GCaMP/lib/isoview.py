@@ -11,7 +11,7 @@ from itertools import izip, chain, repeat
 from util import newFixedThreadPool, Task, syncPrint
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed
-from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution
+from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 
 
 def deconvolveTimePoints(srcDir,
@@ -103,20 +103,22 @@ def deconvolveTimePoints(srcDir,
   def prepareCoarseTransforms():
     first = TMs[0] # filepaths for first set of 4 KLB images
     images = [klb_loader.get(first[i]) for i in sorted(first.keys())]
+    cmTransforms =cameraTransformations(images[0], images[1], images[2], images[3], calibration)
     scale3D = AffineTransform3D()
     scale3D.set(calibration[0], 0.0, 0.0, 0.0,
                 0.0, calibration[1], 0.0, 0.0,
                 0.0, 0.0, calibration[2], 0.0)
-    cmTransforms = cameraTransformations(images[0], images[1], images[2], images[3], calibration)
+    
     cmIsotropicTransforms = []
     for camera_index in sorted(cmTransforms.keys()):
       aff = AffineTransform3D()
       aff.set(*cmTransforms[camera_index])
       aff.concatenate(scale3D)
       cmIsotropicTransforms.append(aff)
-    return cmIsotropicTransforms
-  
-  cmIsotropicTransforms = prepareCoarseTransforms()
+    return cmTransforms, cmIsotropicTransforms
+
+  # matrices, AffineModel3D instances
+  cmTransforms, cmIsotropicTransforms = prepareCoarseTransforms()
   
   # Create target folder for storing deconvolved images
   if not os.path.exists(os.path.join(targetDir, "deconvolved")):
@@ -127,7 +129,7 @@ def deconvolveTimePoints(srcDir,
   # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
   for i, filepaths in enumerate(TMs):
     syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
-    deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration, cmIsotropicTransforms,
+    deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration, cmTransforms, cmIsotropicTransforms,
                         roi, params, modelclass, kernel, exe)
   
   # Register deconvolved time points
@@ -139,7 +141,7 @@ def deconvolveTimePoints(srcDir,
 
 
 def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
-                        cmIsotropicTransforms, roi, params, modelclass, kernel,
+                        cmTransforms, cmIsotropicTransforms, roi, params, modelclass, kernel,
                         exe, write=writeZip):
   """ filepaths is a dictionary of camera index vs filepath to a KLB file.
       This function will generate two deconvolved views, one for each channel,
@@ -186,6 +188,17 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
                 cmIsotropicTransforms[2],
                 concat(cmIsotropicTransforms[3], matrices[1])]
 
+  def affine3D(matrix):
+    aff = AffineTransform3D()
+    aff.set(*matrix)
+    return aff
+
+  # Without the scaling up to isotropy
+  transformsPSF = [affine3D(cmTransforms[0]),
+                   concat(affine3D(cmTransforms[1]), matrices[0]),
+                   affine3D(cmTransforms[2]),
+                   concat(affine3D(cmTransforms[3]), matrices[1])]
+
   # Step 4: deconvolution
   def deconvolveAndSave(indices):
     name = "CM0%i-CM0%i-deconvolved" % indices
@@ -205,18 +218,10 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
         imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(img))
         ImgUtil.copy(ImgView.wrap(img, imgA.factory()), imgA)
         images.append(imgA)
-        # Transform the kernel just like the img: needs translation to the center of the img.
-        # Then copy the transformed kernel into an ArrayImg
-        offset = AffineTransform3D()
-        offset.identity()
-        offset.setTranslation(*[(imgA.dimension(d) - kernel.dimension(d)) / 2.0 for d in xrange(imgA.numDimensions())])
-        t = AffineTransform3D()
-        t.set(transforms[index])
-        t.preConcatenate(offset)
-        t_kernel = Views.zeroMin(viewTransformed(kernel, [1, 1, 1], t))
-        kernelA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(t_kernel))
-        ImgUtil.copy(ImgView.wrap(t_kernel, kernelA.factory()), kernelA)
-        PSF_kernels.append(kernelA)
+        # Transform the kernel with the affine of the view, without the scaling to isotropy
+        PSF_kernels.append(transformPSFKernelToView(kernel, transformsPSF[index]))
+        # DEBUG: write the kernelA
+        #writeZip(PSF_kernels[-1], "/tmp/kernel" + str(index) + ".zip", title="kernel" + str(index))
 
       # DEBUG: save the images
       #for i, img in zip(indices, images):
@@ -227,6 +232,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       #if True:
       #  return None # DEBUG
       # Deconvolve: merge two views into a single volume
+      
       n_iterations = params["CM_%i_%i_n_iterations" % indices]
       img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
       writeZip(img, path, title=filename)
