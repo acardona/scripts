@@ -3,6 +3,8 @@ from net.imglib2.img.array import ArrayImgFactory
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.view import Views
 from net.imglib2.util import Intervals
+from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
+from net.imglib2.realtransform import RealViews, AffineTransform3D
 from net.preibisch.mvrecon.process.deconvolution import MultiViewDeconvolutionSeq, DeconView, DeconViews, MultiViewDeconvolution
 from net.preibisch.mvrecon.process.deconvolution.iteration.sequential import ComputeBlockSeqThreadCPUFactory, ComputeBlockSeqThreadCUDAFactory
 from net.preibisch.mvrecon.process.deconvolution.init import PsiInitBlurredFusedFactory
@@ -135,10 +137,24 @@ def prepareImgForDeconvolution(img, affine3D, interval):
   Transform the img for deconvolution, taking care of pixels with zero value within the image
   and setting the appropriate values for outside the image, and cropping to the interval.
   """
-  return Views.zeroMin(TransformView.transformView(img, affine3D, interval,
-                                                   MultiViewDeconvolution.minValueImg,
-                                                   MultiViewDeconvolution.outsideValueImg,
-                                                   1)) # 1: linear interpolation
+  # ERROR: a systematic error in registration, a translation.
+  #return Views.zeroMin(TransformView.transformView(img, affine3D, interval,
+  #                                                 MultiViewDeconvolution.minValueImg,
+  #                                                 MultiViewDeconvolution.outsideValueImg,
+  #                                                 1)) # 1: linear interpolation
+
+  # Obtain a view where every zero value within the image
+  # is replaced with MultiViewDeconvolution.minValueImg, which is 1.0f (a float)
+  identity = AffineTransform3D()
+  identity.identity()
+  imgNonZero = TransformView.transformView(img, identity, img, MultiViewDeconvolution.minValueImg, MultiViewDeconvolution.outsideValueImg, 0) # 0: nearest neighbor
+  # Transform
+  imgE = Views.extendValue(imgNonZero, FloatType(MultiViewDeconvolution.outsideValueImg))
+  imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
+  imgT = RealViews.transform(imgI, affine3D)
+  imgR = Views.zeroMin(Views.interval(imgT, interval))
+  return imgR
+
 
 def transformPSFKernelToView(kernelImg, affine3D):
   """ Return a PSF kernel as an ArrayImg, transformed with the affine3D of the view.
