@@ -72,7 +72,7 @@ def setupEngine(use_cuda=True, askForMultipleDevices=False):
   return createFactoryFn
 
 # Define function, having potentially loaded the native CUDA library
-createFactory = setupEngine()
+createFactory = setupEngine(use_cuda=False)
 
 
 def multiviewDeconvolution(images, blockSize, PSF_kernels, n_iterations, lambda_val=0.0006, weights=None,
