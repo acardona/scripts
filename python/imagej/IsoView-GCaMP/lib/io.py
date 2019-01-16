@@ -95,7 +95,7 @@ class TransformedLoader(CacheLoader):
     imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
     imgT = RealViews.transform(imgI, transform)
     minC = self.roi[0] if self.roi else [0] * img.numDimensions()
-    maxC = self.roi[1] if self.roi else [img.dimension(d) for d in xrange(img.numDimensions())]
+    maxC = self.roi[1] if self.roi else [img.dimension(d) -1 for d in xrange(img.numDimensions())]
     return Views.zeroMin(Views.interval(imgT, minC, maxC))
 
 
