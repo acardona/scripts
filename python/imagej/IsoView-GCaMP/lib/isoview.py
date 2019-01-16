@@ -13,14 +13,16 @@ from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 
+from net.imglib2.img.display.imagej import ImageJFunctions as IL
+
 
 def deconvolveTimePoints(srcDir,
                          targetDir,
                          kernel_filepath,
                          calibration,
                          cameraTransformations,
+                         fineTransformsPostROICrop,
                          params,
-                         modelclass,
                          roi,
                          subrange=None,
                          n_threads=0): # 0 means all
@@ -47,9 +49,8 @@ def deconvolveTimePoints(srcDir,
      calibration: the array of [x, y, z] dimensions.
      camera_transformations: a map of camera index vs the 12-digit 3D affine matrices describing
                              the transform to register the camera view onto the camera at index 0.
-     params: a dictionary with all the necessary parameters for peak detection, feature extraction
-             finding pointmatches and transformation model estimation.
-     modelclass: the class of the transformation model for registering the camera views.
+     fineTransformsPostROICrop: a list of the transform matrices to be applied after both the coarse transform and the ROI crop.
+     params: a dictionary with all the necessary parameters for feature extraction, registration and deconvolution.
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
      subrange: defaults to None. Can be a list specifying the indices of time points to deconvolve.
   """
@@ -99,11 +100,11 @@ def deconvolveTimePoints(srcDir,
 
   # All OK, submit all timepoint folders for registration and deconvolution 
   
-  # Prepare coarse transforms
+  # Prepare coarse transforms ("cm" prefix means camera)
   def prepareCoarseTransforms():
     first = TMs[0] # filepaths for first set of 4 KLB images
     images = [klb_loader.get(first[i]) for i in sorted(first.keys())]
-    cmTransforms =cameraTransformations(images[0], images[1], images[2], images[3], calibration)
+    cmTransforms = cameraTransformations(images[0], images[1], images[2], images[3], calibration)
     scale3D = AffineTransform3D()
     scale3D.set(calibration[0], 0.0, 0.0, 0.0,
                 0.0, calibration[1], 0.0, 0.0,
@@ -123,83 +124,69 @@ def deconvolveTimePoints(srcDir,
   # Create target folder for storing deconvolved images
   if not os.path.exists(os.path.join(targetDir, "deconvolved")):
     os.mkdir(os.path.join(targetDir, "deconvolved"))
-  
-  # Submit for registration + deconvolution
-  # The registration uses 2 parallel threads, and deconvolution all possible available threads.
-  # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
-  for i, filepaths in enumerate(TMs):
-    syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
-    deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration, cmTransforms, cmIsotropicTransforms,
-                        roi, params, modelclass, kernel, exe)
-  
-  # Register deconvolved time points
-  # First, all the 0_1 deconvolutions sequentially.
-  # Second, all the 2_3 onto the corresponding registered 0_1.
-  deconvolved_csv_dir = os.path.join(targetDir, "deconvolved/csvs")
-  if not os.path.exists(deconvolved_csv_dir):
-    os.mkdir(deconvolved_csv_dir)
 
+  # Transform kernel to each view
+  matrices = fineTransformsPostROICrop
 
-def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
-                        cmTransforms, cmIsotropicTransforms, roi, params, modelclass, kernel,
-                        exe, write=writeZip):
-  """ filepaths is a dictionary of camera index vs filepath to a KLB file.
-      This function will generate two deconvolved views, one for each channel,
-      where CHN00 is made of CM00 + CM01, and
-            CHNO1 is made of CM02 + CM03.
-      Will take the camera registrations (cmIsotropicTransforms), which are coarse,
-      and run a finer registration by extracting features and computing a modelclass (like RigidModel3D).
-      If the deconvolved images exist, it will neither compute it nor write it."""
-  # Step 0: create csv_dir if not there
-  tm_dirname = filepaths[0][filepaths[0].rfind("_TM") + 1:filepaths[0].rfind("_CM")]
-  csv_dir = os.path.join(targetDir, tm_dirname + "-csv")
-  if not os.path.exists(csv_dir):
-    os.mkdir(csv_dir)
-
-  # Step 1: fine registration
-  # Check if matrices exist, otherwise load them:
-  matrices_name = tm_dirname + "-matrices"
-  if os.path.exists(os.path.join(csv_dir, matrices_name)):
-    matrices = loadMatrices(matrices_name, csv_dir)
-  else:
-    transforming_loader = TransformedLoader(klb_loader, {filepaths[k]: cmIsotropicTransforms[k] for k in xrange(4)}, roi=roi)
-    futures = []
-    # Each task will use two additional threads
-    futures.append(exe.submit(Task(computeForwardTransforms, [filepaths[0], filepaths[1]], transforming_loader, getCalibration,
-                                                             csv_dir, exe, modelclass, params, exe_shutdown=False)))
-    futures.append(exe.submit(Task(computeForwardTransforms, [filepaths[2], filepaths[3]], transforming_loader, getCalibration,
-                                                             csv_dir, exe, modelclass, params, exe_shutdown=False)))
-    _, matrix_0_1 = futures[0].get() # the _ is an identity transform
-    _, matrix_2_3 = futures[1].get()
-    matrices = [matrix_0_1, matrix_2_3]
-    saveMatrices(matrices_name, matrices, csv_dir)
-
-  # Step 2: concatenate coarse transforms with newly computed fine transformation matrices
+  # Concatenate coarse transforms with fine transformation matrices
   def concat(aff, matrix):
     t = AffineTransform3D()
     t.set(aff)
     aff1 = AffineTransform3D()
     aff1.set(*matrix)
+    aff1 = aff1.inverse() # THIS WAS MISSING: matrices contain forward transforms, e.g. CM00->CM01, not CM01->cM00.
     t.preConcatenate(aff1)
     return t
 
-  transforms = [cmIsotropicTransforms[0],
-                concat(cmIsotropicTransforms[1], matrices[0]),
-                cmIsotropicTransforms[2],
-                concat(cmIsotropicTransforms[3], matrices[1])]
+  transforms = [concat(cmIsotropicTransforms[0], matrices[0]),
+                concat(cmIsotropicTransforms[1], matrices[1]),
+                concat(cmIsotropicTransforms[2], matrices[2]),
+                concat(cmIsotropicTransforms[3], matrices[3])]
 
   def affine3D(matrix):
     aff = AffineTransform3D()
     aff.set(*matrix)
     return aff
 
-  # Without the scaling up to isotropy
-  transformsPSF = [affine3D(cmTransforms[0]),
-                   concat(affine3D(cmTransforms[1]), matrices[0]),
-                   affine3D(cmTransforms[2]),
-                   concat(affine3D(cmTransforms[3]), matrices[1])]
+  # For the PSF kernel, transforms without the scaling up to isotropy
+  transformsPSF = [concat(affine3D(cmTransforms[0]), matrices[0]),
+                   concat(affine3D(cmTransforms[1]), matrices[1]),
+                   concat(affine3D(cmTransforms[2]), matrices[2]),
+                   concat(affine3D(cmTransforms[3]), matrices[3])]
 
-  # Step 4: deconvolution
+  # Transform the kernel with the affine of the view, without the scaling to isotropy
+  PSF_kernels = [transformPSFKernelToView(kernel, t) for t in transformsPSF]
+  
+  # DEBUG: write the kernelA
+  for index in [0, 1, 2, 3]:
+    writeZip(PSF_kernels[index], "/tmp/kernel" + str(index) + ".zip", title="kernel" + str(index))
+  
+  # Submit for registration + deconvolution
+  # The registration uses 2 parallel threads, and deconvolution all possible available threads.
+  # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
+  for i, filepaths in enumerate(TMs):
+    syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
+    deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
+                        transforms, roi, params, PSF_kernels, exe)
+  
+  # Register deconvolved time points
+  deconvolved_csv_dir = os.path.join(targetDir, "deconvolved/csvs")
+  if not os.path.exists(deconvolved_csv_dir):
+    os.mkdir(deconvolved_csv_dir)
+  # TODO
+
+
+def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
+                        transforms, roi, params, PSF_kernels,
+                        exe, write=writeZip):
+  """ filepaths is a dictionary of camera index vs filepath to a KLB file.
+      This function will generate two deconvolved views, one for each channel,
+      where CHN00 is made of CM00 + CM01, and
+            CHNO1 is made of CM02 + CM03.
+      Will take the camera registrations (cmIsotropicTransforms), which are coarse,
+      apply them to the images, then crop the images, then apply the fine transformations.
+      If the deconvolved images exist, it will neither compute it nor write it."""
+  tm_dirname = filepaths[0][filepaths[0].rfind("_TM") + 1:filepaths[0].rfind("_CM")]
   def deconvolveAndSave(indices):
     name = "CM0%i-CM0%i-deconvolved" % indices
     filename = tm_dirname + "_" + name + ".zip"
@@ -207,7 +194,6 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
     interval = FinalInterval(roi[0], roi[1]) # for cropping
     if not os.path.exists(path):
       images = []
-      PSF_kernels = []
       for index in indices:
         # Prepare the img:
         # 1. Ensure its pixel values conform to expectations (no zeros inside)
@@ -217,17 +203,17 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
         imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(img))
         ImgUtil.copy(ImgView.wrap(img, imgA.factory()), imgA)
         images.append(imgA)
-        # Transform the kernel with the affine of the view, without the scaling to isotropy
-        PSF_kernels.append(transformPSFKernelToView(kernel, transformsPSF[index]))
-        # DEBUG: write the kernelA
-        #writeZip(PSF_kernels[-1], "/tmp/kernel" + str(index) + ".zip", title="kernel" + str(index))
 
       # DEBUG: save the images
-      #for i, img in zip(indices, images):
-      #  try:
-      #    writeZip(img, "/tmp/" + "pre_deconv__" + tm_dirname + "_CM0" + str(i) + "-PREPARED.zip", title="CM" + str(i))
-      #  except:
-      #    print sys.exc_info()
+      if tm_dirname == "TM000000":
+        try:
+          for i, img in zip(indices, images):
+            writeZip(img, "/tmp/" + "pre_deconv__" + tm_dirname + "_CM0" + str(i) + "-PREPARED.zip", title="CM" + str(i))
+          # DEBUG: show the registered images into a hyperstack
+          IL.wrap(Views.stack(images), "stack %i-%i" % indices).show()
+        except:
+          print sys.exc_info()
+      
       #if True:
       #  return None # DEBUG
       
@@ -239,7 +225,9 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
   deconvolveAndSave((0, 1))
   deconvolveAndSave((2, 3))
 
-  
+
+
+# TODO NEEDS UPDATE, both channels are now registered to CM00
 def registerDeconvolvedTimePoints(srcDir,
                                   targetDir,
                                   params,
