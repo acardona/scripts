@@ -11,6 +11,7 @@ sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import computeForwardTransforms, asBackwardConcatTransforms, viewTransformed, saveMatrices, loadMatrices
 from lib.util import newFixedThreadPool, Task
 from lib.io import readFloats
+from lib.deconvolution import transformPSFKernelToView
 from org.janelia.simview.klb import KLB
 from net.imglib2.cache import CacheLoader
 from java.lang import Runtime
@@ -26,6 +27,7 @@ from net.preibisch.mvrecon.process.deconvolution.init import PsiInitBlurredFused
 from net.preibisch.mvrecon.process.deconvolution.DeconViewPSF import PSFTYPE
 from bdv.util import ConstantRandomAccessible
 from net.imglib2 import FinalInterval
+from net.imglib2.util import Intervals
 from net.imglib2.algorithm.math import ImgMath
 from net.imglib2.img.array import ArrayImgs
 from ij.io import FileSaver
@@ -302,12 +304,23 @@ finally:
 # Read the kernel as a FloatType ArrayImg
 kernel = readFloats("/home/albert/lab/Raghav-IsoView-PSF/PSF-19x19x25.tif", [19, 19, 25], header=434)
 
-def deconvolve(images, name, n_iterations):
+def affine3D(matrix):
+  aff = AffineTransform3D()
+  aff.set(*matrix)
+  return aff
+
+# Transform the kernel for each view
+kernels = [kernel,
+           transformPSFKernelToView(kernel, affine3D(matrices["imgB0-imgB1"])),
+           transformPSFKernelToView(kernel, affine3D(matrices["imgB0-imgB2"])),
+           transformPSFKernelToView(kernel, affine3D(matrices["imgB0-imgB3"]))]
+
+def deconvolve(images, kernels, name, n_iterations):
   # Bayesian-based multi-view deconvolution
-  exe = newFixedThreadPool(Runtime.getRuntime().availableProcessors())
+  exe = newFixedThreadPool(Runtime.getRuntime().availableProcessors() -2)
   try:
     mylambda = 0.0006
-    blockSize = [128, 128, 128]
+    blockSize = Intervals.dimensionsAsIntArray(images[0]) # [128, 128, 128]
     cptf = ComputeBlockSeqThreadCPUFactory(exe, mylambda, blockSize, ArrayImgFactory(FloatType()))
     psiInitFactory = PsiInitBlurredFusedFactory() # PsiInitAvgPreciseFactory() fails with type mismatch: UnsignedByteType (?) vs FloatType
     weight = Views.interval(ConstantRandomAccessible(FloatType(1), images[0].numDimensions()), FinalInterval(images[0]))
