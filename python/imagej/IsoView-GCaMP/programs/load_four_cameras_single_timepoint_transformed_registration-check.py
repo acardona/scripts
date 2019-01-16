@@ -351,7 +351,6 @@ deconvolve(images, "4-view", 40)
 deconvolve(images, "4-view", 50)
 """
 
-#deconvolve([imgB0, imgB1], "2-view_CM00_CM01_", 10)
-#deconvolve([imgB2, imgB3], "2-view_CM02_CM03_", 10) # CHN01 seems to need more than 10
-deconvolve([imgB2, imgB3], "2-view_CM02_CM03_", 20)
-deconvolve([imgB2, imgB3], "2-view_CM02_CM03_", 30)
+#deconvolve([imgB0, imgB1], kernels[0:2], "2-view_CM00_CM01_", 5)
+#deconvolve([imgB2, imgB3], kernels[2:4], "2-view_CM02_CM03_", 5)
+
