@@ -201,19 +201,6 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
         images.append(imgA)
         syncPrint("--Completed copying transformed and prepared image into ArrayImg.")
 
-      # DEBUG: save the images
-      if tm_dirname == "TM000000":
-        try:
-          #for i, img in zip(indices, images):
-          #  writeZip(img, "/tmp/" + "pre_deconv__" + tm_dirname + "_CM0" + str(i) + "-PREPARED.zip", title="CM" + str(i))
-          # DEBUG: show the registered images into a hyperstack
-          IL.wrap(Views.stack(images), "stack %i-%i" % indices).show()
-        except:
-          print sys.exc_info()
-      
-      #if True:
-      #  return None # DEBUG
-      
       # Deconvolve: merge two views into a single volume
       n_iterations = params["CM_%i_%i_n_iterations" % indices]
       img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
