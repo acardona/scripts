@@ -3,7 +3,7 @@ from net.imglib2.img.array import ArrayImgs
 from jarray import zeros
 from java.nio import ByteBuffer
 import operator
-from net.imglib2 import RandomAccessibleInterval
+from net.imglib2 import RandomAccessibleInterval, IterableInterval
 from net.imglib2.view import Views
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.cache import CacheLoader
@@ -59,7 +59,9 @@ def readKLB(path):
 
 
 def writeZip(img, path, title=""):
-  if isinstance(img, RandomAccessibleInterval):
+  if isinstance(img, IterableInterval):
+    imp = IL.wrap(img, title)
+  elif isinstance(img, RandomAccessibleInterval):
     imp = IL.wrap(Views.iterable(img), title)
   elif isinstance(img, ImagePlus):
     imp = img
