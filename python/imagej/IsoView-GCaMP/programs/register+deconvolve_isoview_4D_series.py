@@ -19,17 +19,17 @@ kernelPath = "/home/albert/shares/cardonalab/Albert/Raghav-IsoView-PSF/PSF-19x19
 calibration = [1.0, 1.0, 5.0]
 
 # The transformations of each timepoint onto the camera at index zero.
-def cameraTransformations(img1, img2, img3, img4, calibration):
+def cameraTransformations(dims0, dims1, dims2, dims3, calibration):
   return {
     0: [1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0],
-    1: [-1.0, 0.0, 0.0, img2.dimension(0) * calibration[0] - 195,
+    1: [-1.0, 0.0, 0.0, dims1[0] * calibration[0] - 195,
          0.0, 1.0, 0.0, 54.0,
          0.0, 0.0, 1.0,  8.0],
     2: [ 0.0, 0.0, 1.0,  0.0,
          0.0, 1.0, 0.0, 25.0,
-        -1.0, 0.0, 0.0, img3.dimension(2) * calibration[2] + 41.0],
+        -1.0, 0.0, 0.0, dims2[2] * calibration[2] + 41.0],
     3: [0.0, 0.0, 1.0,    0.0,
         0.0, 1.0, 0.0,   25.0,
         1.0, 0.0, 0.0, -159.0]

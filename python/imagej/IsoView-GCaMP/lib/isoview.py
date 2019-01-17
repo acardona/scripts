@@ -9,6 +9,7 @@ from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 import os, re, sys
 from pprint import pprint
 from itertools import izip, chain, repeat
+from operator import itemgetter
 from util import newFixedThreadPool, Task, syncPrint, affine3D
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
@@ -99,13 +100,15 @@ def deconvolveTimePoints(srcDir,
     print i
     pprint(TM)
 
+  # dimensions: all images from each camera have the same dimensions
+  dimensions = [Intervals.dimensionsAsLongArray(klb_loader.get(filepath))
+                for index, filepath in sorted(TMs[0].items(), key=itemgetter(0))]
+
   # All OK, submit all timepoint folders for registration and deconvolution 
   
   # Prepare coarse transforms ("cm" prefix means camera)
   def prepareCoarseTransforms():
-    first = TMs[0] # filepaths for first set of 4 KLB images
-    images = [klb_loader.get(first[i]) for i in sorted(first.keys())]
-    cmTransforms = cameraTransformations(images[0], images[1], images[2], images[3], calibration)
+    cmTransforms = cameraTransformations(dimensions[0], dimensions[1], dimensions[2], dimensions[3], calibration)
     scale3D = AffineTransform3D()
     scale3D.set(calibration[0], 0.0, 0.0, 0.0,
                 0.0, calibration[1], 0.0, 0.0,
