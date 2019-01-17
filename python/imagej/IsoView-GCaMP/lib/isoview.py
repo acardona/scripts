@@ -9,10 +9,12 @@ from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 import os, re, sys
 from pprint import pprint
 from itertools import izip, chain, repeat
+from operator import itemgetter
 from util import newFixedThreadPool, Task, syncPrint, affine3D
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
+from converter import createSamplerConverter
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
@@ -26,6 +28,7 @@ def deconvolveTimePoints(srcDir,
                          params,
                          roi,
                          subrange=None,
+                         output_converter=None, # defults to 16-bit unsigned
                          n_threads=0): # 0 means all
   """
      Main program entry point.
@@ -54,6 +57,8 @@ def deconvolveTimePoints(srcDir,
      params: a dictionary with all the necessary parameters for feature extraction, registration and deconvolution.
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
      subrange: defaults to None. Can be a list specifying the indices of time points to deconvolve.
+     n_threads: number of threads to use. Zero (default) means as many as possible.
+     output_converter: a SamplerConverter that defaults to None (implying a conversion from FloatType to UnsignedShortType).
   """
   kernel = readFloats(kernel_filepath, [19, 19, 25], header=434)
   klb_loader = KLBLoader()
@@ -99,13 +104,15 @@ def deconvolveTimePoints(srcDir,
     print i
     pprint(TM)
 
+  # dimensions: all images from each camera have the same dimensions
+  dimensions = [Intervals.dimensionsAsLongArray(klb_loader.get(filepath))
+                for index, filepath in sorted(TMs[0].items(), key=itemgetter(0))]
+
   # All OK, submit all timepoint folders for registration and deconvolution 
   
   # Prepare coarse transforms ("cm" prefix means camera)
   def prepareCoarseTransforms():
-    first = TMs[0] # filepaths for first set of 4 KLB images
-    images = [klb_loader.get(first[i]) for i in sorted(first.keys())]
-    cmTransforms = cameraTransformations(images[0], images[1], images[2], images[3], calibration)
+    cmTransforms = cameraTransformations(dimensions[0], dimensions[1], dimensions[2], dimensions[3], calibration)
     scale3D = AffineTransform3D()
     scale3D.set(calibration[0], 0.0, 0.0, 0.0,
                 0.0, calibration[1], 0.0, 0.0,
@@ -129,26 +136,6 @@ def deconvolveTimePoints(srcDir,
   # Transform kernel to each view
   matrices = fineTransformsPostROICrop
 
-  """
-  # Concatenate coarse transforms with fine transformation matrices
-  def concat(aff, matrix):
-    t = AffineTransform3D()
-    t.set(aff)
-    aff1 = AffineTransform3D()
-    aff1.set(*matrix)
-    aff1 = aff1.inverse() # THIS WAS MISSING: matrices contain forward transforms, e.g. CM00->CM01, not CM01->cM00.
-    t.preConcatenate(aff1)
-    return t
-  
-  # Can't: the cropping by ROI introduces translations not accounted for in the matrices
-  transforms = [concat(cmIsotropicTransforms[0], matrices[0]),
-                concat(cmIsotropicTransforms[1], matrices[1]),
-                concat(cmIsotropicTransforms[2], matrices[2]),
-                concat(cmIsotropicTransforms[3], matrices[3])]
-  """
-
-  print "cmTransforms:", cmTransforms
-
   # For the PSF kernel, transforms without the scaling up to isotropy
   # No need to account for the translation: the transformPSFKernelToView keeps the center point centered.
   PSF_kernels = [transformPSFKernelToView(kernel, affine3D(cmTransforms[i])) for i in xrange(4)]
@@ -156,20 +143,13 @@ def deconvolveTimePoints(srcDir,
   # TODO: if kernels are not ArrayImg, they should be made be.
   print "PSF_kernel[0]:", PSF_kernels[0], type(PSF_kernels[0])
 
-  """
-  # WRONG, can't concate these: the translation is not accounted for.
-  transformsPSF = [concat(affine3D(cmTransforms[0]), matrices[0]),
-                   concat(affine3D(cmTransforms[1]), matrices[1]),
-                   concat(affine3D(cmTransforms[2]), matrices[2]),
-                   concat(affine3D(cmTransforms[3]), matrices[3])]
-
-  # Transform the kernel with the affine of the view, without the scaling to isotropy
-  PSF_kernels = [transformPSFKernelToView(kernel, t) for t in transformsPSF]
-  """
-  
   # DEBUG: write the kernelA
   for index in [0, 1, 2, 3]:
     writeZip(PSF_kernels[index], "/tmp/kernel" + str(index) + ".zip", title="kernel" + str(index))
+
+  if output_converter is None:
+    # Default: a converter from FloatType to UnsignedShortType
+    output_converter = createSamplerConverter(FloatType, UnsignedShortType)
   
   # Submit for registration + deconvolution
   # The registration uses 2 parallel threads, and deconvolution all possible available threads.
@@ -177,7 +157,7 @@ def deconvolveTimePoints(srcDir,
   for i, filepaths in enumerate(TMs):
     syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
     deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
-                        cmIsotropicTransforms, roi, fineTransformsPostROICrop, params, PSF_kernels, exe)
+                        cmIsotropicTransforms, roi, fineTransformsPostROICrop, params, PSF_kernels, exe, output_converter)
   
   # Register deconvolved time points
   deconvolved_csv_dir = os.path.join(targetDir, "deconvolved/csvs")
@@ -188,7 +168,7 @@ def deconvolveTimePoints(srcDir,
 
 def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
                         cmIsotropicTransforms, roi, fineTransformsPostROICrop, params, PSF_kernels,
-                        exe, write=writeZip):
+                        exe, output_converter, write=writeZip):
   """ filepaths is a dictionary of camera index vs filepath to a KLB file.
       This function will generate two deconvolved views, one for each channel,
       where CHN00 is made of CM00 + CM01, and
@@ -197,58 +177,63 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       apply them to the images, then crop the images, then apply the fine transformations.
       If the deconvolved images exist, it will neither compute it nor write it."""
   tm_dirname = filepaths[0][filepaths[0].rfind("_TM") + 1:filepaths[0].rfind("_CM")]
-  
-  def deconvolveAndSave(indices):
+
+  def prepare(index):
+    # Prepare the img:
+    # 0. Transform in two (three) steps:
+    #    first transform with coarse cmIsotropicTransform,
+    #    then crop to ROI,
+    #    then with the inverse of the fineTransformsPostRoiCrop matrices.
+    # 1. Ensure its pixel values conform to expectations (no zeros inside)
+    # 2. Copy it into an ArrayImg for faster recurrent retrieval of same pixels
+    syncPrint("Working now on %s CM0%i" % (tm_dirname, index))
+    img = klb_loader.get(filepaths[index])
+    imgE = Views.extendZero(img)
+    imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
+    imgT = RealViews.transform(imgI, cmIsotropicTransforms[index])
+    imgB = Views.zeroMin(Views.interval(imgT, roi[0], roi[1])) # bounded: crop with ROI
+    imgP = prepareImgForDeconvolution(imgB,
+                                      affine3D(fineTransformsPostROICrop[index]).inverse(),
+                                      FinalInterval([0, 0, 0],
+                                                    [imgB.dimension(d) -1 for d in xrange(3)]))
+    # Copy transformed view into ArrayImg for best performance in deconvolution
+    imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(imgP))
+    ImgUtil.copy(ImgView.wrap(imgP, imgA.factory()), imgA)
+    syncPrint("--Completed preparing %s CM0%i" % (tm_dirname, index))
+    return (index, imgA)
+
+  def strings(indices):
     name = "CM0%i-CM0%i-deconvolved" % indices
-    syncPrint("Invoked deconvolveAndSave for indices %i, %i" % indices)
     filename = tm_dirname + "_" + name + ".zip"
     path = os.path.join(targetDir, "deconvolved/" + filename)
+    return filename, path
+
+  # Find out which pairs haven't been created yet
+  futures = []
+  todo = []
+  for indices in ((0, 1), (2, 3)):
+    filename, path = strings(indices)
     if not os.path.exists(path):
-      images = []
+      todo.append(indices)
       for index in indices:
-        # Prepare the img:
-        # 0. Transform in two (three) steps:
-        #    first transform with coarse cmIsotropicTransform,
-        #    then crop to ROI,
-        #    then with the inverse of the fineTransformsPostRoiCrop matrices.
-        # 1. Ensure its pixel values conform to expectations (no zeros inside)
-        # 2. Copy it into an ArrayImg for faster recurrent retrieval of same pixels
-        syncPrint("Working now on %s CM0%i" % (tm_dirname, index))
-        img = klb_loader.get(filepaths[index])
-        imgE = Views.extendZero(img)
-        imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
-        imgT = RealViews.transform(imgI, cmIsotropicTransforms[index])
-        imgB = Views.zeroMin(Views.interval(imgT, roi[0], roi[1])) # bounded: crop with ROI
-        imgP = prepareImgForDeconvolution(imgB,
-                                          affine3D(fineTransformsPostROICrop[index]).inverse(),
-                                          FinalInterval([0, 0, 0],
-                                                        [imgB.dimension(d) -1 for d in xrange(3)]))
-        # Copy transformed view into ArrayImg for best performance in deconvolution
-        imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(imgP))
-        ImgUtil.copy(ImgView.wrap(imgP, imgA.factory()), imgA)
-        images.append(imgA)
-        syncPrint("--Completed copying transformed and prepared image into ArrayImg.")
+        futures.append(exe.submit(Task, prepare, index))
 
-      # DEBUG: save the images
-      if tm_dirname == "TM000000":
-        try:
-          #for i, img in zip(indices, images):
-          #  writeZip(img, "/tmp/" + "pre_deconv__" + tm_dirname + "_CM0" + str(i) + "-PREPARED.zip", title="CM" + str(i))
-          # DEBUG: show the registered images into a hyperstack
-          IL.wrap(Views.stack(images), "stack %i-%i" % indices).show()
-        except:
-          print sys.exc_info()
-      
-      #if True:
-      #  return None # DEBUG
-      
-      # Deconvolve: merge two views into a single volume
-      n_iterations = params["CM_%i_%i_n_iterations" % indices]
-      img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
-      writeZip(img, path, title=filename)
+  # Dictionary of index vs imgA
+  prepared = dict(f.get() for f in futures)
 
-  deconvolveAndSave((0, 1))
-  deconvolveAndSave((2, 3))
+  # Each deconvolution run uses many threads when run with CPU
+  # So do one at a time. With GPU perhaps it could do two at a time.
+  for indices in todo:
+    images = [prepared[index] for index in indices]
+    syncPrint("Invoked deconvolution for %s %i,%i" % (tm_dirname, indices))
+    # Deconvolve: merge two views into a single volume
+    n_iterations = params["CM_%i_%i_n_iterations" % indices]
+    img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
+    # On-the-fly convert to 16-bit: data values are well within the 16-bit range
+    imgU = Converters.convert(img, output_converter)
+    filename, path = strings(indices)
+    writeZip(img, path, title=filename)
+
 
 
 

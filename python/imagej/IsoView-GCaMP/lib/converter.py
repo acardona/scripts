@@ -323,4 +323,4 @@ def defineConverter(fromType,
 def createConverter(*args, **kwargs):
   """ Returns a new instance of the newly defined class implementing the Converter interface.
       See defineConverter for all argument details. """
-  return defineSConverter(*args, **kwargs).newInstance()
+  return defineConverter(*args, **kwargs).newInstance()
