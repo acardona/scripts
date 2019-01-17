@@ -169,45 +169,61 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       apply them to the images, then crop the images, then apply the fine transformations.
       If the deconvolved images exist, it will neither compute it nor write it."""
   tm_dirname = filepaths[0][filepaths[0].rfind("_TM") + 1:filepaths[0].rfind("_CM")]
-  
-  def deconvolveAndSave(indices):
+
+  def prepare(index):
+    # Prepare the img:
+    # 0. Transform in two (three) steps:
+    #    first transform with coarse cmIsotropicTransform,
+    #    then crop to ROI,
+    #    then with the inverse of the fineTransformsPostRoiCrop matrices.
+    # 1. Ensure its pixel values conform to expectations (no zeros inside)
+    # 2. Copy it into an ArrayImg for faster recurrent retrieval of same pixels
+    syncPrint("Working now on %s CM0%i" % (tm_dirname, index))
+    img = klb_loader.get(filepaths[index])
+    imgE = Views.extendZero(img)
+    imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
+    imgT = RealViews.transform(imgI, cmIsotropicTransforms[index])
+    imgB = Views.zeroMin(Views.interval(imgT, roi[0], roi[1])) # bounded: crop with ROI
+    imgP = prepareImgForDeconvolution(imgB,
+                                      affine3D(fineTransformsPostROICrop[index]).inverse(),
+                                      FinalInterval([0, 0, 0],
+                                                    [imgB.dimension(d) -1 for d in xrange(3)]))
+    # Copy transformed view into ArrayImg for best performance in deconvolution
+    imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(imgP))
+    ImgUtil.copy(ImgView.wrap(imgP, imgA.factory()), imgA)
+    syncPrint("--Completed preparing %s CM0%i" % (tm_dirname, index))
+    return (index, imgA)
+
+  def strings(indices):
     name = "CM0%i-CM0%i-deconvolved" % indices
-    syncPrint("Invoked deconvolveAndSave for indices %i, %i" % indices)
     filename = tm_dirname + "_" + name + ".zip"
     path = os.path.join(targetDir, "deconvolved/" + filename)
+    return filename, path
+
+  # Find out which pairs haven't been created yet
+  futures = []
+  todo = []
+  for indices in ((0, 1), (2, 3)):
+    filename, path = strings(indices)
     if not os.path.exists(path):
-      images = []
+      todo.append(indices)
       for index in indices:
-        # Prepare the img:
-        # 0. Transform in two (three) steps:
-        #    first transform with coarse cmIsotropicTransform,
-        #    then crop to ROI,
-        #    then with the inverse of the fineTransformsPostRoiCrop matrices.
-        # 1. Ensure its pixel values conform to expectations (no zeros inside)
-        # 2. Copy it into an ArrayImg for faster recurrent retrieval of same pixels
-        syncPrint("Working now on %s CM0%i" % (tm_dirname, index))
-        img = klb_loader.get(filepaths[index])
-        imgE = Views.extendZero(img)
-        imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
-        imgT = RealViews.transform(imgI, cmIsotropicTransforms[index])
-        imgB = Views.zeroMin(Views.interval(imgT, roi[0], roi[1])) # bounded: crop with ROI
-        imgP = prepareImgForDeconvolution(imgB,
-                                          affine3D(fineTransformsPostROICrop[index]).inverse(),
-                                          FinalInterval([0, 0, 0],
-                                                        [imgB.dimension(d) -1 for d in xrange(3)]))
-        # Copy transformed view into ArrayImg for best performance in deconvolution
-        imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(imgP))
-        ImgUtil.copy(ImgView.wrap(imgP, imgA.factory()), imgA)
-        images.append(imgA)
-        syncPrint("--Completed copying transformed and prepared image into ArrayImg.")
+        futures.append(exe.submit(Task, prepare, index))
 
-      # Deconvolve: merge two views into a single volume
-      n_iterations = params["CM_%i_%i_n_iterations" % indices]
-      img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
-      writeZip(img, path, title=filename)
+  # Dictionary of index vs imgA
+  prepared = dict(f.get() for f in futures)
 
-  deconvolveAndSave((0, 1))
-  deconvolveAndSave((2, 3))
+  # Each deconvolution run uses many threads when run with CPU
+  # So do one at a time. With GPU perhaps it could do two at a time.
+  for indices in todo:
+    images = [prepared[index] for index in indices]
+    syncPrint("Invoked deconvolution for %s %i,%i" % (tm_dirname, indices))
+    # Deconvolve: merge two views into a single volume
+    n_iterations = params["CM_%i_%i_n_iterations" % indices]
+    img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
+    filename, path = strings(indices)
+    writeZip(img, path, title=filename)
+
 
 
 
