@@ -174,6 +174,17 @@ def viewTransformed(img, calibration, transform):
   return imgB
 
 
+def transformedView(img, transform, interval=None):
+  """ """
+  imgE = Views.extendZero(img)
+  imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
+  imgT = RealViews.transform(imgI, transform)
+  if interval:
+    return Views.interval(imgT, interval)
+  else:
+    return Views.interval(imgT, [0, 0, 0], [img.dimension(d) -1 for d in xrange(img.numDimensions())])
+
+
 def registeredView(img_filenames, img_loader, getCalibration, csv_dir, modelclass, params, exe=None):
   """ img_filenames: a list of file names
       csv_dir: directory for CSV files
