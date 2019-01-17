@@ -3,6 +3,7 @@ from java.util.concurrent import Callable, Future, Executors, ThreadFactory
 from java.util.concurrent.atomic import AtomicInteger
 from java.lang.reflect.Array import newInstance as newArray
 from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character, System
+from net.imglib2.realtransform import AffineTransform3D
 
 
 @make_synchronized
@@ -107,3 +108,9 @@ def timeit(n_iterations, fn, *args, **kwargs):
     t1 = System.nanoTime()
     times.append(t1 - t0)
   print "min: %.2f ms, max: %.2f ms, mean: %.2f ms" % (min(times) / 1000000.0, max(times) / 1000000.0, sum(times)/(len(times) * 1000000.0))
+
+
+def affine3D(matrix):
+  aff = AffineTransform3D()
+  aff.set(*matrix)
+  return aff
