@@ -14,6 +14,7 @@ from util import newFixedThreadPool, Task, syncPrint, affine3D
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
+from converter import createSamplerConverter
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
@@ -27,6 +28,7 @@ def deconvolveTimePoints(srcDir,
                          params,
                          roi,
                          subrange=None,
+                         output_converter=None, # defults to 16-bit unsigned
                          n_threads=0): # 0 means all
   """
      Main program entry point.
@@ -55,6 +57,8 @@ def deconvolveTimePoints(srcDir,
      params: a dictionary with all the necessary parameters for feature extraction, registration and deconvolution.
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
      subrange: defaults to None. Can be a list specifying the indices of time points to deconvolve.
+     n_threads: number of threads to use. Zero (default) means as many as possible.
+     output_converter: a SamplerConverter that defaults to None (implying a conversion from FloatType to UnsignedShortType).
   """
   kernel = readFloats(kernel_filepath, [19, 19, 25], header=434)
   klb_loader = KLBLoader()
@@ -142,6 +146,10 @@ def deconvolveTimePoints(srcDir,
   # DEBUG: write the kernelA
   for index in [0, 1, 2, 3]:
     writeZip(PSF_kernels[index], "/tmp/kernel" + str(index) + ".zip", title="kernel" + str(index))
+
+  if output_converter is None:
+    # Default: a converter from FloatType to UnsignedShortType
+    output_converter = createSamplerConverter(FloatType, UnsignedShortType)
   
   # Submit for registration + deconvolution
   # The registration uses 2 parallel threads, and deconvolution all possible available threads.
@@ -149,7 +157,7 @@ def deconvolveTimePoints(srcDir,
   for i, filepaths in enumerate(TMs):
     syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
     deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
-                        cmIsotropicTransforms, roi, fineTransformsPostROICrop, params, PSF_kernels, exe)
+                        cmIsotropicTransforms, roi, fineTransformsPostROICrop, params, PSF_kernels, exe, output_converter)
   
   # Register deconvolved time points
   deconvolved_csv_dir = os.path.join(targetDir, "deconvolved/csvs")
@@ -160,7 +168,7 @@ def deconvolveTimePoints(srcDir,
 
 def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
                         cmIsotropicTransforms, roi, fineTransformsPostROICrop, params, PSF_kernels,
-                        exe, write=writeZip):
+                        exe, output_converter, write=writeZip):
   """ filepaths is a dictionary of camera index vs filepath to a KLB file.
       This function will generate two deconvolved views, one for each channel,
       where CHN00 is made of CM00 + CM01, and
@@ -221,6 +229,8 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
     # Deconvolve: merge two views into a single volume
     n_iterations = params["CM_%i_%i_n_iterations" % indices]
     img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
+    # On-the-fly convert to 16-bit: data values are well within the 16-bit range
+    imgU = Converters.convert(img, output_converter)
     filename, path = strings(indices)
     writeZip(img, path, title=filename)
 
