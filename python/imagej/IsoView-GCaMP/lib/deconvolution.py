@@ -137,12 +137,12 @@ def prepareImgForDeconvolution(img, affine3D, interval):
   Transform the img for deconvolution, taking care of pixels with zero value within the image
   and setting the appropriate values for outside the image, and cropping to the interval.
   """
-  # ERROR: a systematic error in registration, a translation.
-  #return Views.zeroMin(TransformView.transformView(img, affine3D, interval,
-  #                                                 MultiViewDeconvolution.minValueImg,
-  #                                                 MultiViewDeconvolution.outsideValueImg,
-  #                                                 1)) # 1: linear interpolation
-
+  return Views.zeroMin(TransformView.transformView(img, affine3D, interval,
+                                                   MultiViewDeconvolution.minValueImg,
+                                                   MultiViewDeconvolution.outsideValueImg,
+                                                   1)) # 1: linear interpolation
+  """
+  # Manual:
   # Obtain a view where every zero value within the image
   # is replaced with MultiViewDeconvolution.minValueImg, which is 1.0f (a float)
   identity = AffineTransform3D()
@@ -154,6 +154,7 @@ def prepareImgForDeconvolution(img, affine3D, interval):
   imgT = RealViews.transform(imgI, affine3D)
   imgR = Views.zeroMin(Views.interval(imgT, interval))
   return imgR
+  """
 
 
 def transformPSFKernelToView(kernelImg, affine3D):
