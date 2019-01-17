@@ -2,15 +2,16 @@ from net.imglib2 import FinalInterval
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.img import ImgView
 from net.imglib2.util import Intervals, ImgUtil
-from net.imglib2.realtransform import Scale3D, AffineTransform3D
+from net.imglib2.realtransform import Scale3D, AffineTransform3D, RealViews
 from net.imglib2.img.io import Load
 from net.imglib2.view import Views
+from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 import os, re, sys
 from pprint import pprint
 from itertools import izip, chain, repeat
-from util import newFixedThreadPool, Task, syncPrint
+from util import newFixedThreadPool, Task, syncPrint, affine3D
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
-from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed
+from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
@@ -128,6 +129,7 @@ def deconvolveTimePoints(srcDir,
   # Transform kernel to each view
   matrices = fineTransformsPostROICrop
 
+  """
   # Concatenate coarse transforms with fine transformation matrices
   def concat(aff, matrix):
     t = AffineTransform3D()
@@ -137,18 +139,25 @@ def deconvolveTimePoints(srcDir,
     aff1 = aff1.inverse() # THIS WAS MISSING: matrices contain forward transforms, e.g. CM00->CM01, not CM01->cM00.
     t.preConcatenate(aff1)
     return t
-
+  
+  # Can't: the cropping by ROI introduces translations not accounted for in the matrices
   transforms = [concat(cmIsotropicTransforms[0], matrices[0]),
                 concat(cmIsotropicTransforms[1], matrices[1]),
                 concat(cmIsotropicTransforms[2], matrices[2]),
                 concat(cmIsotropicTransforms[3], matrices[3])]
+  """
 
-  def affine3D(matrix):
-    aff = AffineTransform3D()
-    aff.set(*matrix)
-    return aff
+  print "cmTransforms:", cmTransforms
 
   # For the PSF kernel, transforms without the scaling up to isotropy
+  # No need to account for the translation: the transformPSFKernelToView keeps the center point centered.
+  PSF_kernels = [transformPSFKernelToView(kernel, affine3D(cmTransforms[i])) for i in xrange(4)]
+  PSF_kernels = [transformPSFKernelToView(k, affine3D(matrix).inverse()) for k, matrix in izip(PSF_kernels, matrices)]
+  # TODO: if kernels are not ArrayImg, they should be made be.
+  print "PSF_kernel[0]:", PSF_kernels[0], type(PSF_kernels[0])
+
+  """
+  # WRONG, can't concate these: the translation is not accounted for.
   transformsPSF = [concat(affine3D(cmTransforms[0]), matrices[0]),
                    concat(affine3D(cmTransforms[1]), matrices[1]),
                    concat(affine3D(cmTransforms[2]), matrices[2]),
@@ -156,6 +165,7 @@ def deconvolveTimePoints(srcDir,
 
   # Transform the kernel with the affine of the view, without the scaling to isotropy
   PSF_kernels = [transformPSFKernelToView(kernel, t) for t in transformsPSF]
+  """
   
   # DEBUG: write the kernelA
   for index in [0, 1, 2, 3]:
@@ -167,7 +177,7 @@ def deconvolveTimePoints(srcDir,
   for i, filepaths in enumerate(TMs):
     syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
     deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
-                        transforms, roi, params, PSF_kernels, exe)
+                        cmIsotropicTransforms, roi, fineTransformsPostROICrop, params, PSF_kernels, exe)
   
   # Register deconvolved time points
   deconvolved_csv_dir = os.path.join(targetDir, "deconvolved/csvs")
@@ -177,7 +187,7 @@ def deconvolveTimePoints(srcDir,
 
 
 def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
-                        transforms, roi, params, PSF_kernels,
+                        cmIsotropicTransforms, roi, fineTransformsPostROICrop, params, PSF_kernels,
                         exe, write=writeZip):
   """ filepaths is a dictionary of camera index vs filepath to a KLB file.
       This function will generate two deconvolved views, one for each channel,
@@ -187,28 +197,43 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
       apply them to the images, then crop the images, then apply the fine transformations.
       If the deconvolved images exist, it will neither compute it nor write it."""
   tm_dirname = filepaths[0][filepaths[0].rfind("_TM") + 1:filepaths[0].rfind("_CM")]
+  
   def deconvolveAndSave(indices):
     name = "CM0%i-CM0%i-deconvolved" % indices
+    syncPrint("Invoked deconvolveAndSave for indices %i, %i" % indices)
     filename = tm_dirname + "_" + name + ".zip"
     path = os.path.join(targetDir, "deconvolved/" + filename)
-    interval = FinalInterval(roi[0], roi[1]) # for cropping
     if not os.path.exists(path):
       images = []
       for index in indices:
         # Prepare the img:
+        # 0. Transform in two (three) steps:
+        #    first transform with coarse cmIsotropicTransform,
+        #    then crop to ROI,
+        #    then with the inverse of the fineTransformsPostRoiCrop matrices.
         # 1. Ensure its pixel values conform to expectations (no zeros inside)
         # 2. Copy it into an ArrayImg for faster recurrent retrieval of same pixels
-        img = prepareImgForDeconvolution(klb_loader.get(filepaths[index]), transforms[index], interval)
-        # Copy transformed view into ArrayImg for best performance
-        imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(img))
-        ImgUtil.copy(ImgView.wrap(img, imgA.factory()), imgA)
+        syncPrint("Working now on %s CM0%i" % (tm_dirname, index))
+        img = klb_loader.get(filepaths[index])
+        imgE = Views.extendZero(img)
+        imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
+        imgT = RealViews.transform(imgI, cmIsotropicTransforms[index])
+        imgB = Views.zeroMin(Views.interval(imgT, roi[0], roi[1])) # bounded: crop with ROI
+        imgP = prepareImgForDeconvolution(imgB,
+                                          affine3D(fineTransformsPostROICrop[index]).inverse(),
+                                          FinalInterval([0, 0, 0],
+                                                        [imgB.dimension(d) -1 for d in xrange(3)]))
+        # Copy transformed view into ArrayImg for best performance in deconvolution
+        imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(imgP))
+        ImgUtil.copy(ImgView.wrap(imgP, imgA.factory()), imgA)
         images.append(imgA)
+        syncPrint("--Completed copying transformed and prepared image into ArrayImg.")
 
       # DEBUG: save the images
       if tm_dirname == "TM000000":
         try:
-          for i, img in zip(indices, images):
-            writeZip(img, "/tmp/" + "pre_deconv__" + tm_dirname + "_CM0" + str(i) + "-PREPARED.zip", title="CM" + str(i))
+          #for i, img in zip(indices, images):
+          #  writeZip(img, "/tmp/" + "pre_deconv__" + tm_dirname + "_CM0" + str(i) + "-PREPARED.zip", title="CM" + str(i))
           # DEBUG: show the registered images into a hyperstack
           IL.wrap(Views.stack(images), "stack %i-%i" % indices).show()
         except:
