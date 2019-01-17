@@ -6,6 +6,9 @@ from net.imglib2.realtransform import Scale3D, AffineTransform3D, RealViews
 from net.imglib2.img.io import Load
 from net.imglib2.view import Views
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
+from net.imglib2.type.numeric.real import FloatType
+from net.imglib2.type.numeric.integer import UnsignedShortType
+from net.imglib2.converter import Converters
 import os, re, sys
 from pprint import pprint
 from itertools import izip, chain, repeat
@@ -216,7 +219,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
     if not os.path.exists(path):
       todo.append(indices)
       for index in indices:
-        futures.append(exe.submit(Task, prepare, index))
+        futures.append(exe.submit(Task(prepare, index)))
 
   # Dictionary of index vs imgA
   prepared = dict(f.get() for f in futures)
@@ -225,14 +228,14 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
   # So do one at a time. With GPU perhaps it could do two at a time.
   for indices in todo:
     images = [prepared[index] for index in indices]
-    syncPrint("Invoked deconvolution for %s %i,%i" % (tm_dirname, indices))
+    syncPrint("Invoked deconvolution for %s %i,%i" % (tm_dirname, indices[0], indices[1]))
     # Deconvolve: merge two views into a single volume
     n_iterations = params["CM_%i_%i_n_iterations" % indices]
     img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
     # On-the-fly convert to 16-bit: data values are well within the 16-bit range
     imgU = Converters.convert(img, output_converter)
     filename, path = strings(indices)
-    writeZip(img, path, title=filename)
+    writeZip(imgU, path, title=filename)
 
 
 
