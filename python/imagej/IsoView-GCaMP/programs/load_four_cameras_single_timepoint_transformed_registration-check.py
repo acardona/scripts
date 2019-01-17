@@ -97,7 +97,7 @@ affine.concatenate(scale3D)
 imgE = Views.extendZero(img2)
 imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
 imgT = RealViews.transform(imgI, affine)
-imgB2 = Views.interval(imgT, [0, 0, 0], [img2.dimension(0) -1, img2.dimension(1) -1, img2.dimension(2) * 5 -100 - 1])
+imgB2 = Views.interval(imgT, [0, 0, 0], [img2.dimension(0) -1, img2.dimension(1) -1, img2.dimension(2) * 5 - 1]) # removed the -100
 #imp = IL.wrap(imgB2, "img2 rotated 90")
 #imp.setDisplayRange(74, 542)
 #imp.setSlice(175)
@@ -266,7 +266,7 @@ def transformedView(img, matrix):
   imgE = Views.extendZero(img)
   imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
   aff = AffineTransform3D()
-  aff.set(*matrix)
+  aff.set(*matrix) # Because matrix defines a forward transform and for rendering relative to CM00 a backward one is needed
   aff = aff.inverse()
   imgT = RealViews.transform(imgI, aff)
   return Views.interval(imgT, [0, 0, 0], [img.dimension(d) for d in xrange(3)])
@@ -300,6 +300,8 @@ try:
   imgB0, imgB1, imgB2, imgB3 = [f.get() for f in futures]
 finally:
   exe.shutdown()
+
+viewAsStack(imgB0, imgB1, imgB2, imgB3) # ArrayImg instances
 
 # Read the kernel as a FloatType ArrayImg
 kernel = readFloats("/home/albert/lab/Raghav-IsoView-PSF/PSF-19x19x25.tif", [19, 19, 25], header=434)
