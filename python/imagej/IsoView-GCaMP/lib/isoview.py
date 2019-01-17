@@ -132,26 +132,6 @@ def deconvolveTimePoints(srcDir,
   # Transform kernel to each view
   matrices = fineTransformsPostROICrop
 
-  """
-  # Concatenate coarse transforms with fine transformation matrices
-  def concat(aff, matrix):
-    t = AffineTransform3D()
-    t.set(aff)
-    aff1 = AffineTransform3D()
-    aff1.set(*matrix)
-    aff1 = aff1.inverse() # THIS WAS MISSING: matrices contain forward transforms, e.g. CM00->CM01, not CM01->cM00.
-    t.preConcatenate(aff1)
-    return t
-  
-  # Can't: the cropping by ROI introduces translations not accounted for in the matrices
-  transforms = [concat(cmIsotropicTransforms[0], matrices[0]),
-                concat(cmIsotropicTransforms[1], matrices[1]),
-                concat(cmIsotropicTransforms[2], matrices[2]),
-                concat(cmIsotropicTransforms[3], matrices[3])]
-  """
-
-  print "cmTransforms:", cmTransforms
-
   # For the PSF kernel, transforms without the scaling up to isotropy
   # No need to account for the translation: the transformPSFKernelToView keeps the center point centered.
   PSF_kernels = [transformPSFKernelToView(kernel, affine3D(cmTransforms[i])) for i in xrange(4)]
@@ -159,17 +139,6 @@ def deconvolveTimePoints(srcDir,
   # TODO: if kernels are not ArrayImg, they should be made be.
   print "PSF_kernel[0]:", PSF_kernels[0], type(PSF_kernels[0])
 
-  """
-  # WRONG, can't concate these: the translation is not accounted for.
-  transformsPSF = [concat(affine3D(cmTransforms[0]), matrices[0]),
-                   concat(affine3D(cmTransforms[1]), matrices[1]),
-                   concat(affine3D(cmTransforms[2]), matrices[2]),
-                   concat(affine3D(cmTransforms[3]), matrices[3])]
-
-  # Transform the kernel with the affine of the view, without the scaling to isotropy
-  PSF_kernels = [transformPSFKernelToView(kernel, t) for t in transformsPSF]
-  """
-  
   # DEBUG: write the kernelA
   for index in [0, 1, 2, 3]:
     writeZip(PSF_kernels[index], "/tmp/kernel" + str(index) + ".zip", title="kernel" + str(index))
