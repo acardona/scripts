@@ -46,15 +46,9 @@ def readUnsignedBytes(path, dimensions, header=0):
     ra.close()
 
 
-__klb__ = None
-
-@make_synchronized
-def __initKLB__():
-  if not __klb__:
-    __klb__ = KLB.newInstance()
+__klb__ = KLB.newInstance()
 
 def readKLB(path):
-  __init__KLB__()
   return __klb__.readFull(path)
 
 
