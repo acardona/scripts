@@ -2,7 +2,8 @@ from org.objectweb.asm import ClassWriter, Opcodes, Type
 from java.lang import Object, Class
 from net.imglib2.converter.readwrite import SamplerConverter
 from net.imglib2 import Sampler
-from itertools import imap
+from net.imglib2.converter import Converter
+from itertools import imap, repeat
 # Local lib
 from lib.asm import initClass, initMethod, initConstructor, CustomClassLoader
 
@@ -239,7 +240,7 @@ def defineConverter(fromType,
   cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
   cw.visit(Opcodes.V1_8,                      # java version
            Opcodes.ACC_PUBLIC,                # public class
-           class_name,                        # package and class name
+           classname,                        # package and class name
            class_signature,                   # signature (None means not generic)
            class_object,                      # superclass
            [Type.getInternalName(Converter)]) # array of interfaces
@@ -306,7 +307,7 @@ def defineConverter(fromType,
   bridge.visitVarInsn(Opcodes.ALOAD, 2)
   bridge.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(toType))
   bridge.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
-                         class_name,
+                         classname,
                          "convert",
                          "(L%s;L%s;)V" % tuple(imap(Type.getInternalName, (fromType, toType))), # descriptor
                          False)
