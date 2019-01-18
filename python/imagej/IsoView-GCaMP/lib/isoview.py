@@ -107,30 +107,38 @@ def deconvolveTimePoints(srcDir,
     print i
     pprint(TM)
 
+  # All OK, submit all timepoint folders for registration and deconvolution
+
   # dimensions: all images from each camera have the same dimensions
   dimensions = [Intervals.dimensionsAsLongArray(klb_loader.get(filepath))
                 for index, filepath in sorted(TMs[0].items(), key=itemgetter(0))]
 
-  # All OK, submit all timepoint folders for registration and deconvolution 
+  cmTransforms = cameraTransformations(dimensions[0], dimensions[1], dimensions[2], dimensions[3], calibration)
   
-  # Prepare coarse transforms ("cm" prefix means camera)
-  def prepareCoarseTransforms():
-    cmTransforms = cameraTransformations(dimensions[0], dimensions[1], dimensions[2], dimensions[3], calibration)
+  def prepareTransforms():
+    # Scale to isotropy
     scale3D = AffineTransform3D()
     scale3D.set(calibration[0], 0.0, 0.0, 0.0,
                 0.0, calibration[1], 0.0, 0.0,
                 0.0, 0.0, calibration[2], 0.0)
+    # Translate to ROI origin of coords
+    roi_translation = affine3D([1, 0, 0, -roi[0][0],
+                                0, 1, 0, -roi[0][1],
+                                0, 0, 1, -roi[0][2]])
     
-    cmIsotropicTransforms = []
+    transforms = []
     for camera_index in sorted(cmTransforms.keys()):
       aff = AffineTransform3D()
       aff.set(*cmTransforms[camera_index])
       aff.concatenate(scale3D)
-      cmIsotropicTransforms.append(aff)
-    return cmTransforms, cmIsotropicTransforms
+      aff.preConcatenate(roi_translation)
+      aff.preConcatenate(affine3D(fineTransformsPostROICrop[index]).inverse())
+      transforms.append(aff)
+    
+    return transforms
 
-  # matrices, AffineModel3D instances
-  cmTransforms, cmIsotropicTransforms = prepareCoarseTransforms()
+  # Transforms apply to all time points equally
+  transforms = prepareTransforms()
   
   # Create target folder for storing deconvolved images
   if not os.path.exists(os.path.join(targetDir, "deconvolved")):
@@ -153,14 +161,18 @@ def deconvolveTimePoints(srcDir,
   if output_converter is None:
     # Default: a converter from FloatType to UnsignedShortType
     output_converter = createSamplerConverter(FloatType, UnsignedShortType)
+
+  target_interval = FinalInterval([0, 0, 0],
+                                  [maxC - minC for minC, maxC in izip(roi[0], roi[1])])
   
   # Submit for registration + deconvolution
   # The registration uses 2 parallel threads, and deconvolution all possible available threads.
   # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
   for i, filepaths in enumerate(TMs):
     syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
-    deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
-                        cmIsotropicTransforms, roi, fineTransformsPostROICrop, params, PSF_kernels, exe, output_converter)
+    deconvolveTimePoint(filepaths, targetDir, klb_loader,
+                        transforms, target_interval,
+                        params, PSF_kernels, exe, output_converter)
   
   # Register deconvolved time points
   deconvolved_csv_dir = os.path.join(targetDir, "deconvolved/csvs")
@@ -169,9 +181,10 @@ def deconvolveTimePoints(srcDir,
   # TODO
 
 
-def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
-                        cmIsotropicTransforms, roi, fineTransformsPostROICrop, params, PSF_kernels,
-                        exe, output_converter, write=writeZip):
+def deconvolveTimePoint(filepaths, targetDir, klb_loader,
+                        transforms, target_interval,
+                        params, PSF_kernels, exe, output_converter,
+                        write=writeZip):
   """ filepaths is a dictionary of camera index vs filepath to a KLB file.
       This function will generate two deconvolved views, one for each channel,
       where CHN00 is made of CM00 + CM01, and
@@ -182,27 +195,17 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
   tm_dirname = filepaths[0][filepaths[0].rfind("_TM") + 1:filepaths[0].rfind("_CM")]
 
   def prepare(index):
-    # Prepare the img:
-    # 0. Transform in two (three) steps:
-    #    first transform with coarse cmIsotropicTransform,
-    #    then crop to ROI,
-    #    then with the inverse of the fineTransformsPostRoiCrop matrices.
+    # Prepare the img for deconvolution:
+    # 0. Transform in one step.
     # 1. Ensure its pixel values conform to expectations (no zeros inside)
     # 2. Copy it into an ArrayImg for faster recurrent retrieval of same pixels
-    syncPrint("Working now on %s CM0%i" % (tm_dirname, index))
-    img = klb_loader.get(filepaths[index])
-    imgE = Views.extendZero(img)
-    imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
-    imgT = RealViews.transform(imgI, cmIsotropicTransforms[index])
-    imgB = Views.zeroMin(Views.interval(imgT, roi[0], roi[1])) # bounded: crop with ROI
-    imgP = prepareImgForDeconvolution(imgB,
-                                      affine3D(fineTransformsPostROICrop[index]).inverse(),
-                                      FinalInterval([0, 0, 0],
-                                                    [imgB.dimension(d) -1 for d in xrange(3)]))
+    syncPrint("Preparing %s CM0%i for deconvolution" % (tm_dirname, index))
+    img = klb_loader.get(filepaths[index]) # of UnsignedShortType
+    imgP = prepareImgForDeconvolution(img, transforms[index], target_interval) # returns of FloatType
     # Copy transformed view into ArrayImg for best performance in deconvolution
     imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(imgP))
     ImgUtil.copy(ImgView.wrap(imgP, imgA.factory()), imgA)
-    syncPrint("--Completed preparing %s CM0%i" % (tm_dirname, index))
+    syncPrint("--Completed preparing %s CM0%i for deconvolution" % (tm_dirname, index))
     return (index, imgA)
 
   def strings(indices):
@@ -233,9 +236,9 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader, getCalibration,
     n_iterations = params["CM_%i_%i_n_iterations" % indices]
     img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
     # On-the-fly convert to 16-bit: data values are well within the 16-bit range
-    imgU = Converters.convert(img, output_converter)
+    #imgU = Converters.convert(img, output_converter)
     filename, path = strings(indices)
-    writeZip(imgU, path, title=filename)
+    writeZip(img, path, title=filename) # TODO use imgU
 
 
 
