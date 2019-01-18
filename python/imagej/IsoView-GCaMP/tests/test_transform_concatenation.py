@@ -1,6 +1,5 @@
-import sys
+import sys, os
 sys.path.append("//home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
-from lib.io import readKLB
 from net.imglib2.realtransform import Scale3D, AffineTransform3D, RealViews
 from net.imglib2.view import Views
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
@@ -11,6 +10,8 @@ from net.imglib2.img.array import ArrayImgs
 from net.imglib2.img.display.imagej import ImageJFunctions as IL  
 from net.imglib2.util import Intervals, ImgUtil
 from net.imglib2.img import ImgView
+from org.janelia.simview.klb import KLB
+from itertools import izip
 
 
 
@@ -70,13 +71,19 @@ fineTransformsPostROICrop = \
      -0.0034501662251717287, 0.003016621335310332, 0.9999894981192247, 2.447694931285838]]
 
 
-filepaths = ["/home/albert/dropbox/Dropbox (HHMI)/data/4D-series/SPM00_TM000000_CM00_CHN00.klb"]
+sourceDir = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/TM000000/"
+filepaths = [os.path.join(sourceDir, filepath) 
+             for filepath in sorted(os.listdir(sourceDir))
+             if filepath.endswith(".klb")]
+for fp in filepaths: print fp
+
+klb = KLB.newInstance()
 
 # TODO: transform an image one way and then the other and compare.
 
 def twoStep(index=0):
   # The current way:
-  img = readKLB(filepaths[index]) # klb_loader.get(filepaths[index])
+  img = klb.readFull(filepaths[index]) # klb_loader.get(filepaths[index])
   imgE = Views.extendZero(img)
   imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
   imgT = RealViews.transform(imgI, cmIsotropicTransforms[index])
@@ -97,25 +104,28 @@ def twoStep(index=0):
 
 def oneStep(index=0):
   # Combining transforms into one, via a translation to account of the ROI crop
-  img = readKLB(filepaths[index]) # klb_loader.get(filepaths[index])
+  img = klb.readFull(filepaths[index]) # klb_loader.get(filepaths[index])
   t1 = cmIsotropicTransforms[index]
-  t2 = affine3D([1, 0, 0, roi[0][0],
-                 0, 1, 0, roi[0][1],
-                 0, 0, 1, roi[0][2]])
+  t2 = affine3D([1, 0, 0, -roi[0][0],
+                 0, 1, 0, -roi[0][1],
+                 0, 0, 1, -roi[0][2]])
   t3 = affine3D(fineTransformsPostROICrop[index]).inverse()
   aff = AffineTransform3D()
   aff.set(t1)
   aff.preConcatenate(t2)
   aff.preConcatenate(t3)
-  imgP = prepareImgForDeconvolution(img, aff, FinalInterval(roi[0], roi[1]))
+  # Final interval is now rooted at 0,0,0 given that the transform includes the translation
+  imgP = prepareImgForDeconvolution(img, aff, FinalInterval([0, 0, 0], [maxC - minC  for minC, maxC in izip(roi[0], roi[1])]))
   # Copy transformed view into ArrayImg for best performance in deconvolution
   imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(imgP))
   ImgUtil.copy(ImgView.wrap(imgP, imgA.factory()), imgA)
-  IL.wrap(imgA, "one step").show()
+  IL.wrap(imgA, "one step index %i" % index).show()
 
-#oneStep()
+oneStep(index=2)
+oneStep(index=3)
 
 # The performance is massively different:
 #   oneStep is a few seconds,
 #   whereas twoStep takes minutes
+
 
