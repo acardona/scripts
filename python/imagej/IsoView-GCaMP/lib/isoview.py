@@ -30,7 +30,6 @@ def deconvolveTimePoints(srcDir,
                          params,
                          roi,
                          subrange=None,
-                         output_converter=None, # defaults to 16-bit unsigned
                          n_threads=0): # 0 means all
   """
      Main program entry point.
@@ -156,9 +155,8 @@ def deconvolveTimePoints(srcDir,
   for index in [0, 1, 2, 3]:
     writeZip(PSF_kernels[index], "/tmp/kernel" + str(index) + ".zip", title="kernel" + str(index))
 
-  if output_converter is None:
-    # Default: a converter from FloatType to UnsignedShortType
-    output_converter = createConverter(FloatType, UnsignedShortType)
+  # A converter from FloatType to UnsignedShortType
+  output_converter = createConverter(FloatType, UnsignedShortType)
 
   target_interval = FinalInterval([0, 0, 0],
                                   [maxC - minC for minC, maxC in izip(roi[0], roi[1])])
