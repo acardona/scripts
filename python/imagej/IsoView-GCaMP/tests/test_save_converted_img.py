@@ -14,3 +14,7 @@ writeZip(imgF, "/tmp/floats.zip")
 
 imgF2 = convert(imgU, createConverter(UnsignedShortType, FloatType), FloatType)
 writeZip(imgF2, "/tmp/floats2.zip")
+
+imgFN = ArrayImgs.floats([10, 10])
+imgReverse = convert(imgFN, createConverter(FloatType, UnsignedShortType), UnsignedShortType)
+writeZip(imgReverse, "/tmp/shorts.zip")
