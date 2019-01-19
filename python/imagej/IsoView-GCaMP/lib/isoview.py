@@ -16,7 +16,7 @@ from util import newFixedThreadPool, Task, syncPrint, affine3D
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
-from converter import samplerConvert, createSamplerConverter
+from converter import convert, createConverter
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
@@ -60,7 +60,6 @@ def deconvolveTimePoints(srcDir,
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
      subrange: defaults to None. Can be a list specifying the indices of time points to deconvolve.
      n_threads: number of threads to use. Zero (default) means as many as possible.
-     output_converter: a SamplerConverter that defaults to None (implying a conversion from FloatType to UnsignedShortType).
   """
   kernel = readFloats(kernel_filepath, [19, 19, 25], header=434)
   klb_loader = KLBLoader()
@@ -159,7 +158,7 @@ def deconvolveTimePoints(srcDir,
 
   if output_converter is None:
     # Default: a converter from FloatType to UnsignedShortType
-    output_converter = createSamplerConverter(FloatType, UnsignedShortType)
+    output_converter = createConverter(FloatType, UnsignedShortType)
 
   target_interval = FinalInterval([0, 0, 0],
                                   [maxC - minC for minC, maxC in izip(roi[0], roi[1])])
@@ -235,9 +234,9 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     n_iterations = params["CM_%i_%i_n_iterations" % indices]
     img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
     # On-the-fly convert to 16-bit: data values are well within the 16-bit range
-    imgU = samplerConvert(img, output_converter)
+    imgU = convert(img, output_converter, UnsignedShortType)
     filename, path = strings(indices)
-    writeZip(imgU, path, title=filename) # TODO use imgU
+    writeZip(imgU, path, title=filename)
 
 
 
