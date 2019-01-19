@@ -53,14 +53,15 @@ def readKLB(path):
 
 
 def writeZip(img, path, title=""):
-  if isinstance(img, IterableInterval):
+  if isinstance(img, RandomAccessibleInterval):
     imp = IL.wrap(img, title)
-  elif isinstance(img, RandomAccessibleInterval):
-    imp = IL.wrap(Views.iterable(img), title)
   elif isinstance(img, ImagePlus):
     imp = img
     if title:
       imp.setTitle(title)
+  else:
+    syncPrint("Cannot writeZip to %s:\n  Unsupported image type %s" % (path, str(type(img))))
+    return None
   #
   FileSaver(imp).saveAsZip(path)
   return imp
