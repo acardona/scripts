@@ -8,7 +8,6 @@ from net.imglib2.view import Views
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.type.numeric.integer import UnsignedShortType
-from net.imglib2.converter import Converters
 import os, re, sys
 from pprint import pprint
 from itertools import izip, chain, repeat
@@ -17,7 +16,7 @@ from util import newFixedThreadPool, Task, syncPrint, affine3D
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
-from converter import createSamplerConverter
+from converter import samplerConvert, createSamplerConverter
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
@@ -31,7 +30,7 @@ def deconvolveTimePoints(srcDir,
                          params,
                          roi,
                          subrange=None,
-                         output_converter=None, # defults to 16-bit unsigned
+                         output_converter=None, # defaults to 16-bit unsigned
                          n_threads=0): # 0 means all
   """
      Main program entry point.
@@ -236,9 +235,9 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     n_iterations = params["CM_%i_%i_n_iterations" % indices]
     img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
     # On-the-fly convert to 16-bit: data values are well within the 16-bit range
-    #imgU = Converters.convert(img, output_converter)
+    imgU = samplerConvert(img, output_converter)
     filename, path = strings(indices)
-    writeZip(img, path, title=filename) # TODO use imgU
+    writeZip(imgU, path, title=filename) # TODO use imgU
 
 
 
