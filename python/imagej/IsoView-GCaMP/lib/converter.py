@@ -1,8 +1,9 @@
 from org.objectweb.asm import ClassWriter, Opcodes, Type
 from java.lang import Object, Class
 from net.imglib2.converter.readwrite import SamplerConverter
-from net.imglib2 import Sampler
-from net.imglib2.converter import Converter
+from net.imglib2 import Sampler, RandomAccessibleInterval
+from net.imglib2.converter import Converter, Converters
+from net.imglib2.type import Type as ImgLib2Type # must alias
 from itertools import imap, repeat
 # Local lib
 from lib.asm import initClass, initMethod, initConstructor, CustomClassLoader
@@ -325,3 +326,30 @@ def createConverter(*args, **kwargs):
   """ Returns a new instance of the newly defined class implementing the Converter interface.
       See defineConverter for all argument details. """
   return defineConverter(*args, **kwargs).newInstance()
+
+
+def samplerConvert(rai, *args, **kwargs):
+  """
+    rai: an instance of RandomAccessibleInterval
+    args and kwargs: necessary to create the SamplerConverter class.
+                     The two mandatory args are fromType and toType, in this order.
+  """
+  converter = createSamplerConverter(*args, **kwargs)
+  # Grab method through reflection. Otherwise we get one that returns an IterableInterval
+  # which is not compatible with ImageJFunctions.wrap methods.
+  m = Converters.getDeclaredMethod("convert", [RandomAccessibleInterval, SamplerConverter])
+  return m.invoke(None, rai, converter)
+
+
+def convert(rai, *args, **kwargs):
+  """
+    rai: an instance of RandomAccessibleInterval
+    args and kwargs: necessary to create the SamplerConverter class.
+                     The two mandatory args are fromType and toType, in this order.
+  """
+  converter = createConverter(*args, **kwargs)
+  # Grab method through reflection. Otherwise we get one that returns an IterableInterval
+  # which is not compatible with ImageJFunctions.wrap methods.
+  m = Converters.getDeclaredMethod("convert", [RandomAccessibleInterval, Converter, ImgLib2Type])
+  toType = args[1]
+  return m.invoke(None, rai, converter, toType.newInstance())
