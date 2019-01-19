@@ -328,28 +328,24 @@ def createConverter(*args, **kwargs):
   return defineConverter(*args, **kwargs).newInstance()
 
 
-def samplerConvert(rai, *args, **kwargs):
+def samplerConvert(rai, converter):
   """
     rai: an instance of RandomAccessibleInterval
-    args and kwargs: necessary to create the SamplerConverter class.
-                     The two mandatory args are fromType and toType, in this order.
+    converter: an instance of a SamplerConverter.
   """
-  converter = createSamplerConverter(*args, **kwargs)
   # Grab method through reflection. Otherwise we get one that returns an IterableInterval
   # which is not compatible with ImageJFunctions.wrap methods.
   m = Converters.getDeclaredMethod("convert", [RandomAccessibleInterval, SamplerConverter])
   return m.invoke(None, rai, converter)
 
 
-def convert(rai, *args, **kwargs):
+def convert(rai, converter, toType):
   """
     rai: an instance of RandomAccessibleInterval
-    args and kwargs: necessary to create the SamplerConverter class.
-                     The two mandatory args are fromType and toType, in this order.
+    converter: as created with e.g. createConverter
+    toType: class of the target Type
   """
-  converter = createConverter(*args, **kwargs)
   # Grab method through reflection. Otherwise we get one that returns an IterableInterval
   # which is not compatible with ImageJFunctions.wrap methods.
   m = Converters.getDeclaredMethod("convert", [RandomAccessibleInterval, Converter, ImgLib2Type])
-  toType = args[1]
   return m.invoke(None, rai, converter, toType.newInstance())
