@@ -11,7 +11,7 @@ from net.preibisch.mvrecon.process.deconvolution.init import PsiInitBlurredFused
 from net.preibisch.mvrecon.process.deconvolution.DeconViewPSF import PSFTYPE
 from net.preibisch.mvrecon.process.fusion.transformed import TransformView
 from net.preibisch.mvrecon.process.psf import PSFExtraction
-from net.preibisch.mvrecon.process.cuda import CUDAFourierConvolution, CUDATools #, NativeLibraryTools
+from net.preibisch.mvrecon.process.cuda import CUDAFourierConvolution, CUDATools, NativeLibraryTools
 from com.sun.jna import Native
 from bdv.util import ConstantRandomAccessible
 from java.util import ArrayList, HashMap
@@ -48,12 +48,15 @@ def setupEngine(use_cuda=True, askForMultipleDevices=False):
   devices = []
   idToCudaDevice = {}
   if use_cuda:
-    so_path = "/usr/local/lib/libFourierConvolutionCUDALib.so"
-    if os.path.exists(so_path):
-      # Still opens a dialog to ask for the one and only existing library
-      #cuda = NativeLibraryTools.loadNativeLibrary(ArrayList(["FourierConvolutionCuda"]), File(so_path), CUDAFourierConvolution)
-      cuda = Native.loadLibrary(so_path, CUDAFourierConvolution)
-    else:
+    so_paths = ["/usr/local/lib/libFourierConvolutionCUDALib.so",
+                "/groups/cardona/home/championa/code/FourierConvolutionCUDALib/build-cuda-8-master/src/libFourierConvolutionCUDALib.so"] 
+    for so_path in so_paths:
+      if os.path.exists(so_path):
+        # Still opens a dialog to ask for the one and only existing library
+        #cuda = NativeLibraryTools.loadNativeLibrary(ArrayList(["FourierConvolutionCuda"]), File(so_path), CUDAFourierConvolution)
+        cuda = Native.loadLibrary(so_path, CUDAFourierConvolution)
+        break
+    if not cuda:
       # Fire up file dialogs:
       cuda = NativeLibraryTools.loadNativeLibrary(ArrayList(["fftCUDA", "FourierConvolutionCuda"]), CUDAFourierConvolution)
     if not cuda:
