@@ -230,7 +230,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     syncPrint("Invoked deconvolution for %s %i,%i" % (tm_dirname, indices[0], indices[1]))
     # Deconvolve: merge two views into a single volume
     n_iterations = params["CM_%i_%i_n_iterations" % indices]
-    img = multiviewDeconvolution(images, params["blockSize"], PSF_kernels, n_iterations, exe=exe)
+    img = multiviewDeconvolution(images, params["blockSizes"], PSF_kernels, n_iterations, exe=exe)
     # On-the-fly convert to 16-bit: data values are well within the 16-bit range
     imgU = convert(img, output_converter, UnsignedShortType)
     filename, path = strings(indices)
