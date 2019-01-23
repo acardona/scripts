@@ -153,7 +153,7 @@ def deconvolveTimePoints(srcDir,
 
   # DEBUG: write the kernelA
   for index in [0, 1, 2, 3]:
-    writeZip(PSF_kernels[index], "/tmp/kernel" + str(index) + ".zip", title="kernel" + str(index))
+    writeZip(PSF_kernels[index], "/tmp/kernel" + str(index) + ".zip", title="kernel" + str(index)).flush()
 
   # A converter from FloatType to UnsignedShortType
   output_converter = createConverter(FloatType, UnsignedShortType)
@@ -202,6 +202,8 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(imgP))
     ImgUtil.copy(ImgView.wrap(imgP, imgA.factory()), imgA)
     syncPrint("--Completed preparing %s CM0%i for deconvolution" % (tm_dirname, index))
+    imgP = None
+    img = None
     return (index, imgA)
 
   def strings(indices):
@@ -234,7 +236,12 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     # On-the-fly convert to 16-bit: data values are well within the 16-bit range
     imgU = convert(img, output_converter, UnsignedShortType)
     filename, path = strings(indices)
-    writeZip(imgU, path, title=filename)
+    writeZip(imgU, path, title=filename).flush() # flush the returned ImagePlus
+    imgU = None
+    img = None
+    images = None
+
+  prepared = None
 
 
 
