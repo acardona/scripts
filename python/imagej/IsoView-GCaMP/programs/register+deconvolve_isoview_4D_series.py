@@ -70,7 +70,7 @@ paramsModel = {
 
 # Deconvolution parameters
 paramsDeconvolution = {
-  "blockSize": None, # None means the image size. Otherwise specify like e.g. [128, 128, 128]
+  "blockSizes": None, # None means the image size. Otherwise specify like e.g. [[128, 128, 128]] for img in images]
   "CM_0_1_n_iterations": 5,
   "CM_2_3_n_iterations": 7,
 }
