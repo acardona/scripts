@@ -118,10 +118,15 @@ def multiviewDeconvolution(images, blockSizes, PSF_kernels, n_iterations, lambda
 
     if not blockSizes:
       # Whole image dimensions + half of the transformed PSF kernel dimensions
+      kernel_max = int(max(PSF_kernel.dimension(d)
+                           for d in xrange(PSF_kernel.numDimensions())
+                           for PSF_kernel in PSF_kernels) * 2)
+      syncPrint("kernel max dimension *2: %i" % kernel_max)
       blockSizes = []
-      for image, PSF_kernel in izip(images, PSF_kernels):
-        blockSizes.append([image.dimension(d) + PSF_kernel.dimension(d) / 2
+      for image in images:
+        blockSizes.append([image.dimension(d) + kernel_max
                            for d in xrange(image.numDimensions())])
+        syncPrint("blockSize:" + str(blockSizes[-1]))
 
     cptf = createFactory(exe, lambda_val, blockSizes[0]) # TODO which blockSize to give here?
     filterBlocksForContent = False # Run once with True, none were removed
