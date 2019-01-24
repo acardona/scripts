@@ -6,6 +6,7 @@ import operator
 from net.imglib2 import RandomAccessibleInterval, IterableInterval
 from net.imglib2.view import Views
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
+from net.imglib2.img import ImgView
 from net.imglib2.cache import CacheLoader
 from net.imglib2.realtransform import RealViews
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
@@ -79,10 +80,11 @@ class KLBLoader(CacheLoader):
 
 
 class TransformedLoader(CacheLoader):
-  def __init__(self, loader, transformsDict, roi=None):
+  def __init__(self, loader, transformsDict, roi=None, asImg=False):
     self.loader = loader
     self.transformsDict = transformsDict
     self.roi = roi
+    self.asImg = asImg
   def load(self, path):
     return self.get(path)
   def get(self, path):
@@ -93,7 +95,8 @@ class TransformedLoader(CacheLoader):
     imgT = RealViews.transform(imgI, transform)
     minC = self.roi[0] if self.roi else [0] * img.numDimensions()
     maxC = self.roi[1] if self.roi else [img.dimension(d) -1 for d in xrange(img.numDimensions())]
-    return Views.zeroMin(Views.interval(imgT, minC, maxC))
+    imgO = Views.zeroMin(Views.interval(imgT, minC, maxC))
+    return ImgView.wrap(imgO, img.factory()) if self.asImg else imgO
 
 
 class ImageJLoader(CacheLoader):
