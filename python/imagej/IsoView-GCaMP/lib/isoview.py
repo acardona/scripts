@@ -225,6 +225,9 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
   # Dictionary of index vs imgA
   prepared = dict(f.get() for f in futures)
 
+  def writeToDisk(writeZip, img, path, title):
+    writeZip(img, path, title=title).flush() # flush the returned ImagePlus
+
   # Each deconvolution run uses many threads when run with CPU
   # So do one at a time. With GPU perhaps it could do two at a time.
   for indices in todo:
@@ -236,7 +239,8 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     # On-the-fly convert to 16-bit: data values are well within the 16-bit range
     imgU = convert(img, output_converter, UnsignedShortType)
     filename, path = strings(indices)
-    writeZip(imgU, path, title=filename).flush() # flush the returned ImagePlus
+    # Write in a separate thread so as not to wait
+    exe.submit(Task(writeToDisk, writeZip, imgU, path, title))
     imgU = None
     img = None
     images = None
