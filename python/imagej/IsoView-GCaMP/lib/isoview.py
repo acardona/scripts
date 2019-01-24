@@ -17,6 +17,7 @@ from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 from converter import convert, createConverter
+from collections import defaultdict
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
@@ -288,26 +289,33 @@ def registerDeconvolvedTimePoints(targetDir,
     subrange = set(subrange)
     for time in timepoint_views.keys(): # a list copy of the keys, so timepoints can be modified
       if time not in subrange:
-        del timepoints[time]
+        del timepoint_views[time]
 
   # Register only the view CM00-CM01, given that CM02-CM03 has the same transform
   matrices_name = "matrices"
   if os.path.exists(os.path.join(csv_dir, matrices_name + ".csv")):
     matrices = loadMatrices(matrices_name, csv_dir)
   else:
-    # Deconvolved images are isotropic
-    def getCalibration(img_filepath):
-      return [1, 1, 1]
-    timepoints = []
-    filepaths = []
-    for timepoint, views in timepoint_views.iteritems():
-      timepoints.append(timepoint)
-      filepaths.append(os.path.join(deconvolvedDir, timepoint["CM00-CM01"]))
-    #
-    matrices_fwd = computeForwardTransforms(filepaths, ImageJLoader(), getCalibration,
-                                            csv_dir, exe, modelclass, params, exe_shutdown=False)
-    matrices = [affine.getRowPackedCopy() for affine in asBackwardConcatTransforms(matrices_fwd)]
-    saveMatrices(matrices_name, matrices, csv_dir)
+    rexe = exe
+    if not exe:
+      exe = newFixedThreadPool()
+    try:
+      # Deconvolved images are isotropic
+      def getCalibration(img_filepath):
+        return [1, 1, 1]
+      timepoints = []
+      filepaths = []
+      for timepoint, views in timepoint_views.iteritems():
+        timepoints.append(timepoint)
+        filepaths.append(os.path.join(deconvolvedDir, views["CM00-CM01"]))
+      #
+      matrices_fwd = computeForwardTransforms(filepaths, ImageJLoader(), getCalibration,
+                                              csv_dir, exe, modelclass, params, exe_shutdown=False)
+      matrices = [affine.getRowPackedCopy() for affine in asBackwardConcatTransforms(matrices_fwd)]
+      saveMatrices(matrices_name, matrices, csv_dir)
+    finally:
+      if not rexe:
+        exe.shutdownNow()
   
   # Convert matrices into twice as many affine transforms
   affines = []
