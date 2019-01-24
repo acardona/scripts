@@ -330,8 +330,8 @@ def registerDeconvolvedTimePoints(targetDir,
   for timepoint in sorted(timepoint_views.iterkeys()):
     views = timepoint_views.get(timepoint)
     for view_name in ["CM00-CM01", "CM02-CM03"]:
-      filepaths.append(os.path.join(deconvolvedDir, view_name))
+      filepaths.append(os.path.join(deconvolvedDir, views[view_name]))
   
-  img = Load.lazyStack(filepaths, TransformedLoader(ImageJLoader(), dict(izip(filepaths, affines))))
+  img = Load.lazyStack(filepaths, TransformedLoader(ImageJLoader(), dict(izip(filepaths, affines)), asImg=True))
   return img
 
