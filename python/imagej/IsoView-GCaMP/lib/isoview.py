@@ -222,7 +222,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
   # Dictionary of index vs imgA
   prepared = dict(f.get() for f in futures)
 
-  def writeToDisk(writeZip, img, path, title):
+  def writeToDisk(writeZip, img, path, title=''):
     writeZip(img, path, title=title).flush() # flush the returned ImagePlus
 
   # Each deconvolution run uses many threads when run with CPU
@@ -237,7 +237,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     imgU = convert(img, output_converter, UnsignedShortType)
     filename, path = strings(indices)
     # Write in a separate thread so as not to wait
-    exe.submit(Task(writeToDisk, writeZip, imgU, path, title))
+    exe.submit(Task(writeToDisk, writeZip, imgU, path, title=filename))
     imgU = None
     img = None
     images = None
@@ -337,7 +337,7 @@ def registerDeconvolvedTimePoints(targetDir,
   filepaths = []
   for timepoint in sorted(timepoint_views.iterkeys()):
     views = timepoint_views.get(timepoint)
-    for view_name in ["CM00-CM01", "CM02-CM03"]:
+    for view_name in sorted(views.keys()): # ["CM00-CM01", "CM02-CM03"]
       filepaths.append(os.path.join(deconvolvedDir, views[view_name]))
   
   img = Load.lazyStack(filepaths, TransformedLoader(ImageJLoader(), dict(izip(filepaths, affines)), asImg=True))
