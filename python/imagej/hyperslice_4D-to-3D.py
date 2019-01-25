@@ -1,31 +1,26 @@
 from ij import IJ, ImagePlus, ImageStack
 from java.util.concurrent import Executors, Callable
 from java.lang import Thread
+import sys
+sys.path.append("//home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
+from lib.util import Task
 
 imp4D = IJ.getImage()
 stack = imp4D.getStack()
 
-slice_index = 160
+# The selected stack slice
+slice_index = imp4D.getSlice()
+# The selected channel
+channel_index = imp4D.getChannel()
 
 stack2 = ImageStack(imp4D.width, imp4D.height)
-depth = 325
-n_frames = 800
-
-class Task(Callable):
-  """ A wrapper for executing functions in concurrent threads. """
-  def __init__(self, fn, *args, **kwargs):
-    self.fn = fn
-    self.args = args
-    self.kwargs = kwargs
-  def call(self):
-    t = Thread.currentThread()
-    if t.isInterrupted() or not t.isAlive():
-        return None
-    return self.fn(*self.args, **self.kwargs)
+depth = imp4D.getNSlices()
+n_frames = imp4D.getNFrames()
 
 
-def getProcessor(index):
-  return stack.getProcessor(index).convertToShort(False)
+def getProcessor(frame_index):
+  stack_index = imp4D.getStackIndex(channel_index, slice_index, frame_index)
+  return stack.getProcessor(stack_index).convertToShort(False)
 
 exe = Executors.newFixedThreadPool(32)
 
