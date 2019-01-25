@@ -17,6 +17,7 @@ from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
 from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 from converter import convert, createConverter
+from collections import defaultdict
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
@@ -169,12 +170,8 @@ def deconvolveTimePoints(srcDir,
     deconvolveTimePoint(filepaths, targetDir, klb_loader,
                         transforms, target_interval,
                         params, PSF_kernels, exe, output_converter)
-  
-  # Register deconvolved time points
-  deconvolved_csv_dir = os.path.join(targetDir, "deconvolved/csvs")
-  if not os.path.exists(deconvolved_csv_dir):
-    os.mkdir(deconvolved_csv_dir)
-  # TODO
+
+  exe.shutdownNow()
 
 
 def deconvolveTimePoint(filepaths, targetDir, klb_loader,
@@ -225,6 +222,9 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
   # Dictionary of index vs imgA
   prepared = dict(f.get() for f in futures)
 
+  def writeToDisk(writeZip, img, path, title):
+    writeZip(img, path, title=title).flush() # flush the returned ImagePlus
+
   # Each deconvolution run uses many threads when run with CPU
   # So do one at a time. With GPU perhaps it could do two at a time.
   for indices in todo:
@@ -236,7 +236,8 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     # On-the-fly convert to 16-bit: data values are well within the 16-bit range
     imgU = convert(img, output_converter, UnsignedShortType)
     filename, path = strings(indices)
-    writeZip(imgU, path, title=filename).flush() # flush the returned ImagePlus
+    # Write in a separate thread so as not to wait
+    exe.submit(Task(writeToDisk, writeZip, imgU, path, title))
     imgU = None
     img = None
     images = None
@@ -246,85 +247,99 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
 
 
 
-# TODO NEEDS UPDATE, both channels are now registered to CM00
-def registerDeconvolvedTimePoints(srcDir,
-                                  targetDir,
+def registerDeconvolvedTimePoints(targetDir,
                                   params,
                                   modelclass,
-                                  exe):
+                                  exe=None,
+                                  subrange=None):
   """ Can only be run after running deconvolveTimePoints, because it
-      expects deconvolved images to exist under targetDir/deconvolved/,
+      expects deconvolved images to exist under <targetDir>/deconvolved/,
       with a name pattern like: TM_\d+_CM0\d_CM0\d-deconvolved.zip
       
       Tests if files exist first, if not, will stop execution.
-      
-      Returns an imglib2 4D img with the registered deconvolved 3D stacks. """
 
-  csv_dir = os.path.join(target_dir, "deconvolved/csvs/")
+      Will write the features, pointmatches and registration affine matrices
+      into a csv folder under targetDir.
+
+      If a CSV file with the affine transform matrices exist, it will read them out
+      and provide the 4D img right away.
+      Else, it will check which files are missing their features and pointmatches as CSV files,
+      create them, and ultimately create the CSV filew ith the affine transform matrices,
+      and then provide the 4D img.
+
+      targetDir: the directory containing the deconvolved images.
+      params: for feature extraction and registration.
+      modelclass: the model to use, e.g. Translation3D, AffineTransform3D.
+      exe: the ExecutorService to use (optional).
+      subrange: the range of time point indices to process, as enumerated
+                by the folder name, i.e. the number captured by /TM(\d+)/
+      
+      Returns an imglib2 4D img with the registered deconvolved 3D stacks."""
+
+  deconvolvedDir = os.path.join(targetDir, "deconvolved")
+  
+  # A folder for features, pointmatches and matrices in CSV format
+  csv_dir = os.path.join(deconvolvedDir, "csvs")
   if not os.path.exists(csv_dir):
     os.mkdir(csv_dir)
+
+  # A datastructure to represent the timepoints, each with two filenames
+  timepoint_views = defaultdict(defaultdict)
+  pattern = re.compile("^TM(\d+)_(CM0\d-CM0\d)-deconvolved.zip$")
+  for filename in sorted(os.listdir(deconvolvedDir)):
+    m = re.match(pattern, filename)
+    if m:
+      stime, view = m.groups()
+      timepoint_views[int(stime)][view] = filename
+
+  # Filter by specified subrange, if any
+  if subrange:
+    subrange = set(subrange)
+    for time in timepoint_views.keys(): # a list copy of the keys, so timepoints can be modified
+      if time not in subrange:
+        del timepoint_views[time]
+
+  # Register only the view CM00-CM01, given that CM02-CM03 has the same transform
+  matrices_name = "matrices"
+  if os.path.exists(os.path.join(csv_dir, matrices_name + ".csv")):
+    matrices = loadMatrices(matrices_name, csv_dir)
+  else:
+    original_exe = exe
+    if not exe:
+      exe = newFixedThreadPool()
+    try:
+      # Deconvolved images are isotropic
+      def getCalibration(img_filepath):
+        return [1, 1, 1]
+      timepoints = []
+      filepaths = []
+      for timepoint, views in timepoint_views.iteritems():
+        timepoints.append(timepoint)
+        filepaths.append(os.path.join(deconvolvedDir, views["CM00-CM01"]))
+      #
+      matrices_fwd = computeForwardTransforms(filepaths, ImageJLoader(), getCalibration,
+                                              csv_dir, exe, modelclass, params, exe_shutdown=False)
+      matrices = [affine.getRowPackedCopy() for affine in asBackwardConcatTransforms(matrices_fwd)]
+      saveMatrices(matrices_name, matrices, csv_dir)
+    finally:
+      if not original_exe:
+        exe.shutdownNow() # Was created new
   
-  deconvolved_filepaths_0_1 = []
-  deconvolved_filepaths_2_3 = []
-  for tm_dirname in sorted(os.listdir(srcDir)):
-    if tm_dirname.startswith("TM00"):
-      path_0_1 = os.path.join(targetDir, "deconvolved/" + tm_dirname + "_CM00-CM01-deconvolved.zip")
-      if not os.path.exists(path_0_1):
-        print "File does not exists: ", path_0_1
-        return
-      path_2_3 = os.path.join(targetDir, "deconvolved/" + tm_dirname + "_CM02-CM03-deconvolved.zip")
-      if not os.path.exists(path_2_3):
-        print "File does not exists: ", path_2_3
-        return
-      deconvolved_filepaths_0_1.append(path_0_1)
-      deconvolved_filepaths_2_3.append(path_2_3)
-
-  # Deconvolved images are isotropic
-  def getCalibration(img_filepath):
-    return [1, 1, 1]
-
-  # Register all path_0_1 to each other, then register each path_2_3 to each path_0_1
-  matrices_0_1_name = "matrices_CM00_CM01"
-  if os.path.exists(os.path.join(csv_dir, matrices_0_1_name + ".csv")):
-    matrices_0_1 = loadMatrices(matrices_0_1_name, csv_dir)
-  else:
-    # Deconvolved images are opened with ImageJ: they are zipped tiff stacks.
-    matrices_0_1_fwd = computeForwardTransforms(filepaths_0_1, ImageJLoader(), getCalibration,
-                                                deconvolved_csv_dir, exe, modelclass, params, exe_shutdown=False)
-    matrices_0_1 = [affine.getRowPackedCopy() for affine in asBackwardConcatTransforms(matrices_0_1_fwd)]
-    saveMatrices(matrices_0_1_filename, matrices_0_1, csv_dir)
-
-  # Register each deconvolved 2_3 volume to its corresponding 0_1
-  matrices_2_3_name = "matrices_CM02_CM03"
-  if os.path.exists(os.path.join(csv_dir, matrices_2_3_name + ".csv")):
-    matrices_2_3 = loadMatrices(matrices_2_3_name, csv_dir)
-  else:
-    futures = []
-    for pair_filepaths in izip(filepaths_0_1, filepaths_2_3):
-      futures.append(exe.submit(Task, computeForwardTransforms, pair_filepaths, ImageJLoader(), getCalibration,
-                                deconcolved_csv_dir, exe, modelclass, params, exe_shutdown=False))
-    matrices_2_3 = []
-    # Invert and concatenate the transforms
-    for i, f in enumerate(futures):
-      _, matrix_2_3_fwd = f.get() # first one is the identity
-      aff_0_1 = AffineTransform3D()
-      aff_0_1.set(*matrices_0_1[i])
-      aff_2_3 = AffineTransform3D()
-      aff_2_3.set(*matrix_2_3_fwd)
-      aff_2_3 = aff_2_3.inverse()
-      aff_2_3.preConcatenate(aff_0_1)
-      matrices_2_3.append(aff_2_3.getRowPackedCopy())
-    saveMatrices(matrices_2_3_name, matrices_2_3, csv_dir)
-
-  # Show the registered deconvolved series as a 4D volume.
+  # Convert matrices into twice as many affine transforms
   affines = []
-  for pair in izip(matrices_0_1, matrices_2_3):
-    for matrix in pair:
-      aff = AffineTransform3D()
-      aff.set(*matrix_0_1)
-      affines.append(aff)
-
-  filepaths = list(chain.from_iterable(izip(deconvolved_filepaths_0_1, deconvolved_filepaths_2_3)))
-  img = Load.lazyStack(filepaths, TransformedLoader(ImageJLoader(), dict(izip(filepaths, affines))))
+  for matrix in matrices:
+    aff = AffineTransform3D()
+    aff.set(*matrix)
+    affines.append(aff)
+    affines.append(aff) # twice: also for the CM02-CM03
+  
+  # Show the registered deconvolved series as a 4D volume.
+  filepaths = []
+  for timepoint in sorted(timepoint_views.iterkeys()):
+    views = timepoint_views.get(timepoint)
+    for view_name in ["CM00-CM01", "CM02-CM03"]:
+      filepaths.append(os.path.join(deconvolvedDir, views[view_name]))
+  
+  img = Load.lazyStack(filepaths, TransformedLoader(ImageJLoader(), dict(izip(filepaths, affines)), asImg=True))
   return img
 
