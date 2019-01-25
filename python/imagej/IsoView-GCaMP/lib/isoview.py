@@ -171,6 +171,8 @@ def deconvolveTimePoints(srcDir,
                         transforms, target_interval,
                         params, PSF_kernels, exe, output_converter)
 
+  exe.shutdownNow()
+
 
 def deconvolveTimePoint(filepaths, targetDir, klb_loader,
                         transforms, target_interval,
@@ -259,6 +261,12 @@ def registerDeconvolvedTimePoints(targetDir,
       Will write the features, pointmatches and registration affine matrices
       into a csv folder under targetDir.
 
+      If a CSV file with the affine transform matrices exist, it will read them out
+      and provide the 4D img right away.
+      Else, it will check which files are missing their features and pointmatches as CSV files,
+      create them, and ultimately create the CSV filew ith the affine transform matrices,
+      and then provide the 4D img.
+
       targetDir: the directory containing the deconvolved images.
       params: for feature extraction and registration.
       modelclass: the model to use, e.g. Translation3D, AffineTransform3D.
@@ -296,7 +304,7 @@ def registerDeconvolvedTimePoints(targetDir,
   if os.path.exists(os.path.join(csv_dir, matrices_name + ".csv")):
     matrices = loadMatrices(matrices_name, csv_dir)
   else:
-    rexe = exe
+    original_exe = exe
     if not exe:
       exe = newFixedThreadPool()
     try:
@@ -314,8 +322,8 @@ def registerDeconvolvedTimePoints(targetDir,
       matrices = [affine.getRowPackedCopy() for affine in asBackwardConcatTransforms(matrices_fwd)]
       saveMatrices(matrices_name, matrices, csv_dir)
     finally:
-      if not rexe:
-        exe.shutdownNow()
+      if not original_exe:
+        exe.shutdownNow() # Was created new
   
   # Convert matrices into twice as many affine transforms
   affines = []

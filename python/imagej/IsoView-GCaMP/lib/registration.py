@@ -191,21 +191,26 @@ def registeredView(img_filenames, img_loader, getCalibration, csv_dir, modelclas
       exe: an ExecutorService for concurrent execution of tasks
       params: dictionary of parameters
       returns a stack view of all registered images, e.g. 3D volumes as a 4D. """
+  original_exe = exe
   if not exe:
     exe = newFixedThreadPool()
-  matrices = computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params)
-  affines = asBackwardConcatTransforms(matrices)
-  #
-  for i, affine in enumerate(affines):
-    matrix = affine.getRowPackedCopy()
-    print i, "matrix: [", matrix[0:4]
-    print "           ", matrix[4:8]
-    print "           ", matrix[8:12], "]"
-  #
-  # TODO replace with a lazy loader
-  images = [img_loader.load(img_filename) for img_filename in img_filenames]
-  registered = Views.stack([viewTransformed(img, getCalibration(img_filename), affine)
-                            for img, img_filename, affine
-                            in izip(images, img_filenames, affines)])
-  return registered
+  try:
+    matrices = computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params)
+    affines = asBackwardConcatTransforms(matrices)
+    #
+    for i, affine in enumerate(affines):
+      matrix = affine.getRowPackedCopy()
+      print i, "matrix: [", matrix[0:4]
+      print "           ", matrix[4:8]
+      print "           ", matrix[8:12], "]"
+    #
+    # TODO replace with a lazy loader
+    images = [img_loader.load(img_filename) for img_filename in img_filenames]
+    registered = Views.stack([viewTransformed(img, getCalibration(img_filename), affine)
+                              for img, img_filename, affine
+                              in izip(images, img_filenames, affines)])
+    return registered
+  finally:
+    if not original_exe:
+      exe.shutdownNow()
 
