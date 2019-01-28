@@ -137,8 +137,7 @@ def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration,
   # Extract pointmatches from img_filename i to all in range(i+1, i+n)
   futures = []
   n = params["n_adjacent"]
-  for i in xrange(len(img_filenames):
-    tile = tiles[i]
+  for i in xrange(len(img_filenames) - n + 1):
     img_filename = img_filenames[i]
     for inc in xrange(1, n):
       # All features were extracted already, so the 'exe' won't be used in findPointMatches
@@ -151,7 +150,7 @@ def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration,
      # There are n-1 lists of pointmatches
      k = i / (n-1)
      pointmatches = f.get()
-     tile[k].connect(tile[k + (i % (n-1))], pointmatches)
+     tiles[k].connect(tiles[k + (i % (n-1))], pointmatches)
   
   # Optimize tile pose
   tc = TileConfiguration()
@@ -164,8 +163,11 @@ def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration,
   maxPlateauwidth = params["maxPlateauwidth"]
   maxIterations = params["maxIterations"]
   damp = params["damp"]
-  tc.optimizeSilentlyConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
-                                maxIterations, maxPlateauwidth, damp)
+  maxMeanFactor = params["maxMeanFactor"]
+  tc.optimizeAndFilter(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
+                                maxIterations, maxPlateauwidth, damp, maxMeanFactor)
+
+  # TODO problem: can fail when there are 0 inliers
 
   # Return model matrices as double[] arrays with 12 values
   matrices = []
