@@ -2,9 +2,16 @@ import sys
 sys.path.append("//home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.isoview import registerDeconvolvedTimePoints
 from mpicbg.models import RigidModel3D, TranslationModel3D
-from net.imglib2.img.display.imagej import ImageJFunctions as IL
+from net.imglib2.img.display.imagej import ImageJFunctions as IL, ImageJVirtualStackUnsignedShort
+from ij import ImagePlus, CompositeImage
 
 # Register deconvolved views across time and show them as a VirtualStack
+
+# A folder to save deconvolved images in, and CSV files describing features, point matches and transformations
+targetDir = "/home/albert/shares/cardonalab/Albert/2017-05-10_1018/"
+
+# Deconvolved images have isotropic calibration
+calibration = [1.0, 1.0, 1.0]
 
 # Parameters for registering deconvolved time points serially
 
@@ -38,11 +45,22 @@ paramsModel = {
   "maxTrust": 4, # for rejecting candidates
 }
 
+paramsTileConfiguration = {
+  "n_adjacent": 6,
+  "fixed_tile_index": 0, # first one
+  "maxAllowedError": 0, # Saalfeld recommends 0
+  "maxPlateauwidth": 200, # Like in TrakEM2
+  "maxIterations": 1000, # Saalfeld recommends 1000
+  "damp": 1.0, # Saalfeld recommends 1.0, which mens no damp
+  "maxMeanFactor": 1.0, # TODO adjust
+}
+
 # Joint dictionary of parameters
 params = {}
 params.update(paramsDoG)
 params.update(paramsFeatures)
 params.update(paramsModel)
+params.update(paramsTileConfiguration)
 
 modelclass = TranslationModel3D
 
@@ -51,5 +69,11 @@ img4D = registerDeconvolvedTimePoints(targetDir,
                                       modelclass,
                                       exe=None,
                                       subrange=range(0, 400))
+# IL.wrap gets structure wrong: uses channels for slices, and slices for frames
+#IL.wrap(img4D, "0-399").show()
 
-IL.wrap(img4D, "0-399").show()
+stack = ImageJVirtualStackUnsignedShort.wrap(img4D)
+imp = ImagePlus("0-399", stack)
+imp.setDimensions(1, img4D.dimension(2), img4D.dimension(3))
+comp = CompositeImage(imp, CompositeImage.GRAYSCALE)
+comp.show()
