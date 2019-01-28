@@ -1,10 +1,10 @@
-from mpicbg.models import NotEnoughDataPointsException
+from mpicbg.models import NotEnoughDataPointsException, Tile, TileConfiguration, ErrorStatistic
 from java.util import ArrayList
 from net.imglib2.view import Views
 from net.imglib2.realtransform import RealViews, AffineTransform3D, Scale3D, Translation3D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from jarray import array, zeros
-from itertools import izip, imap
+from itertools import izip, imap, islice
 import os, sys, csv
 from os.path import basename
 # local lib functions:
@@ -113,6 +113,69 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
     if exe_shutdown:
       exe.shutdown()
 
+
+def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params):
+  """ Compute forward transforms from image i to image i+1, i+2 ... i+n,
+      where n is params["n_adjacent"].
+      Then all matches are optimized together using mpicbg.models.TileConfiguration.
+      By default, tile at index 0 is fixed, unless a different index is specified with params["fixed_tile_index"].
+      Expects, in total:
+       * params["n_adjacent"]
+       * params["fixed_tile_index"]
+       * params["maxAllowedError"]
+       * params["maxPlateauwidth"]
+       * params["maxIterations"]
+       * params["damp"]
+      Returns a list of affine 3D matrices, each a double[] with 12 values.
+  """
+  # Ensure features exist in CSV files, or create them
+  ensureFeaturesForAll(img_filenames, img_loader, getCalibration, csv_dir, params, exe)
+  
+  # One Tile per time point
+  tiles = [Tile(modelclass()) for _ in img_filenames]
+  
+  # Extract pointmatches from img_filename i to all in range(i+1, i+n)
+  futures = []
+  n = params["n_adjacent"]
+  for i in xrange(len(img_filenames):
+    tile = tiles[i]
+    img_filename = img_filenames[i]
+    for inc in xrange(1, n):
+      # All features were extracted already, so the 'exe' won't be used in findPointMatches
+      futures.append(exe.submit(Task(findPointMatches, img_filename, img_filenames[i + inc],
+                                                       img_loader, getCalibration, csv_dir, exe, params)))
+  # Join tiles with tiles for which pointmatches were computed
+  # tiles: 0, 1, 2, ...
+  # pointmatches as futures: 0, 0, 0, 1, 1, 1, 2, 2, 2, for n=3
+  for i, f in enumerate(futures):
+     # There are n-1 lists of pointmatches
+     k = i / (n-1)
+     pointmatches = f.get()
+     tile[k].connect(tile[k + (i % (n-1))], pointmatches)
+  
+  # Optimize tile pose
+  tc = TileConfiguration()
+  tc.addTiles(tiles)
+  fixed_tile_index = min(len(tiles) -1, max(0, params.get("fixed_tile_index", 0)))
+  syncPrint("Fixed tile index: %i" % fixed_tile_index)
+  tc.fixTile(tiles[fixed_tile_index])
+  tc.preAlign()
+  maxAllowedError = params["maxAllowedError"]
+  maxPlateauwidth = params["maxPlateauwidth"]
+  maxIterations = params["maxIterations"]
+  damp = params["damp"]
+  tc.optimizeSilentlyConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
+                                maxIterations, maxPlateauwidth, damp)
+
+  # Return model matrices as double[] arrays with 12 values
+  matrices = []
+  for tile in tiles:
+    a = nativeArray('d', [3, 4])
+    tile.getModel().toMatrix(a) # Can't use model.toArray: different order of elements
+    matrices.append(array(a[0] + a[1] + a[2], 'd')) # Concat: flatten to 1-dimensional array
+  
+  return matrices
+  
 
 def asBackwardConcatTransforms(matrices, transformclass=AffineTransform3D):
     """ Transforms are img1 -> img2, and we want the opposite: so invert each.
