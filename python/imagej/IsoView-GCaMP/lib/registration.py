@@ -9,7 +9,7 @@ import os, sys, csv
 from os.path import basename
 # local lib functions:
 from util import syncPrint, Task, nativeArray, newFixedThreadPool
-from features import findPointMatches, ensureFeatures
+from features import findPointMatches, ensureFeaturesForAll
 
 
 def fit(model, pointmatches, n_iterations, maxEpsilon,
@@ -95,11 +95,7 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
   """
   try:
     # Ensure features exist in CSV files, or create them
-    futures = [exe.submit(Task(ensureFeatures, img_filename, img_loader, getCalibration, csv_dir, params))
-               for img_filename in img_filenames]
-    # Wait until all complete
-    for f in futures:
-      f.get()
+    ensureFeaturesForAll(img_filenames, img_loader, getCalibration, csv_dir, params, exe)
 
     # Create models: ensures first that pointmatches exist in CSV files, or creates them
     futures = [exe.submit(Task(fitModel, img1_filename, img2_filename, img_loader,

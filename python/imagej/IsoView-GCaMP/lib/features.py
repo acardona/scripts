@@ -369,3 +369,10 @@ def ensureFeatures(img_filename, img_loader, getCalibration, csv_dir, params):
     # TODO: Delete CSV files for pointmatches, if any
 
 
+def ensureFeaturesForAll(img_filenames, img_loader, getCalibration, csv_dir, params, exe):
+  """ Ensure features exist in CSV files, or create them, for each image file. """
+  futures = [exe.submit(Task(ensureFeatures, img_filename, img_loader, getCalibration, csv_dir, params))
+             for img_filename in img_filenames]
+  # Wait until all complete
+  for f in futures:
+    f.get()
