@@ -52,7 +52,7 @@ paramsTileConfiguration = {
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which mens no damp
-  "maxMeanFactor": 1.0, # TODO adjust
+  #"maxMeanFactor": 1.0, # TODO adjust -- unused, only for TileConfiguration.optimizeAndFilter, which is not used here.
 }
 
 # Joint dictionary of parameters
