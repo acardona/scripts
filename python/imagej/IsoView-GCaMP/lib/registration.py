@@ -153,7 +153,7 @@ def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration,
        syncPrint("Zero pointmatches for %i vs %i" % (i, j))
        continue
      syncPrint("connecting tile %i with %i" % (i, j))
-     tiles[i].connect(tiles[j], pointmatches)
+     tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
   
   # Optimize tile pose
   tc = TileConfiguration()
@@ -178,7 +178,7 @@ def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration,
   for tile in tiles:
     a = nativeArray('d', [3, 4])
     tile.getModel().toMatrix(a) # Can't use model.toArray: different order of elements
-    matrices.append(array(a[0] + a[1] + a[2], 'd')) # Concat: flatten to 1-dimensional array
+    matrices.append(a[0] + a[1] + a[2]) # Concat: flatten to 1-dimensional array
   
   return matrices
   
