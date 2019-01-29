@@ -301,7 +301,7 @@ def registerDeconvolvedTimePoints(targetDir,
         del timepoint_views[time]
 
   # Register only the view CM00-CM01, given that CM02-CM03 has the same transform
-  matrices_name = "matrices"
+  matrices_name = "matrices-%s" % modelclass.getSimpleName()
   matrices = None
   if os.path.exists(os.path.join(csv_dir, matrices_name + ".csv")):
     matrices = loadMatrices(matrices_name, csv_dir)
