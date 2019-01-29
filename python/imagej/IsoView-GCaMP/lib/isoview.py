@@ -312,16 +312,16 @@ def registerDeconvolvedTimePoints(targetDir,
       # Deconvolved images are isotropic
       def getCalibration(img_filepath):
         return [1, 1, 1]
-      timepoints = []
-      filepaths = []
-      for timepoint, views in timepoint_views.iteritems():
+      timepoints = [] # sorted
+      filepaths = [] # sorted
+      for timepoint, views in sorted(timepoint_views.iteritems(), key=itemgetter(0)):
         timepoints.append(timepoint)
         filepaths.append(os.path.join(deconvolvedDir, views["CM00-CM01"]))
       #
       #matrices_fwd = computeForwardTransforms(filepaths, ImageJLoader(), getCalibration,
       #                                        csv_dir, exe, modelclass, params, exe_shutdown=False)
       matrices_fwd = computeOptimizedForwardTransforms(filepaths, ImageJLoader(), getCalibration,
-                                                       csv_dir, exe, modelclass, params)
+                                                       csv_dir, exe, modelclass, params, verbose=verbose)
       matrices = [affine.getRowPackedCopy() for affine in asBackwardConcatTransforms(matrices_fwd)]
       saveMatrices(matrices_name, matrices, csv_dir)
     finally:
