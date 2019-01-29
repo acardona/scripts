@@ -68,6 +68,7 @@ img4D = registerDeconvolvedTimePoints(targetDir,
                                       params,
                                       modelclass,
                                       exe=None,
+                                      verbose=False,
                                       subrange=range(0, 400))
 # IL.wrap gets structure wrong: uses channels for slices, and slices for frames
 #IL.wrap(img4D, "0-399").show()
