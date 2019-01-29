@@ -166,10 +166,8 @@ def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration,
   maxPlateauwidth = params["maxPlateauwidth"]
   maxIterations = params["maxIterations"]
   damp = params["damp"]
-  maxMeanFactor = params["maxMeanFactor"]
   tc.optimizeSilentlyConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
                                 maxIterations, maxPlateauwidth, damp)
-  #tc.optimizeAndFilter(maxAllowedError, maxIterations, maxPlateauwidth, damp, maxMeanFactor)
 
   # TODO problem: can fail when there are 0 inliers
 
