@@ -135,22 +135,25 @@ def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration,
   tiles = [Tile(modelclass()) for _ in img_filenames]
   
   # Extract pointmatches from img_filename i to all in range(i+1, i+n)
+  def findPointMatchesProxy(i, j):
+    pointmatches = findPointMatches(img_filenames[i], img_filenames[j],
+                                    img_loader, getCalibration, csv_dir, exe, params, verbose=verbose)
+    return i, j, pointmatches
+  #
   futures = []
   n = params["n_adjacent"]
   for i in xrange(len(img_filenames) - n + 1):
-    img_filename = img_filenames[i]
     for inc in xrange(1, n):
       # All features were extracted already, so the 'exe' won't be used in findPointMatches
-      futures.append(exe.submit(Task(findPointMatches, img_filename, img_filenames[i + inc],
-                                                       img_loader, getCalibration, csv_dir, exe, params)))
+      futures.append(exe.submit(Task(findPointMatchesProxy, i, i + inc)))
   # Join tiles with tiles for which pointmatches were computed
-  # tiles: 0, 1, 2, ...
-  # pointmatches as futures: 0, 0, 0, 1, 1, 1, 2, 2, 2, for n=3
-  for i, f in enumerate(futures):
-     # There are n-1 lists of pointmatches
-     k = i / (n-1)
-     pointmatches = f.get()
-     tiles[k].connect(tiles[k + (i % (n-1))], pointmatches)
+  for f in futures:
+     i, j, pointmatches = f.get()
+     if 0 == len(pointmatches):
+       syncPrint("Zero pointmatches for %i vs %i" % (i, j))
+       continue
+     syncPrint("connecting tile %i with %i" % (i, j))
+     tiles[i].connect(tiles[j], pointmatches)
   
   # Optimize tile pose
   tc = TileConfiguration()
