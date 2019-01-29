@@ -114,7 +114,7 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
       exe.shutdown()
 
 
-def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params):
+def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params, verbose=True):
   """ Compute forward transforms from image i to image i+1, i+2 ... i+n,
       where n is params["n_adjacent"].
       Then all matches are optimized together using mpicbg.models.TileConfiguration.
@@ -129,7 +129,7 @@ def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration,
       Returns a list of affine 3D matrices, each a double[] with 12 values.
   """
   # Ensure features exist in CSV files, or create them
-  ensureFeaturesForAll(img_filenames, img_loader, getCalibration, csv_dir, params, exe)
+  ensureFeaturesForAll(img_filenames, img_loader, getCalibration, csv_dir, params, exe, verbose=verbose)
   
   # One Tile per time point
   tiles = [Tile(modelclass()) for _ in img_filenames]

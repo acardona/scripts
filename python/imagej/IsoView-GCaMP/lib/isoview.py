@@ -251,6 +251,7 @@ def registerDeconvolvedTimePoints(targetDir,
                                   params,
                                   modelclass,
                                   exe=None,
+                                  verbose=True,
                                   subrange=None):
   """ Can only be run after running deconvolveTimePoints, because it
       expects deconvolved images to exist under <targetDir>/deconvolved/,
