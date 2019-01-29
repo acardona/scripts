@@ -302,9 +302,13 @@ def registerDeconvolvedTimePoints(targetDir,
 
   # Register only the view CM00-CM01, given that CM02-CM03 has the same transform
   matrices_name = "matrices"
+  matrices = None
   if os.path.exists(os.path.join(csv_dir, matrices_name + ".csv")):
     matrices = loadMatrices(matrices_name, csv_dir)
-  else:
+    if len(matrices) != len(timepoint_views):
+      syncPrint("Ignoring existing matrices CSV file: length (%i) doesn't match with expected number of timepoints (%i)" % (len(matrices), len(timepoint_views)))
+      matrices = None
+  if not matrices:
     original_exe = exe
     if not exe:
       exe = newFixedThreadPool()
