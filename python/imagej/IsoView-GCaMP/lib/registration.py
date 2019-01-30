@@ -1,4 +1,4 @@
-from mpicbg.models import NotEnoughDataPointsException, Tile, TileConfiguration, ErrorStatistic
+from mpicbg.models import NotEnoughDataPointsException, Tile, TileConfiguration, ErrorStatistic, TranslationModel3D
 from java.util import ArrayList
 from net.imglib2.view import Views
 from net.imglib2.realtransform import RealViews, AffineTransform3D, Scale3D, Translation3D
@@ -162,7 +162,13 @@ def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration,
   syncPrint("Fixed tile indices: %s" % str(fixed_tile_indices))
   for index in fixed_tile_indices:
     tc.fixTile(tiles[index])
-  tc.preAlign()
+  #
+  if TranslationModel3D != modelclass:
+    syncPrint("Running TileConfiguration.preAlign, given %s" % modelclass.getSimpleName())
+    tc.preAlign()
+  else:
+    syncPrint("No prealign, model is %s" % modelclass.getSimpleName())
+  #
   maxAllowedError = params["maxAllowedError"]
   maxPlateauwidth = params["maxPlateauwidth"]
   maxIterations = params["maxIterations"]
