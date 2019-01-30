@@ -80,7 +80,7 @@ def loadMatrices(name, csv_dir):
     with open(path, 'r') as csvfile:
       reader = csv.reader(csvfile, delimiter=',', quotechar='"')
       reader.next() # skip header
-      matrices = [array(imap(float, row), 'd') for row in reader]
+      matrices = [array(imap(float, row), 'd') for row in reader if row]
       return matrices
   except:
     syncPrint("Could not load matrices from path %s" % path)
