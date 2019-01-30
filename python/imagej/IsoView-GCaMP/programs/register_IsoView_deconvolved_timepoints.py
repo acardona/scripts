@@ -1,5 +1,5 @@
 import sys
-sys.path.append("//home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
+sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.isoview import registerDeconvolvedTimePoints
 from mpicbg.models import RigidModel3D, TranslationModel3D
 from net.imglib2.img.display.imagej import ImageJFunctions as IL, ImageJVirtualStackUnsignedShort
@@ -18,7 +18,7 @@ calibration = [1.0, 1.0, 1.0]
 # Parameters for DoG difference of Gaussian to detect soma positions
 somaDiameter = 8 * calibration[0]
 paramsDoG = {
-  "minPeakValue": 30, # Determined by hand
+  "minPeakValue": 20, # Determined by hand
   "sigmaSmaller": somaDiameter / 4.0, # in calibrated units: 1/4 soma
   "sigmaLarger": somaDiameter / 2.0, # in calibrated units: 1/2 soma
 }
@@ -27,7 +27,7 @@ paramsFeatures = {
   # Parameters for features
   "radius": somaDiameter * 5, # for searching nearby peaks
   "min_angle": 0.25, # in radians, between vectors to p1 and p2
-  "max_per_peak": 10, # maximum number of constellations to create per peak
+  "max_per_peak": 20, # maximum number of constellations to create per peak
 
   # Parameters for comparing constellations to find point matches
   "angle_epsilon": 0.02, # in radians. 0.05 is 2.8 degrees, 0.02 is 1.1 degrees
@@ -40,7 +40,7 @@ paramsFeatures = {
 paramsModel = {
   "maxEpsilon": somaDiameter, # max allowed alignment error in calibrated units (a distance)
   "minInlierRatio": 0.0000001, # ratio inliers/candidates
-  "minNumInliers": 5, # minimum number of good matches to accept the result
+  "minNumInliers": 20, # minimum number of good matches to accept the result
   "n_iterations": 2000, # for estimating the model
   "maxTrust": 4, # for rejecting candidates
 }
