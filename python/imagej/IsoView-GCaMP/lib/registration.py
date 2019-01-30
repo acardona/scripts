@@ -158,9 +158,10 @@ def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration,
   # Optimize tile pose
   tc = TileConfiguration()
   tc.addTiles(tiles)
-  fixed_tile_index = min(len(tiles) -1, max(0, params.get("fixed_tile_index", 0)))
-  syncPrint("Fixed tile index: %i" % fixed_tile_index)
-  tc.fixTile(tiles[fixed_tile_index])
+  fixed_tile_indices = params.get("fixed_tile_indices", [0]) # default: fix first tile
+  syncPrint("Fixed tile indices: %s" % str(fixed_tile_indices))
+  for index in fixed_tile_indices:
+    tc.fixTile(tiles[index])
   tc.preAlign()
   maxAllowedError = params["maxAllowedError"]
   maxPlateauwidth = params["maxPlateauwidth"]
