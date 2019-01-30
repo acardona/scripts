@@ -14,7 +14,7 @@ from itertools import izip, chain, repeat
 from operator import itemgetter
 from util import newFixedThreadPool, Task, syncPrint, affine3D
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
-from registration import computeOptimizedForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
+from registration import computeOptimizedTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 from converter import convert, createConverter
 from collections import defaultdict
@@ -324,9 +324,9 @@ def registerDeconvolvedTimePoints(targetDir,
       #
       #matrices_fwd = computeForwardTransforms(filepaths, ImageJLoader(), getCalibration,
       #                                        csv_dir, exe, modelclass, params, exe_shutdown=False)
-      matrices_fwd = computeOptimizedForwardTransforms(filepaths, ImageJLoader(), getCalibration,
-                                                       csv_dir, exe, modelclass, params, verbose=verbose)
-      matrices = [affine.getRowPackedCopy() for affine in asBackwardConcatTransforms(matrices_fwd)]
+      #matrices = [affine.getRowPackedCopy() for affine in asBackwardConcatTransforms(matrices_fwd)]
+      matrices = computeOptimizedTransforms(filepaths, ImageJLoader(), getCalibration,
+                                            csv_dir, exe, modelclass, params, verbose=verbose)
       saveMatrices(matrices_name, matrices, csv_dir)
     finally:
       if not original_exe:

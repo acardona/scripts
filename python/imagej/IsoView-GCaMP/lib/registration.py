@@ -114,11 +114,12 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
       exe.shutdown()
 
 
-def computeOptimizedForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params, verbose=True):
-  """ Compute forward transforms from image i to image i+1, i+2 ... i+n,
+def computeOptimizedTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params, verbose=True):
+  """ Compute transforms for all images at once,
+      simultaneously considering registrations between image i to image i+1, i+2 ... i+n,
       where n is params["n_adjacent"].
       Then all matches are optimized together using mpicbg.models.TileConfiguration.
-      By default, tile at index 0 is fixed, unless a different index is specified with params["fixed_tile_index"].
+      Fixed tiles are specified in a list of indices with params["fixed_tile_index"].
       Expects, in total:
        * params["n_adjacent"]
        * params["fixed_tile_index"]
