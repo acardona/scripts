@@ -46,8 +46,8 @@ paramsModel = {
 }
 
 paramsTileConfiguration = {
-  "n_adjacent": 6,
-  "fixed_tile_index": 0, # first one
+  "n_adjacent": 12,
+  "fixed_tile_indices": [0], # only the first one
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends 1000
