@@ -47,7 +47,7 @@ def mergeNormalized(matrix_csv_path, measurements_csv_path, fix, single, joint):
             count = 0
             for n_syn, norm in zip([row11, row12, row21, row22], \
                                    [  n11,   n12,   n21,   n22]):
-                if n_syn >= 3:
+                if n_syn >= single:
                     s += norm
                     count += 1
             return (s / count) * 100 if count > 0 else 0

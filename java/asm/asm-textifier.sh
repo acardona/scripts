@@ -1,0 +1,1 @@
+java -classpath /home/albert/Programming/fiji-new/Fiji.app/jars/imglib2-5.1.0.jar:/home/albert/Programming/fiji-new/Fiji.app/jars/asm-5.0.4.jar://home/albert/Programming/fiji-new/Fiji.app/jars/asm-util-4.0.jar org.objectweb.asm.util.Textifier my/UnsignedByteToFloatConverter.class
