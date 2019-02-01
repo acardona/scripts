@@ -13,12 +13,20 @@ from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from ij.io import FileSaver
 from ij import ImagePlus, IJ
 from synchronize import make_synchronized
-from util import syncPrint
+from util import syncPrint, newFixedThreadPool
+from ui import showStack, showBDV
 try:
   # Needs 'SiMView' Fiji update site enabled
   from org.janelia.simview.klb import KLB
 except:
   print "*** KLB library is NOT installed ***"
+try:
+  from org.janelia.saalfeldlab.n5.imglib2 import N5Utils
+except:
+  print: "*** n5-imglib2 from github.com/saalfeldlab not installed. ***"
+from org.janelia.saalfeldlab.n5 import N5FSReader, N5FSWriter, GzipCompression
+from com.google.gson import GsonBuilder
+
 
 def readFloats(path, dimensions, header=0):
   """ Read a file as an ArrayImg of FloatType """
@@ -104,3 +112,34 @@ class ImageJLoader(CacheLoader):
     return IL.wrap(IJ.openImage(path))
   def load(self, path):
     return self.get(path)
+
+
+def readN5(path, dataset_name, show=None):
+  """ path: filepath to the folder with N5 data.
+      dataset_name: name of the dataset to use (there could be more than one).
+      show: defaults to None. "IJ" for virtual stack, "BDV" for BigDataViewer.
+      
+      If "IJ", returns the RandomAccessibleInterval and the ImagePlus.
+      If "BDV", returns the RandomAccessibleInterval and the bdv instance. """
+  img = N5Utils.open(N5FSReader(path, GsonBuilder()), dataset_name)
+  if show:
+    if "IJ" == show:
+      return img, showStack(img, title=dataset)
+    elif "BDV" == show:
+      return img, showBDV(img, title=dataset)
+  return img
+
+
+def writeN5(img, path, dataset_name, blockSize, gzip_compression_level=4, n_threads=0):
+  """ img: the RandomAccessibleInterval to store in N5 format.
+      path: the directory to store the N5 data.
+      dataset_name: the name of the img data.
+      blockSize: an array or list as long as dimensions has the img, specifying
+                 how to chop up the img into pieces.
+      gzip_compression_level: defaults to 4, ranges from 0 (no compression) to 9 (maximum;
+                              see java.util.zip.Deflater for details.).
+      n_threads: defaults to as many as CPU cores, for parallel writing. """
+  N5Utils.save(img, N5FSWriter(path, GsonBuilder()),
+               dataset_name, blockSize,
+               GzipCompression(gzip_compression_level),
+               newFixedThreadPool(n_threads))
