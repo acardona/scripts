@@ -22,3 +22,15 @@ def showInBDV(images, names=None, bdv=None):
   #
   return bdv
 
+
+def showStack(img, title=""):
+  imp = IL.wrap(img, title)
+  imp.show()
+  return imp
+
+
+def showBDV(img, title="", bdv=None):
+  if bdv:
+    BdvFunctions.show(img, title, Bdv.options().addTo(bdv))
+    return bdv
+  return BdvFunctions.show(img, title)
