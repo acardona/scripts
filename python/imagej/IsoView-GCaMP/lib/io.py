@@ -23,7 +23,7 @@ except:
 try:
   from org.janelia.saalfeldlab.n5.imglib2 import N5Utils
 except:
-  print: "*** n5-imglib2 from github.com/saalfeldlab not installed. ***"
+  print "*** n5-imglib2 from github.com/saalfeldlab not installed. ***"
 from org.janelia.saalfeldlab.n5 import N5FSReader, N5FSWriter, GzipCompression
 from com.google.gson import GsonBuilder
 
