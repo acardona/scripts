@@ -4,7 +4,7 @@ from net.imglib2.view import Views
 from net.imglib2.realtransform import RealViews, AffineTransform3D, Scale3D, Translation3D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from jarray import array, zeros
-from itertools import izip, imap, islice
+from itertools import izip, imap, islice, combinations
 import os, sys, csv
 from os.path import basename
 # local lib functions:
@@ -121,6 +121,7 @@ def computeOptimizedTransforms(img_filenames, img_loader, getCalibration, csv_di
   """ Compute transforms for all images at once,
       simultaneously considering registrations between image i to image i+1, i+2 ... i+n,
       where n is params["n_adjacent"].
+      Alternatively, if the params["all_to_all"] exists and is truthy, all tiles will be connected to all tiles.
       Then all matches are optimized together using mpicbg.models.TileConfiguration.
       Fixed tiles are specified in a list of indices with params["fixed_tile_index"].
       Expects, in total:
@@ -145,11 +146,17 @@ def computeOptimizedTransforms(img_filenames, img_loader, getCalibration, csv_di
     return i, j, pointmatches
   #
   futures = []
-  n = params["n_adjacent"]
-  for i in xrange(len(img_filenames) - n + 1):
-    for inc in xrange(1, n):
-      # All features were extracted already, so the 'exe' won't be used in findPointMatches
-      futures.append(exe.submit(Task(findPointMatchesProxy, i, i + inc)))
+
+  if params.get("all_to_all", False):
+    for i, j in combinations(xrange(len(img_filenames)), 2):
+      futures.append(exe.submit(Task(findPointMatchesProxy, i, j)))
+  else:
+    n = params["n_adjacent"]
+    for i in xrange(len(img_filenames) - n + 1):
+      for inc in xrange(1, n):
+        # All features were extracted already, so the 'exe' won't be used in findPointMatches
+        futures.append(exe.submit(Task(findPointMatchesProxy, i, i + inc)))
+  
   # Join tiles with tiles for which pointmatches were computed
   for f in futures:
      i, j, pointmatches = f.get()
