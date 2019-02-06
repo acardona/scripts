@@ -124,9 +124,9 @@ def readN5(path, dataset_name, show=None):
   img = N5Utils.open(N5FSReader(path, GsonBuilder()), dataset_name)
   if show:
     if "IJ" == show:
-      return img, showStack(img, title=dataset)
+      return img, showStack(img, title=dataset_name)
     elif "BDV" == show:
-      return img, showBDV(img, title=dataset)
+      return img, showBDV(img, title=dataset_name)
   return img
 
 
