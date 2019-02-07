@@ -5,6 +5,7 @@ from lib.dogpeaks import createDoG
 from lib.synthetic import virtualPointsRAI
 from lib.ui import showStack
 from lib.nuclei import findPeaks, mergePeaks, filterNuclei
+from net.imglib2.util import Intervals
 from net.imglib2.view import Views
 
 n5dir = "/home/albert/shares/cardonalab/Albert/2017-05-10_1018/deconvolved/n5"
@@ -22,8 +23,8 @@ img4Db = Views.subsample(Views.interval(img4D, [0, 0, 0, 1], Intervals.maxAsLong
 showStack(img4Da, title="CM00+CM01 registered+deconvolved")
 showStack(img4Db, title="CM02+CM03 registered+deconvolved")
 
-calibration - [1.0, 1.0, 1.0]
-somaDiameter = 8 * calibration
+calibration = [1.0, 1.0, 1.0]
+somaDiameter = 8 * calibration[0]
 
 params = {
  "frames": 5, # number of time frames to average, 5 is equivalent to 3.75 seconds: 0.75 * 5
