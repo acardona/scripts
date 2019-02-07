@@ -100,6 +100,37 @@ def newFixedThreadPool(n_threads=0, name="jython-worker"):
   return Executors.newFixedThreadPool(n_threads, ThreadFactorySameGroup(name))
 
 
+class ParallelTasks:
+  def __init__(self, name, exe=None):
+    self.exe = exe if exe else newFixedThreadPool()
+    self.futures = []
+  def add(self, fn, *args, **kwargs):
+    future = self.exe.submit(Task(fn, *args, **kwargs))
+    self.futures.append(future)
+    return future
+  def chunkConsume(self, chunk_size, tasks):
+    """ 
+    chunk_size: number of tasks to submit prior to start waiting and yielding their results.
+    tasks: a generator (or an iterable) with Task instances.
+    Returns a generator with the results.
+    """
+    for task in tasks:
+      self.futures.add(self.exe.submit(task))
+      if len(futures) > chunk_size:
+        while len(self.futures) > 0:
+          yield self.futures.pop(0).get()
+  def awaitAll(self):
+    while len(self.futures) > 0:
+      self.futures.pop(0).get()
+  def generateAll(self):
+    while len(self.futures) > 0:
+      yield self.futures.pop(0).get()
+  def destroy(self):
+    self.exe.shutdownNow()
+    self.exe = None
+    self.futures = None
+
+
 def timeit(n_iterations, fn, *args, **kwargs):
   times = []
   for i in xrange(n_iterations):

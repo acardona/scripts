@@ -1,15 +1,15 @@
-from mpicbg.models import NotEnoughDataPointsException
+from mpicbg.models import NotEnoughDataPointsException, Tile, TileConfiguration, ErrorStatistic, TranslationModel3D
 from java.util import ArrayList
 from net.imglib2.view import Views
 from net.imglib2.realtransform import RealViews, AffineTransform3D, Scale3D, Translation3D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from jarray import array, zeros
-from itertools import izip, imap
+from itertools import izip, imap, islice, combinations
 import os, sys, csv
 from os.path import basename
 # local lib functions:
 from util import syncPrint, Task, nativeArray, newFixedThreadPool
-from features import findPointMatches, ensureFeatures
+from features import findPointMatches, ensureFeaturesForAll
 
 
 def fit(model, pointmatches, n_iterations, maxEpsilon,
@@ -44,13 +44,16 @@ def fitModel(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, 
       basename(img1_filename), basename(img2_filename)))
     a = nativeArray('d', [3, 4])
     model.toMatrix(a) # Can't use model.toArray: different order of elements
-    return a[0] + a[1] + a[2] # Concat: flatten to 1-dimensional array:
+    matrix = a[0] + a[1] + a[2] # Concat: flatten to 1-dimensional array:
   else:
     syncPrint("Model not found for:\n    %s\n    %s" % (img1_filename, img2_filename))
     # Return identity
-    return array([1, 0, 0, 0,
-                  0, 1, 0, 0,
-                  0, 0, 1, 0], 'd')
+    matrix = array([1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0], 'd')
+  syncPrint("found %i pointmatches, with matrix:\n[%s]\nbetween \n    %s\n    %s" % \
+            (len(pointmatches), ", ".join("%.2f" % v for v in matrix), basename(img1_filename), basename(img2_filename)))
+  return matrix
 
 
 def saveMatrices(name, matrices, csv_dir):
@@ -80,7 +83,7 @@ def loadMatrices(name, csv_dir):
     with open(path, 'r') as csvfile:
       reader = csv.reader(csvfile, delimiter=',', quotechar='"')
       reader.next() # skip header
-      matrices = [array(imap(float, row), 'd') for row in reader]
+      matrices = [array(imap(float, row), 'd') for row in reader if row]
       return matrices
   except:
     syncPrint("Could not load matrices from path %s" % path)
@@ -95,11 +98,7 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
   """
   try:
     # Ensure features exist in CSV files, or create them
-    futures = [exe.submit(Task(ensureFeatures, img_filename, img_loader, getCalibration, csv_dir, params))
-               for img_filename in img_filenames]
-    # Wait until all complete
-    for f in futures:
-      f.get()
+    ensureFeaturesForAll(img_filenames, img_loader, getCalibration, csv_dir, params, exe)
 
     # Create models: ensures first that pointmatches exist in CSV files, or creates them
     futures = [exe.submit(Task(fitModel, img1_filename, img2_filename, img_loader,
@@ -117,6 +116,88 @@ def computeForwardTransforms(img_filenames, img_loader, getCalibration, csv_dir,
     if exe_shutdown:
       exe.shutdown()
 
+
+def computeOptimizedTransforms(img_filenames, img_loader, getCalibration, csv_dir, exe, modelclass, params, verbose=True):
+  """ Compute transforms for all images at once,
+      simultaneously considering registrations between image i to image i+1, i+2 ... i+n,
+      where n is params["n_adjacent"].
+      Alternatively, if the params["all_to_all"] exists and is truthy, all tiles will be connected to all tiles.
+      Then all matches are optimized together using mpicbg.models.TileConfiguration.
+      Fixed tiles are specified in a list of indices with params["fixed_tile_index"].
+      Expects, in total:
+       * params["n_adjacent"]
+       * params["fixed_tile_index"]
+       * params["maxAllowedError"]
+       * params["maxPlateauwidth"]
+       * params["maxIterations"]
+       * params["damp"]
+      Returns a list of affine 3D matrices, each a double[] with 12 values.
+  """
+  # Ensure features exist in CSV files, or create them
+  ensureFeaturesForAll(img_filenames, img_loader, getCalibration, csv_dir, params, exe, verbose=verbose)
+  
+  # One Tile per time point
+  tiles = [Tile(modelclass()) for _ in img_filenames]
+  
+  # Extract pointmatches from img_filename i to all in range(i+1, i+n)
+  def findPointMatchesProxy(i, j):
+    pointmatches = findPointMatches(img_filenames[i], img_filenames[j],
+                                    img_loader, getCalibration, csv_dir, exe, params, verbose=verbose)
+    return i, j, pointmatches
+  #
+  futures = []
+
+  if params.get("all_to_all", False):
+    for i, j in combinations(xrange(len(img_filenames)), 2):
+      futures.append(exe.submit(Task(findPointMatchesProxy, i, j)))
+  else:
+    n = params["n_adjacent"]
+    for i in xrange(len(img_filenames) - n + 1):
+      for inc in xrange(1, n):
+        # All features were extracted already, so the 'exe' won't be used in findPointMatches
+        futures.append(exe.submit(Task(findPointMatchesProxy, i, i + inc)))
+  
+  # Join tiles with tiles for which pointmatches were computed
+  for f in futures:
+     i, j, pointmatches = f.get()
+     if 0 == len(pointmatches):
+       syncPrint("Zero pointmatches for %i vs %i" % (i, j))
+       continue
+     syncPrint("connecting tile %i with %i" % (i, j))
+     tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
+  
+  # Optimize tile pose
+  tc = TileConfiguration()
+  tc.addTiles(tiles)
+  fixed_tile_indices = params.get("fixed_tile_indices", [0]) # default: fix first tile
+  syncPrint("Fixed tile indices: %s" % str(fixed_tile_indices))
+  for index in fixed_tile_indices:
+    tc.fixTile(tiles[index])
+  #
+  if TranslationModel3D != modelclass:
+    syncPrint("Running TileConfiguration.preAlign, given %s" % modelclass.getSimpleName())
+    tc.preAlign()
+  else:
+    syncPrint("No prealign, model is %s" % modelclass.getSimpleName())
+  #
+  maxAllowedError = params["maxAllowedError"]
+  maxPlateauwidth = params["maxPlateauwidth"]
+  maxIterations = params["maxIterations"]
+  damp = params["damp"]
+  tc.optimizeSilentlyConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
+                                maxIterations, maxPlateauwidth, damp)
+
+  # TODO problem: can fail when there are 0 inliers
+
+  # Return model matrices as double[] arrays with 12 values
+  matrices = []
+  for tile in tiles:
+    a = nativeArray('d', [3, 4])
+    tile.getModel().toMatrix(a) # Can't use model.toArray: different order of elements
+    matrices.append(a[0] + a[1] + a[2]) # Concat: flatten to 1-dimensional array
+  
+  return matrices
+  
 
 def asBackwardConcatTransforms(matrices, transformclass=AffineTransform3D):
     """ Transforms are img1 -> img2, and we want the opposite: so invert each.

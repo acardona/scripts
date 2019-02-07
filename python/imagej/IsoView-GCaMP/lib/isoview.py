@@ -8,13 +8,14 @@ from net.imglib2.view import Views
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.type.numeric.integer import UnsignedShortType
+from java.util.concurrent import TimeUnit
 import os, re, sys
 from pprint import pprint
 from itertools import izip, chain, repeat
 from operator import itemgetter
 from util import newFixedThreadPool, Task, syncPrint, affine3D
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
-from registration import computeForwardTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
+from registration import computeOptimizedTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 from converter import convert, createConverter
 from collections import defaultdict
@@ -32,6 +33,7 @@ def deconvolveTimePoints(srcDir,
                          params,
                          roi,
                          subrange=None,
+                         camera_groups=((0, 1), (2, 3)),
                          n_threads=0): # 0 means all
   """
      Main program entry point.
@@ -60,6 +62,7 @@ def deconvolveTimePoints(srcDir,
      params: a dictionary with all the necessary parameters for feature extraction, registration and deconvolution.
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
      subrange: defaults to None. Can be a list specifying the indices of time points to deconvolve.
+     camera_groups: the camera views to fuse and deconvolve together. Defaults to two: ((0, 1), (2, 3))
      n_threads: number of threads to use. Zero (default) means as many as possible.
   """
   kernel = readFloats(kernel_filepath, [19, 19, 25], header=434)
@@ -170,17 +173,22 @@ def deconvolveTimePoints(srcDir,
     syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
     deconvolveTimePoint(filepaths, targetDir, klb_loader,
                         transforms, target_interval,
-                        params, PSF_kernels, exe, output_converter)
+                        params, PSF_kernels, exe, output_converter,
+                        camera_groups=camera_groups)
 
-  exe.shutdownNow()
+  exe.shutdown() # Not accepting any more tasks but letting currently executing tasks to complete.
+  # Wait until the last task (writing the last file) completes execution.
+  exe.awaitTermination(5, TimeUnit.MINUTES)
 
 
 def deconvolveTimePoint(filepaths, targetDir, klb_loader,
                         transforms, target_interval,
                         params, PSF_kernels, exe, output_converter,
+                        camera_groups=((0, 1), (2, 3)),
                         write=writeZip):
   """ filepaths is a dictionary of camera index vs filepath to a KLB file.
-      This function will generate two deconvolved views, one for each channel,
+      With the default camera_groups=((0, 1), (2, 3)) this function will generate
+      two deconvolved views, one for each channel,
       where CHN00 is made of CM00 + CM01, and
             CHNO1 is made of CM02 + CM03.
       Will take the camera registrations (cmIsotropicTransforms), which are coarse,
@@ -208,7 +216,8 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     return (index, imgA)
 
   def strings(indices):
-    name = "CM0%i-CM0%i-deconvolved" % indices
+    cameras = "-".join("CM0%i" % i for i in indices)
+    name = cameras + "-deconvolved"
     filename = tm_dirname + "_" + name + ".zip"
     path = os.path.join(targetDir, "deconvolved/" + filename)
     return filename, path
@@ -216,7 +225,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
   # Find out which pairs haven't been created yet
   futures = []
   todo = []
-  for indices in ((0, 1), (2, 3)):
+  for indices in camera_groups:
     filename, path = strings(indices)
     if not os.path.exists(path):
       todo.append(indices)
@@ -230,21 +239,25 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     writeZip(img, path, title=title).flush() # flush the returned ImagePlus
 
   # Each deconvolution run uses many threads when run with CPU
-  # So do one at a time. With GPU perhaps it could do two at a time.
+  # So do one at a time.
+  last_future = None
   for indices in todo:
     images = [prepared[index] for index in indices]
-    syncPrint("Invoked deconvolution for %s %i,%i" % (tm_dirname, indices[0], indices[1]))
+    syncPrint("Invoked deconvolution for %s %s" % (tm_dirname, " ".join("%i" % i for i in indices)))
     # Deconvolve: merge two views into a single volume
-    n_iterations = params["CM_%i_%i_n_iterations" % indices]
+    n_iterations = params["CM_%s_n_iterations" % "_".join("%i" % i for i in indices)]
     img = multiviewDeconvolution(images, params["blockSizes"], PSF_kernels, n_iterations, exe=exe)
     # On-the-fly convert to 16-bit: data values are well within the 16-bit range
     imgU = convert(img, output_converter, UnsignedShortType)
     filename, path = strings(indices)
     # Write in a separate thread so as not to wait
-    exe.submit(Task(writeToDisk, writeZip, imgU, path, title=filename))
+    last_future = exe.submit(Task(writeToDisk, writeZip, imgU, path, title=filename))
     imgU = None
     img = None
     images = None
+
+  if last_future:
+    last_future.get()
 
   prepared = None
 
@@ -255,6 +268,7 @@ def registerDeconvolvedTimePoints(targetDir,
                                   params,
                                   modelclass,
                                   exe=None,
+                                  verbose=True,
                                   subrange=None):
   """ Can only be run after running deconvolveTimePoints, because it
       expects deconvolved images to exist under <targetDir>/deconvolved/,
@@ -304,10 +318,14 @@ def registerDeconvolvedTimePoints(targetDir,
         del timepoint_views[time]
 
   # Register only the view CM00-CM01, given that CM02-CM03 has the same transform
-  matrices_name = "matrices"
+  matrices_name = "matrices-%s" % modelclass.getSimpleName()
+  matrices = None
   if os.path.exists(os.path.join(csv_dir, matrices_name + ".csv")):
     matrices = loadMatrices(matrices_name, csv_dir)
-  else:
+    if len(matrices) != len(timepoint_views):
+      syncPrint("Ignoring existing matrices CSV file: length (%i) doesn't match with expected number of timepoints (%i)" % (len(matrices), len(timepoint_views)))
+      matrices = None
+  if not matrices:
     original_exe = exe
     if not exe:
       exe = newFixedThreadPool()
@@ -315,15 +333,17 @@ def registerDeconvolvedTimePoints(targetDir,
       # Deconvolved images are isotropic
       def getCalibration(img_filepath):
         return [1, 1, 1]
-      timepoints = []
-      filepaths = []
-      for timepoint, views in timepoint_views.iteritems():
+      timepoints = [] # sorted
+      filepaths = [] # sorted
+      for timepoint, views in sorted(timepoint_views.iteritems(), key=itemgetter(0)):
         timepoints.append(timepoint)
         filepaths.append(os.path.join(deconvolvedDir, views["CM00-CM01"]))
       #
-      matrices_fwd = computeForwardTransforms(filepaths, ImageJLoader(), getCalibration,
-                                              csv_dir, exe, modelclass, params, exe_shutdown=False)
-      matrices = [affine.getRowPackedCopy() for affine in asBackwardConcatTransforms(matrices_fwd)]
+      #matrices_fwd = computeForwardTransforms(filepaths, ImageJLoader(), getCalibration,
+      #                                        csv_dir, exe, modelclass, params, exe_shutdown=False)
+      #matrices = [affine.getRowPackedCopy() for affine in asBackwardConcatTransforms(matrices_fwd)]
+      matrices = computeOptimizedTransforms(filepaths, ImageJLoader(), getCalibration,
+                                            csv_dir, exe, modelclass, params, verbose=verbose)
       saveMatrices(matrices_name, matrices, csv_dir)
     finally:
       if not original_exe:

@@ -193,7 +193,7 @@ def checkParams(params, names, values, epsilon):
   return True
 
 
-def loadFeatures(img_filename, directory, params, validateOnly=False, epsilon=0.00001):
+def loadFeatures(img_filename, directory, params, validateOnly=False, epsilon=0.00001, verbose=True):
   """ Attempts to load features from filename + ".features.csv" if it exists,
       returning a list of Constellation features or None.
       params: dictionary of parameters with which features are wanted now,
@@ -213,10 +213,12 @@ def loadFeatures(img_filename, directory, params, validateOnly=False, epsilon=0.
           return True # would return None above, which is falsy
         reader.next() # skip header with column names
         features = [Constellation.fromRow(map(float, row)) for row in reader]
-        syncPrint("Loaded %i features for %s" % (len(features), img_filename))
+        if verbose:
+          syncPrint("Loaded %i features for %s" % (len(features), img_filename))
         return features
     else:
-      syncPrint("No stored features found at %s" % csvpath)
+      if verbose:
+        syncPrint("No stored features found at %s" % csvpath)
       return None
   except:
     syncPrint("Could not load features for %s" % img_filename)
@@ -248,7 +250,7 @@ def savePointMatches(img_filename1, img_filename2, pointmatches, directory, para
     
 
 
-def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.00001):
+def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.00001, verbose=True):
   """ Attempts to load point matches from filename1 + '.' + filename2 + ".pointmatches.csv" if it exists,
       returning a list of PointMatch instances or None.
       params: dictionary of parameters with which pointmatches are wanted now,
@@ -258,7 +260,8 @@ def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.
   try:
     csvpath = os.path.join(directory, basename(img1_filename) + '.' + basename(img2_filename) + ".pointmatches.csv")
     if not os.path.exists(csvpath):
-      syncPrint("No stored pointmatches found at %s" % csvpath)
+      if verbose:
+        syncPrint("No stored pointmatches found at %s" % csvpath)
       return None
     with open(csvpath, 'r') as csvfile:
       reader = csv.reader(csvfile, delimiter=',', quotechar='"')
@@ -267,7 +270,8 @@ def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.
         return None
       reader.next() # skip header with column names
       pointmatches = PointMatches.fromRows(reader).pointmatches
-      syncPrint("Loaded %i pointmatches for %s, %s" % (len(pointmatches), img1_filename, img2_filename))
+      if verbose:
+        syncPrint("Loaded %i pointmatches for %s, %s" % (len(pointmatches), img1_filename, img2_filename))
       return pointmatches
   except:
     syncPrint("Could not load pointmatches for pair %s, %s" % (img1_filename, img2_filename))
@@ -304,14 +308,14 @@ def makeFeatures(img_filename, img_loader, getCalibration, csv_dir, params):
   return features
 
 
-def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, exe, params):
+def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, exe, params, verbose=True):
   """ Attempt to load them from a CSV file, otherwise compute them and save them. """
   names = set(["minPeakValue", "sigmaSmaller", "sigmaLarger", # DoG peak params
                "radius", "min_angle", "max_per_peak",         # Constellation params
                "angle_epsilon", "len_epsilon_sq"])            # pointmatches params
   pm_params = {k: params[k] for k in names}
   # Attempt to load pointmatches from CSV file
-  pointmatches = loadPointMatches(img1_filename, img2_filename, csv_dir, pm_params)
+  pointmatches = loadPointMatches(img1_filename, img2_filename, csv_dir, pm_params, verbose=verbose)
   if pointmatches is not None:
     return pointmatches
 
@@ -321,16 +325,17 @@ def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, c
   names = set(["minPeakValue", "sigmaSmaller", "sigmaLarger",
                 "radius", "min_angle", "max_per_peak"])
   feature_params = {k: params[k] for k in names}
-  csv_features = [loadFeatures(img_filename, csv_dir, feature_params)
+  csv_features = [loadFeatures(img_filename, csv_dir, feature_params, verbose=verbose)
                   for img_filename in img_filenames]
   # If features were loaded, just return them, otherwise compute them (and save them to CSV files)
   futures = [Getter(fs) if fs
              else exe.submit(Task(makeFeatures, img_filename, img_loader, getCalibration, csv_dir, feature_params))
              for fs, img_filename in izip(csv_features, img_filenames)]
   features = [f.get() for f in futures]
-  
-  for img_filename, fs in izip(img_filenames, features):
-    syncPrint("Found %i constellation features in image %s" % (len(fs), basename(img_filename)))
+
+  if verbose:
+    for img_filename, fs in izip(img_filenames, features):
+      syncPrint("Found %i constellation features in image %s" % (len(fs), basename(img_filename)))
 
   # Compare all possible pairs of constellation features: the PointMatches
   pointmatches_nearby = params.get('pointmatches_nearby', 0)
@@ -350,8 +355,9 @@ def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, c
         features[0], features[1],
         params["angle_epsilon"], params["len_epsilon_sq"])
 
-  syncPrint("Found %i point matches between:\n    %s\n    %s" % \
-            (len(pm.pointmatches), basename(img1_filename), basename(img2_filename)))
+  if verbose:
+    syncPrint("Found %i point matches between:\n    %s\n    %s" % \
+              (len(pm.pointmatches), basename(img1_filename), basename(img2_filename)))
 
   # Store as CSV file
   savePointMatches(img1_filename, img2_filename, pm.pointmatches, csv_dir, pm_params)
@@ -359,13 +365,20 @@ def findPointMatches(img1_filename, img2_filename, img_loader, getCalibration, c
   return pm.pointmatches
 
 
-def ensureFeatures(img_filename, img_loader, getCalibration, csv_dir, params):
+def ensureFeatures(img_filename, img_loader, getCalibration, csv_dir, params, verbose=True):
   names = set(["minPeakValue", "sigmaSmaller", "sigmaLarger",
                "radius", "min_angle", "max_per_peak"])
   feature_params = {k: params[k] for k in names}
-  if not loadFeatures(img_filename, csv_dir, feature_params, validateOnly=True):
+  if not loadFeatures(img_filename, csv_dir, feature_params, validateOnly=True, verbose=verbose):
     # Create features from scratch, which overwrites any CSV files
     makeFeatures(img_filename, img_loader, getCalibration, csv_dir, feature_params)
     # TODO: Delete CSV files for pointmatches, if any
 
 
+def ensureFeaturesForAll(img_filenames, img_loader, getCalibration, csv_dir, params, exe, verbose=True):
+  """ Ensure features exist in CSV files, or create them, for each image file. """
+  futures = [exe.submit(Task(ensureFeatures, img_filename, img_loader, getCalibration, csv_dir, params, verbose=verbose))
+             for img_filename in img_filenames]
+  # Wait until all complete
+  for f in futures:
+    f.get()
