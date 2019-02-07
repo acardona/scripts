@@ -51,6 +51,8 @@ def __makeMerge(params):
     # Return nuclei to enable a reduce operation over many sets of peaks
     return nuclei
 
+  return merge
+
 
 def findPeaks(img4D, params):
   """
@@ -67,18 +69,18 @@ def findPeaks(img4D, params):
   peaks = []
 
   # Sum of the first set of frames
-  compute(add([Views.hyperSlice(img4Da, 3, i) for i in xrange(frames)])).into(sum3D)
+  compute(add([Views.hyperSlice(img4D, 3, i) for i in xrange(frames)])).into(sum3D)
   # Extract nuclei from first sum3D
-  peaks.append(doGPeaks(sum3D))
+  peaks.append(doGPeaks(sum3D, params))
 
   # Running sums: subtract the first and add the last
   for i in xrange(frames, img4D.dimension(3), 1):
     compute(add(sub(sum3D,
-                    Views.hyperSlice(img4Da, 3, i - frames)),
-                Views.hyperSlice(img4Da, 3, i))) \
+                    Views.hyperSlice(img4D, 3, i - frames)),
+                Views.hyperSlice(img4D, 3, i))) \
       .into(sum3D)
     # Extract nuclei from sum4D
-    peaks.append(doGPeaks(sum3D))
+    peaks.append(doGPeaks(sum3D, params))
 
   return peaks
 
@@ -115,7 +117,7 @@ def findNuclei(img4D, params, show=True):
   parmams["min_count"]: to consider only somas detected in at least min_count time points, i.e. their coordinates are the average
                         of at least min_count independent detections.
   """
-  peaks = findPeaks(img4Da, params)
+  peaks = findPeaks(img4D, params)
   mergedPeaks = mergePeaks(peaks, params)
   nuclei = filterNuclei(mergedPeaks, params)
 
