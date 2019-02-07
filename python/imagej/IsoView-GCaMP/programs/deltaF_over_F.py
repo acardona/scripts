@@ -34,7 +34,7 @@ calibration = [1.0, 1.0, 1.0]
 
 # Parameters for detecting nuclei
 somaDiameter = 8 * calibration[0]
-minPeakValue = 30 # determined by hand: the bright peaks
+minPeakValue = 100 # determined by hand: the bright peaks
 sigmaSmaller = somaDiameter / 4.0 # in calibrated units: 1/4 soma
 sigmaLarger = somaDiameter / 2.0  # in calibrated units: 1/2 soma
 searchRadius = somaDiameter / 3.0
@@ -69,10 +69,11 @@ def merge(nuclei, peaks2):
     else:
       # Merge peak with nearest found nuclei, which should only be one given the small radius
       peak1 = search.getSampler(0).get()
-      print peak1
-      new_count = nuclei[peak1] + 1
+      count = float(nuclei[peak1])
+      new_count = count + 1
+      fraction = count / new_count
       for d in xrange(3):
-        peak1.setPosition(peak1.getDoublePosition(d) + peak2.getDoublePosition(d) / new_count, d)
+        peak1.setPosition(peak1.getDoublePosition(d) * fraction + peak2.getDoublePosition(d) / new_count, d)
       nuclei[peak1] = new_count
       # Check for more
       if n > 1:
