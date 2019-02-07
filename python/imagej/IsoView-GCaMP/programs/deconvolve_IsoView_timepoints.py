@@ -81,7 +81,8 @@ modelclass = RigidModel3D
 
 deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                     cameraTransformations, fineTransformsPostROICrop,
-                    params, roi, subrange=range(0, 400))
+                    params, roi, camera_groups=((0, 1), (2, 3)),
+                    subrange=range(0, 400))
 
 
 

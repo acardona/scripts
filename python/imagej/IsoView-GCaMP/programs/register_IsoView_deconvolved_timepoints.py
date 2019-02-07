@@ -4,6 +4,8 @@ from lib.isoview import registerDeconvolvedTimePoints
 from mpicbg.models import RigidModel3D, TranslationModel3D
 from net.imglib2.img.display.imagej import ImageJFunctions as IL, ImageJVirtualStackUnsignedShort
 from ij import ImagePlus, CompositeImage
+from lib.util import newFixedThreadPool
+from lib.ui import showStack
 
 # Register deconvolved views across time and show them as a VirtualStack
 
@@ -72,8 +74,4 @@ img4D = registerDeconvolvedTimePoints(targetDir,
 # IL.wrap gets structure wrong: uses channels for slices, and slices for frames
 #IL.wrap(img4D, "0-399").show()
 
-stack = ImageJVirtualStackUnsignedShort.wrap(img4D)
-imp = ImagePlus("0-399", stack)
-imp.setDimensions(1, img4D.dimension(2), img4D.dimension(3))
-comp = CompositeImage(imp, CompositeImage.GRAYSCALE)
-comp.show()
+showStack(img4D, title="0-399")
