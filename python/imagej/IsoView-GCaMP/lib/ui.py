@@ -42,7 +42,6 @@ def showStack(img, title="", proper=True, n_channels=1):
     imp = IL.wrap(img, title)
     imp.show()
     return imp
-  print "io.showStack: ", title
   # Proper sorting of slices, channels and frames
   imp = wrap(img, title=title, n_channels=n_channels)
   comp = CompositeImage(imp, CompositeImage.GRAYSCALE if 1 == n_channels else CompositeImage.COLOR)
