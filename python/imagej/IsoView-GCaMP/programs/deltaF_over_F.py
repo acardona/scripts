@@ -12,7 +12,7 @@ from net.imglib2.img.array import ArrayImgs
 from net.imglib2.algorithm.math.ImgMath import compute, add, sub
 
 n5dir = "/home/albert/shares/cardonalab/Albert/2017-05-10_1018/deconvolved/n5"
-dataset_name = "2017-5-10_1018_0-399"
+dataset_name = "2017-5-10_1018_0-399_X203_Y155_Z65"
 
 # Load entire 4D IsoView deconvolved and registered data set
 img4D = readN5(n5dir, dataset_name)
@@ -20,8 +20,11 @@ img4D = readN5(n5dir, dataset_name)
 # Split CM00+CM01 (odd) from CM02+CM03 (even) into two series
 img4Da = Views.subsample(img4D,
                          [1, 1, 1, 2]) # step
-img4Db = Views.subsample(Views.interval(img4D, [0, 0, 0, 1], Intervals.maxAsLongArray(img4D))
+img4Db = Views.subsample(Views.interval(img4D, [0, 0, 0, 1], Intervals.maxAsLongArray(img4D)),
                          [1, 1, 1, 2]) # step
+
+showStack(img4Da, title="CM00+CM01 registered+deconvolved")
+showStack(img4Db, title="CM02+CM03 registered+deconvolved")
 
 # number of time frames to average
 frames = 5 # equivalent to 3.75 seconds: 0.75 * 5
