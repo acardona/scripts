@@ -22,9 +22,9 @@ except:
   print "*** KLB library is NOT installed ***"
 try:
   from org.janelia.saalfeldlab.n5.imglib2 import N5Utils
+  from org.janelia.saalfeldlab.n5 import N5FSReader, N5FSWriter, GzipCompression
 except:
-  print "*** n5-imglib2 from github.com/saalfeldlab not installed. ***"
-from org.janelia.saalfeldlab.n5 import N5FSReader, N5FSWriter, GzipCompression
+  print "*** n5-imglib2 from github.com/saalfeldlab/n5-imglib2 not installed. ***"
 from com.google.gson import GsonBuilder
 
 
