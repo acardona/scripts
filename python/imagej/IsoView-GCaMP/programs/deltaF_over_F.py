@@ -4,7 +4,7 @@ from lib.io import readN5
 from lib.dogpeaks import createDoG
 from lib.synthetic import virtualPointsRAI
 from lib.ui import showStack
-from net.imglib2 import KDTree
+from net.imglib2 import KDTree, FinalInterval
 from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
 from net.imglib2.view import Views
 from net.imglib2.util import Intervals
@@ -59,16 +59,17 @@ def merge(nuclei, peaks2):
   """
   radius = searchRadius
   peaks1 = nuclei.keys()
-  rns = RadiusNeighborSearchOnKDTree(KDTree(peaks1, peaks1))
+  search = RadiusNeighborSearchOnKDTree(KDTree(peaks1, peaks1))
   for peak2 in peaks2:
-    rns.search(peak2, radius, False)
+    search.search(peak2, radius, False)
     n = search.numNeighbors()
     if 0 == n:
       # New nuclei not ever seen before
       nuclei[peak2] = 1
     else:
       # Merge peak with nearest found nuclei, which should only be one given the small radius
-      peak1 = search.getPosition(0)
+      peak1 = search.getSampler(0).get()
+      print peak1
       new_count = nuclei[peak1] + 1
       for d in xrange(3):
         peak1.setPosition(peak1.getDoublePosition(d) + peak2.getDoublePosition(d) / new_count, d)
@@ -80,33 +81,37 @@ def merge(nuclei, peaks2):
   return nuclei
         
 
-def findMergedPeaks(img4D, frames):
+def findPeaks(img4D, frames):
   """
   img4D: a 4D RandomAccessibleInterval
   frames: the number of consecutive time points to average
           towards detecting peaks with difference of Gaussian.
 
-  Returns the merged peaks: a dictionary of RealPoint vs number of peaks
-                            that were averaged to compute its position.
+  Returns a list of lists of peaks found, one list per time point.
   """
   # Work image: the current sum
-  sum4D = ArrayImgs.unsignedLongs([img4D.dimension(d) for d in [0, 1, 2]])
+  sum3D = ArrayImgs.unsignedLongs([img4D.dimension(d) for d in [0, 1, 2]])
 
   peaks = []
 
   # Sum of the first set of frames
-  compute(add([Views.hyperSlice(img4Da, 3, i) for i in xrange(frames)])).into(sum4D)
-  # Extract nuclei from first sum4D
-  peaks.append(doGPeaks(sum4D))
+  compute(add([Views.hyperSlice(img4Da, 3, i) for i in xrange(frames)])).into(sum3D)
+  # Extract nuclei from first sum3D
+  peaks.append(doGPeaks(sum3D))
 
   # Running sums: subtract the first and add the last
   for i in xrange(frames, img4D.dimension(3), 1):
-    compute(add(sub(sum4D, Views.hyperSlice(img4Da, 3, i - frames)),
+    compute(add(sub(sum3D,
+                    Views.hyperSlice(img4Da, 3, i - frames)),
                 Views.hyperSlice(img4Da, 3, i))) \
-      .into(sum4D)
+      .into(sum3D)
     # Extract nuclei from sum4D
-    peaks.append(doGPeaks(sum4D))
+    peaks.append(doGPeaks(sum3D))
 
+  return peaks
+
+
+def mergePeaks(peaks):
   # Cluster nearby nuclei detections:
   # Make a KDTree from points
   # For every point, measure distance to nearby points up to e.g. half a soma diameter
@@ -127,10 +132,17 @@ def filterNuclei(mergedPeaks, min_count):
 
 
 
-#
-mergedPeaks = filterNuclei(findMergedPeaks(img4Da, frames), min_count)
+# For testing: only first 5 timepoints, 3 frames
+min_count = 2
+frames = 3
+img4Da = Views.interval(img4Da, FinalInterval([img4Da.dimension(0), img4Da.dimension(1), img4Da.dimension(2), 5]))
+
+
+peaks = findPeaks(img4Da, frames)
+mergedPeaks = mergePeaks(peaks)
+nuclei = filterNuclei(mergedPeaks, min_count)
 
 # Show as a 3D volume with spheres
-spheresRAI = virtualPointsRAI(mergedPeaks, somaDiameter / 2.0, img4Da)
+spheresRAI = virtualPointsRAI(nuclei, somaDiameter / 2.0, Views.hyperSlice(img4D, 3, 1))
 imp = showStack(spheresRAI, title="nuclei (min_count=%i)" % min_count)
 
