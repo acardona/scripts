@@ -22,25 +22,37 @@ else:
   img4D = IL.wrap(imp)
 
 
-# The target, single-timepoint image
-img3D = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img3DV))
+def projectLastDimension(img, showEarly=False):
+  """
+  Project the last dimension, e.g. a 4D image becomes a 3D image,
+  using the provided reducing function (e.g. min, max, sum).
+  """
+  last_dimension = img.numDimensions() -1
+  # The collapsed image
+  imgC = ArrayImgs.unsignedShorts([img.dimension(d) for d in xrange(last_dimension)])
 
-last_dimension = img4D.numDimensions() -1
+  if showEarly:
+    showStack(imgC, title="projected") # show it early, will be updated progressively
 
-if img4D.dimension(last_dimension) > 10:
-  # one by one
-  for i in xrange(img4D.dimension(last_dimension)):
-    compute(maximum(img3D, Views.hyperSlice(img4D, last_dimension, i))).into(img3D)
+  if img.dimension(last_dimension) > 10:
+    # one by one
+    print "One by one"
+    for i in xrange(img.dimension(last_dimension)):
+      print i
+      compute(maximum(imgC, Views.hyperSlice(img, last_dimension, i))).into(imgC)
+  else:
+    # Each sample of img3DV is a virtual vector over all time frames at that 3D coordinate:
+    imgV = Views.collapseReal(img)
+    # Reduce each vector to a single scalar, using a Converter
+    # The Converter class
+    reduce_max = makeCompositeToRealConverter(reducer_class=Math,
+                                              reducer_method="max",
+                                              reducer_method_signature="(DD)D")
+    img3DC = convert(imgV, reduce_max.newInstance(), img.randomAccess().get().getClass())
+    ImgUtil.copy(ImgView.wrap(imgV, img.factory()), imgC)
 
-else:
-  # Each sample of img3DV is a virtual vector over all time frames at that 3D coordinate:
-  img3DV = Views.collapseReal(img4D)
-  # Reduce each vector to a single scalar, using a Converter
-  # The Converter class
-  reduce_max = makeCompositeToRealConverter(reducer_class=Math,
-                                            reducer_method="max",
-                                            reducer_method_signature="(DD)D")
-  img3DC = convert(img3DV, reduce_max.newInstance(), img4D.randomAccess().get().getClass())
-  ImgUtil.copy(ImgView.wrap(img3DC, img3D.factory()), img3D)
+  return imgC
 
-showStack(img3D, "projected")
+img3D = projectLastDimension(img4D, showEarly=True)
+
+showStack(img3D, title="projected")
