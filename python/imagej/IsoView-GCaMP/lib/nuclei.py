@@ -126,6 +126,6 @@ def findNuclei(img4D, params, show=True):
   if show:
     spheresRAI = virtualPointsRAI(nuclei, somaDiameter / 2.0, Views.hyperSlice(img4D, 3, 1))
     imp = showStack(spheresRAI, title="nuclei (min_count=%i)" % min_count)
-    return peaks, mergedPeaks, nuclei, imp
+    return peaks, mergedPeaks, nuclei, spheresRAI, imp
   
   return peaks, mergedPeaks, nuclei
