@@ -1,7 +1,7 @@
 from net.imglib2.img.display.imagej import ImageJFunctions as IL, ImageJVirtualStackUnsignedShort
 from net.imglib2.view import Views
 from bdv.util import BdvFunctions, Bdv
-from ij import ImagePlus, CompositeImage
+from ij import ImagePlus, CompositeImage, VirtualStack
 
 
 def wrap(img, title="", n_channels=1):
@@ -54,3 +54,42 @@ def showBDV(img, title="", bdv=None):
     BdvFunctions.show(img, title, Bdv.options().addTo(bdv))
     return bdv
   return BdvFunctions.show(img, title)
+
+
+class StacksAsChannels(VirtualStack):
+  def __init__(self, stacks):
+    super(VirtualStack, self).__init__(stacks[0].getWidth(), stacks[0].getHeight(),
+                                       max(stack.size() for stack in stacks) * len(stacks))
+    self.stacks = stacks # one per channel
+  def getPixels(self, i):
+    return getProcessor(i).getPixels()
+  def getProcessor(self, i):
+    channel = (i-1) % len(self.stacks)
+    z = (i-1) / len(self.stacks)
+    stack = self.stacks[channel]
+    return stack.getProcessor(min(z + 1, stack.size()))
+    
+def showAsComposite(images, title="Composite", show=True):
+  imps = []
+  # Collect all images as ImagePlus, checking that they have the same XY dimensions.
+  # (Z doesn't matter)
+  dimensions = None
+  for img in images:
+    if isinstance(img, ImagePlus):
+      imps.append(img)
+    else:
+      imps.append(IL.wrap(img, ""))
+    if not dimensions:
+      dimensions = [imps[-1].getWidth(), imps[-1].getHeight()]
+    else:
+      if imps[-1].width != dimensions[0] or imps[-1].getHeight() != dimensions[1]:
+        print "asComposite: dimensions mistach."
+        return
+  imp = ImagePlus(title, StacksAsChannels([imp.getStack() for imp in imps]))
+  imp.setDimensions(len(imps), max(imp.getStack().getSize() for imp in imps), 1)
+  comp = CompositeImage(imp, CompositeImage.COMPOSITE)
+  if show:
+    comp.show()
+  print imp.getNChannels(), imp.getNSlices(), imp.getNFrames(), "but imps: ", len(imps)
+  return comp
+  
