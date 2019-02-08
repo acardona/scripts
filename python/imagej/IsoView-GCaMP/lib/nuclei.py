@@ -1,10 +1,12 @@
 from lib.dogpeaks import createDoG
 from lib.synthetic import virtualPointsRAI
 from lib.ui import showStack
+from lib.util import newFixedThreadPool, Task
 from net.imglib2 import KDTree, FinalInterval
 from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
 from net.imglib2.view import Views
 from net.imglib2.img.array import ArrayImgs
+from net.imglib2.util import ImgUtil, Intervals
 from net.imglib2.algorithm.math.ImgMath import compute, add, sub
 
 
@@ -106,7 +108,7 @@ def filterNuclei(mergedPeaks, params):
   return [mergedPeak for mergedPeak, count in mergedPeaks.iteritems() if count > min_count]
 
 
-def findNuclei(img4D, params, show=True):
+def findNucleiOverTime(img4D, params, show=True):
   """
   params["frames"]: number of time frames to average
   params["calibration"]: e.g. [1.0, 1.0, 1.0]
@@ -124,8 +126,98 @@ def findNuclei(img4D, params, show=True):
 
   # Show as a 3D volume with spheres
   if show:
-    spheresRAI = virtualPointsRAI(nuclei, somaDiameter / 2.0, Views.hyperSlice(img4D, 3, 1))
-    imp = showStack(spheresRAI, title="nuclei (min_count=%i)" % min_count)
+    spheresRAI = virtualPointsRAI(nuclei, params["somaDiameter"] / 2.0, Views.hyperSlice(img4D, 3, 1))
+    imp = showStack(spheresRAI, title="nuclei (min_count=%i)" % params["min_count"])
     return peaks, mergedPeaks, nuclei, spheresRAI, imp
   
   return peaks, mergedPeaks, nuclei
+
+
+def maxProjectLastDimension(img, strategy="1by1", chunk_size=0):
+  last_dimension = img.numDimensions() -1
+
+  if "1by1" == strategy:
+    exe = newFixedThreadPool()
+    try:
+      n_threads = exe.getCorePoolSize()
+      imgTs = [ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(imgC)) for i in xrange(n_threads)]
+      
+      def mergeMax(img1, img2, imgT):
+        return compute(maximum(img1, img2)).into(imgT)
+
+      def hyperSlice(index):
+        return Views.hyperSlice(img, last_dimension, index)
+
+      # The first n_threads mergeMax:
+      futures = [exe.submit(Task(mergeMax, hyperSlice(i*2), hyperSlice(i*2 +1), imgTs[i]))
+                 for i in xrange(n_threads)]
+      # As soon as one finishes, merge it with the next available hyperSlice
+      next = n_threads
+      while len(futures) > 0: # i.e. not empty
+        imgT = futures.pop(0).get()
+        if next < img.dimension(last_dimension):
+          futures.append(exe.submit(Task(mergeMax, imgT, hyperSlice(next), imgT)))
+          next += 1
+        else:
+          # Run out of hyperSlices to merge
+          if 0 == len(futures):
+            return imgT # done
+          # Merge imgT to each other until none remain
+          futures.append(exe.submit(Task(mergeMax, imgT, futures.pop(0).get(), imgT)))
+    finally:
+      exe.shutdownNow()
+  else:
+    # By chunks
+    imglibtype =  img.randomAccess().get().getClass()
+    # The Converter class
+    reduce_max = makeCompositeToRealConverter(reducer_class=Math,
+                                              reducer_method="max",
+                                              reducer_method_signature="(DD)D")
+    if chunk_size > 0:
+      # map reduce approach
+      exe = newFixedThreadPool()
+      try:
+        def projectMax(img, minC, maxC, reduce_max):
+          imgA = ArrayImgs.unsignedSorts(Intervals.dimensionsAsLongArray(imgC))
+          ImgUtil.copy(ImgView.wrap(convert(Views.collapseReal(Views.interval(img, minC, maxC)), reduce_max.newInstance(), imglibtype), img.factory()), imgA)
+          return imgA
+        
+        # The min and max coordinates of all dimensions except the last one
+        minCS = [0 for d in xrange(last_dimension)]
+        maxCS = [img.dimension(d) -1 for d in xrange(last_dimension)]
+
+        # Process every chunk in parallel
+        futures = [exe.submit(Task(projectMax, img, minCS + [offset], maxCS + [min(offset + chunk_size, img.dimension(last_dimension)) -1]))
+                   for offset in xrange(0, img.dimension(last_dimension), chunk_size)]
+        
+        return reduce(lambda f1, f2: compute(maximum(f1.get(), f2.get())).into(f1.get(), futures))
+      finally:
+        exe.shutdownNow()
+    else:
+      # One chunk: all at once
+      # Each sample of img3DV is a virtual vector over all time frames at that 3D coordinate
+      # Reduce each vector to a single scalar, using a Converter
+      img3DC = convert(Views.collapseReal(img), reduce_max.newInstance(), imglibtype)
+      imgA = ArrayImgs.unsignedShorts([img.dimension(d) for d in xrange(last_dimension)])
+      ImgUtil.copy(ImgView.wrap(imgV, img.factory()), imgA)
+      return imgA
+
+
+def findNucleiByMaxProjection(img4D, params, img3D=None, projection_strategy="1by1", show=True):
+  """
+  img4D: the 4D series to max-project and then detect nuclei in.
+  params: for difference of Gaussian to detect somas.
+  img3D: optional, provide a ready-made max projection.
+  projection_strategy: defaults to "1by1". See maxProjectLastDimension.
+  show: defaults to True, and if so opens a 3D volume showing the nuclei as white spheres.
+  """
+  if not img3D:
+    img3D = maxProjectLastDimension(img4D, strategy=projection_strategy)
+  
+  peaks = doGPeaks(img3D, params)
+  if show:
+    spheresRAI = virtualPointsRAI(peaks, params["somaDiameter"] / 2.0, img3D)
+    imp = showStack(spheresRAI, title="nuclei by max projection")
+    return peaks, spheresRAI, imp
+
+
