@@ -102,6 +102,7 @@ def filterNuclei(mergedPeaks, params):
 
   Returns the list of accepted mergedPeaks.
   """
+  min_count = params["min_count"]
   return [mergedPeak for mergedPeak, count in mergedPeaks.iteritems() if count > min_count]
 
 
