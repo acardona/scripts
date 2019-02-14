@@ -4,6 +4,7 @@ sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.synthetic import virtualPointsRAI
 from ij3d import Image3DUniverse, Content, ContentCreator
 from customnode import CustomMultiMesh, MeshMaker, CustomTriangleMesh
+from org.scijava.vecmath import Color3f
 from itertools import islice, imap, izip
 from net.imglib2 import FinalInterval, RealPoint
 from net.imglib2.view import Views
@@ -58,16 +59,18 @@ def withIcospheres(time_window=None):
     # Template icosahedron
     ico = MeshMaker.createIcosahedron(2, radius)
     # Share meshes across all timepoints
-    icos = [MeshMaker.copyTranslated(ico, peak.dimension(0), peak.dimension(1) , peak.dimension(2)) for peak in peaks]
+    icos = [MeshMaker.copyTranslated(ico, peak.getFloatPosition(0), peak.getFloatPosition(1) , peak.getFloatPosition(2)) for peak in peaks]
     #
     univ = Image3DUniverse(512, 512)
-    univ.show()
     #
+    #rows = reader if time_window is None else islice(reader, time_window[0], time_window[1])
     for row in reader:
       meshes = [CustomTriangleMesh(mesh, Color3f(v, v, v), 0)
                 for v, mesh in izip(imap(lambda val: (min(max(val, minimum), maximum) / span), islice(reader, 1, None)), icos)]
+      print row[0]
       content = ContentCreator.createContent(CustomMultiMesh(meshes), str(row[0]), int(row[0])) # sets the timepoint
       univ.addContentLater(content)
+    univ.show()
 
 
-
+withIcospheres(time_window=(0, 10))
