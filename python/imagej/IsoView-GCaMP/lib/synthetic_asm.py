@@ -279,4 +279,4 @@ def makeNativeRadiusBoundsEach(classloader=None):
 
   if not classloader:
     classloader = CustomClassLoader()
-  return classloader.defineClass("my/RadiusBoundsEach", cw.toByteArray()))
+  return classloader.defineClass("my/RadiusBoundsEach", cw.toByteArray())

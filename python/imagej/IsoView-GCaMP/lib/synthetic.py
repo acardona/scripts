@@ -2,7 +2,7 @@ from net.imglib2.view import Views
 from net.imglib2 import RealPoint, RealRandomAccess, KDTree, RealRandomAccessible
 from net.imglib2.neighborsearch import NearestNeighborSearchOnKDTree
 from net.imglib2.type.numeric.integer import UnsignedByteType
-from synthetic_asm import makeNativeRadiusBounds
+from synthetic_asm import makeNativeRadiusBounds, makeNativeRadiusBoundsEach
 
 RadiusBounds = makeNativeRadiusBounds()
 RadiusBoundsEach = makeNativeRadiusBoundsEach()
@@ -28,7 +28,7 @@ class RadiusBoundsRealRandomAccessible(RealRandomAccessible):
   """ The RealRandomAccessible that wraps the RadiusBounds in space, unbounded.
       NOTE: partial implementation, unneeded methods were left unimplemented.
 
-      When inside is None, a RadiusBoundsEach is used.
+      When inside is a list of values, a RadiusBoundsEach is used.
   """
   def __init__(self, n_dimensions, kdtree, radius, inside, outside):
     self.n_dimensions = n_dimensions
@@ -37,10 +37,10 @@ class RadiusBoundsRealRandomAccessible(RealRandomAccessible):
     self.inside = inside
     self.outside = outside
   def realRandomAccess(self):
-    if inside:
-      return RadiusBounds(self.n_dimensions, self.kdtree, self.radius, self.inside, self.outside)
-    else:
+    if isinstance(self.inside, list):
       return RadiusBoundsEach(self.n_dimensions, self.kdtree, self.radius, self.outside)
+    else:
+      return RadiusBounds(self.n_dimensions, self.kdtree, self.radius, self.inside, self.outside)
   def numDimensions(self):
     return self.n_dimensions
 
@@ -60,7 +60,6 @@ def virtualPointsRAI(points, radius, interval,
   with its data created dynamically from a KDTree on the points and a NearestNeighborSearchOnKDTree,
   using the inside and outside values.
   """
-
   kdtree = KDTree(inside if isinstance(inside, list) else [inside] * len(points), points)
   
   # An unbounded view of the RadiusBounds that can be iterated in a grid, with integers
