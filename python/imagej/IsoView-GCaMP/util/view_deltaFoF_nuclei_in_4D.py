@@ -21,9 +21,10 @@ interval = FinalInterval([406, 465, 325])
 minimum = -1.0 # actual min: -5.0
 maximum = 2.0 # actual max: 9.4
 span = maximum - minimum
+range_max = 255 # should be 255
 
 def to8bitRange(values):
-  return [UnsignedByteType(int((min(max(val, minimum), maximum) / span) * 255)) for val in values]
+  return [UnsignedByteType(int((min(max(val, minimum), maximum) / span) * range_max)) for val in values]
 
 with open(os.path.join(baseDir, csvFilename), 'r') as csvfile:
   reader = csv.reader(csvfile, delimiter=',', quotechar='"')
