@@ -5,6 +5,7 @@ from net.imglib2.type.numeric.integer import UnsignedByteType
 from synthetic_asm import makeNativeRadiusBounds
 
 RadiusBounds = makeNativeRadiusBounds()
+RadiusBoundsEach = makeNativeRadiusBoundsEach()
 
 #class RadiusBounds(RealPoint, RealRandomAccess):
 #  """ The definition of a point with a diameter in space. """
@@ -26,6 +27,8 @@ RadiusBounds = makeNativeRadiusBounds()
 class RadiusBoundsRealRandomAccessible(RealRandomAccessible):
   """ The RealRandomAccessible that wraps the RadiusBounds in space, unbounded.
       NOTE: partial implementation, unneeded methods were left unimplemented.
+
+      When inside is None, a RadiusBoundsEach is used.
   """
   def __init__(self, n_dimensions, kdtree, radius, inside, outside):
     self.n_dimensions = n_dimensions
@@ -34,7 +37,10 @@ class RadiusBoundsRealRandomAccessible(RealRandomAccessible):
     self.inside = inside
     self.outside = outside
   def realRandomAccess(self):
-    return RadiusBounds(self.n_dimensions, self.kdtree, self.radius, self.inside, self.outside)
+    if inside:
+      return RadiusBounds(self.n_dimensions, self.kdtree, self.radius, self.inside, self.outside)
+    else:
+      return RadiusBoundsEach(self.n_dimensions, self.kdtree, self.radius, self.outside)
   def numDimensions(self):
     return self.n_dimensions
 
@@ -47,16 +53,19 @@ def virtualPointsRAI(points, radius, interval,
   radius: how "fat" to draw each point.
   interval: the interval within which to define the returned RandomAccessibleInterval.
   inside: defaults to UnsignedByteType(255), meaning "white".
+          Can also be a list index-paired with points, providing a value for each point.
   outside: defaults to UnsignedByteType(0), meaning "black".
   
   Returns a RandomAccessibleInterval showing each point within the interval painted within radius,
   with its data created dynamically from a KDTree on the points and a NearestNeighborSearchOnKDTree,
   using the inside and outside values.
   """
-  kdtree = KDTree([inside] * len(points), points)
+
+  kdtree = KDTree(inside if isinstance(inside, list) else [inside] * len(points), points)
   
   # An unbounded view of the RadiusBounds that can be iterated in a grid, with integers
   raster = Views.raster(RadiusBoundsRealRandomAccessible(points[0].numDimensions(),
                                                          kdtree, radius, inside, outside))
 
   return Views.interval(raster, interval)
+  
