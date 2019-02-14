@@ -1,7 +1,9 @@
+import os
 from lib.dogpeaks import createDoG
 from lib.synthetic import virtualPointsRAI
 from lib.ui import showStack
 from lib.util import newFixedThreadPool, Task
+from lib.io import writeZip, ImageJLoader
 from net.imglib2 import KDTree, FinalInterval
 from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
 from net.imglib2.view import Views
@@ -140,7 +142,7 @@ def maxProjectLastDimension(img, strategy="1by1", chunk_size=0):
     exe = newFixedThreadPool()
     try:
       n_threads = exe.getCorePoolSize()
-      imgTs = [ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(imgC)) for i in xrange(n_threads)]
+      imgTs = [ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img)) for i in xrange(n_threads)]
       
       def mergeMax(img1, img2, imgT):
         return compute(maximum(img1, img2)).into(imgT)
@@ -203,7 +205,7 @@ def maxProjectLastDimension(img, strategy="1by1", chunk_size=0):
       return imgA
 
 
-def findNucleiByMaxProjection(img4D, params, img3D=None, projection_strategy="1by1", show=True):
+def findNucleiByMaxProjection(img4D, params, img3D_filepath, projection_strategy="1by1", show=True):
   """
   img4D: the 4D series to max-project and then detect nuclei in.
   params: for difference of Gaussian to detect somas.
@@ -211,13 +213,21 @@ def findNucleiByMaxProjection(img4D, params, img3D=None, projection_strategy="1b
   projection_strategy: defaults to "1by1". See maxProjectLastDimension.
   show: defaults to True, and if so opens a 3D volume showing the nuclei as white spheres.
   """
-  if not img3D:
+  if not os.path.exists(img3D_filepath):
+    print "Will max project 4D to 3D"
     img3D = maxProjectLastDimension(img4D, strategy=projection_strategy)
+    writeZip(img3D, img3D_filepath, title=os.path.basename(img3D_filepath))
+  else:
+    print "Loading max projection"
+    img3D = ImageJLoader().get(img3D_filepath)
   
   peaks = doGPeaks(img3D, params)
+  
   if show:
     spheresRAI = virtualPointsRAI(peaks, params["somaDiameter"] / 2.0, img3D)
     imp = showStack(spheresRAI, title="nuclei by max projection")
-    return peaks, spheresRAI, imp
+    return img3D, peaks, spheresRAI, imp
+  else:
+    return img3D, peaks
 
 
