@@ -46,11 +46,7 @@ Then open a terminal and type:
 
 ```
 $ git clone https://github.com/acardona/scripts.git
-$ cd scripts/python/imagej/IsoView-GCaMP/
-$ echo `pwd` >> config.txt
 ```
-
-The last command will create a configuration file (`config.txt`) in the right place, so that the programs will know at run time where to find the library.
 
 
 ## Running the programs
