@@ -1,4 +1,3 @@
-from __future__ import with_statement
 from org.janelia.simview.klb import KLB
 from net.imglib2.view import Views
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
@@ -7,8 +6,7 @@ from net.imglib2.realtransform import RealViews, AffineTransform3D, Translation3
 import os, sys
 from os.path import basename
 from bdv.util import BdvFunctions, Bdv
-with open(os.path.join(os.path.dirname(os.path.dirname(sys.argv[0])), "config.txt")) as fd:
-  sys.path.append(fd.read().strip())
+sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0]))
 from lib.registration import computeForwardTransforms, asBackwardConcatTransforms, viewTransformed, saveMatrices, loadMatrices
 from lib.util import newFixedThreadPool, Task
 from lib.io import readFloats

@@ -1,7 +1,5 @@
-from __future__ import with_statement
 import sys, os
-with open(os.path.join(os.path.dirname(os.path.dirname(sys.argv[0])), "config.txt")) as fd:
-  sys.path.append(fd.read().strip())
+sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0]))
 from lib.isoview import registerDeconvolvedTimePoints
 from mpicbg.models import RigidModel3D, TranslationModel3D
 from net.imglib2.img.display.imagej import ImageJFunctions as IL, ImageJVirtualStackUnsignedShort
