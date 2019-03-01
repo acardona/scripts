@@ -1,6 +1,7 @@
 from __future__ import with_statement
 import sys, os, csv
-sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
+with open(os.path.join(os.path.dirname(os.path.dirname(sys.argv[0])), "config.txt")) as fd:
+  sys.path.append(fd.read().strip())
 from lib.io import readN5
 from lib.dogpeaks import createDoG
 from lib.synthetic import virtualPointsRAI
