@@ -116,12 +116,10 @@ class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
       print sys.exc_info()
       return False
     #self.imp.updateAndDraw() # fails for virtual stacks
-    # TODO find a solution that works for ImgLib2's virtual stacks
-    # Hack:
-    index = self.imp.getSlice()
-    other = index + 1 if index < self.imp.getNSlices() else index - 1
-    self.imp.setPosition(self.imp.getChannel(), other, self.imp.getFrame())
-    self.imp.setPosition(self.imp.getChannel(), index, self.imp.getFrame())
+    # A solution that works for virtual stacks, by Wayne Rasband:
+    minimum, maximum = self.imp.getDisplayRangeMin(), self.imp.getDisplayRangeMax()
+    self.imp.setProcessor(self.imp.getStack().getProcessor(self.imp.getCurrentSlice()))
+    self.imp.setDisplayRange(minimum, maximum)
     return True
 
   def parse(self):
