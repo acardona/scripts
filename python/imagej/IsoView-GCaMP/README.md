@@ -65,7 +65,13 @@ Here, instead I prefer to coarsely register all 4 volumes in the following way, 
 
 In this script, first we load all 4 3D volumes, then define an affine transform for each (as a matrix) that implements the expected rotation (plus appropriate translation that goes with it), and then load all 4 transformed views in an ImageJ hyperstack, where each channel is one of the 4 cameras. For simplicity, the first camera (CM00) has an identity transform. (The transforms are virtual thanks to [ImgLib2], no duplicated images are generated.)
 
-By browsing the 4D stack across its "channels" and Z slices, you will notice that, despite the rotation, there are still a number of translations pending. With ImageJ's ROI tools, you can quite precisely measure the translations in X,Y, and Z manually, and then type in the numbers into the matrices (in the script file itself) and re-run the script.
+By browsing the 4D stack across its "channels" and Z slices, you will notice that, despite the rotation being roughly right, there are still a number of translations pending.
+
+A window will open with 3 rows, showing X, Y, Z text fields to edit the translation values of CM01, CM02, CM03 relative to CM00. Either type in a number and push return, or use the scroll wheel to adjust the values in each field.
+
+This is how I do it: draw a rectangular ROI over a prominent feature, say the thickness of the nerve cord, in CM00 (the first frame). Then use the lower scroller in the image window to go to the CM01 (the second frame). Now adjust the X, Y position until the same recognized feature falls within the ROI.
+
+Alternatively, run the script in "persistence" mode (it's a checkbox near the "Run" button in the [Script Editor] that must be ticked prior to pushing "Run"), and then you have access to the affine transforms `aff1`, `aff2`, and `aff3` to edit them directly: they are [AffineTransform3D] instances, with methods like e.g. `setTranslation(double[])` that you can call like e.g. `aff1.setTranslation([0.0, 10.5, 0.0])` to adjust the translation in the Y axis.
 
 
 ### Step 2: define a ROI for cropping
@@ -102,4 +108,5 @@ With these coarse transformation matrices, and the ROI, we now proceed to refine
 [custom features]: https://www.ini.uzh.ch/~acardona/fiji-tutorial/#custom-features
 [IsoView 4-camera lightsheet microscope]: https://www.nature.com/articles/nmeth.3632
 [BigDataViewer]: https://imagej.net/BigDataViewer
+[AffineTransform3D]: https://github.com/imglib/imglib2-realtransform/blob/master/src/main/java/net/imglib2/realtransform/AffineTransform3D.java
 
