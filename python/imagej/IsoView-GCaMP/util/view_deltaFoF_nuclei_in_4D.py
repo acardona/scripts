@@ -63,10 +63,10 @@ def withIcospheres(time_window=None):
     #
     univ = Image3DUniverse(512, 512)
     #
-    #rows = reader if time_window is None else islice(reader, time_window[0], time_window[1])
-    for row in reader:
+    rows = reader if time_window is None else islice(reader, time_window[0], time_window[1])
+    for row in rows:
       meshes = [CustomTriangleMesh(mesh, Color3f(v, v, v), 0)
-                for v, mesh in izip(imap(lambda val: (min(max(val, minimum), maximum) / span), islice(reader, 1, None)), icos)]
+                for v, mesh in izip(imap(lambda val: min(max(val, minimum), maximum) / span, islice(row, 1, None)), icos)]
       print row[0]
       content = ContentCreator.createContent(CustomMultiMesh(meshes), str(row[0]), int(row[0])) # sets the timepoint
       univ.addContentLater(content)
