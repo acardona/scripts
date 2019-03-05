@@ -2,14 +2,14 @@ from __future__ import with_statement
 import sys, os, csv
 from org.janelia.simview.klb import KLB
 from operator import itemgetter
-sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP")
+sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP")
 from lib.util import newFixedThreadPool, Task, syncPrint
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.util import Intervals
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
-srcDir = "/home/albert/shares/keller-s8/SV4/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
-tgtDir = "/home/albert/Desktop/deltaFoF/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
+srcDir = "/mnt/keller-s8/SV4/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
+tgtDir = "/groups/cardona/cardonalab/Albert/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
 
 if not os.path.exists(tgtDir):
   os.makedirs(tgtDir)
@@ -32,26 +32,30 @@ if os.path.exists(csv_sums_path):
   with open(csv_sums_path, 'r') as csvfile:
     reader = csv.reader(csvfile, delimiter=',', quotechar="\"")
     header = reader.next() # skip
-    sums = [int(time), float(s) for time, s in reader]
+    sums = [(int(time), float(s)) for time, s in reader]
 else:
   # Compute:
-  exe = newFixedThreadPool(-2)
+  exe = newFixedThreadPool(-1)
   try:
-    def computeSum(filename):
+    def computeSum(filename, aimg=None):
       syncPrint(filename)
-      img = klb.readFull(os.path.join(srcDir, filename))
-      return sum(img.getImg().update(None).getCurrentStorageArray())
+      img = aimg if aimg is not None else klb.readFull(os.path.join(srcDir, filename))
+      try:
+        return filename, sum(img.getImg().update(None).getCurrentStorageArray())
+      except:
+        syncPrint("Failed to compute sum: retry")
+        return computeSum(filename, aimg=img)
 
     futures = [exe.submit(Task(computeSum, filename)) for filename in TMs]
 
-    sums = [(i, f.get()) for i, f in enumerate(futures)]
-
     # Store to disk as a CSV file
     with open(os.path.join(tgtDir, "sums.csv"), 'w') as csvfile:
-      w = csv.writer(csvfile, delimiter=",", quoting=csv.QUOTE_NONNUMERIC))
-      w.writerow(["time", "sum"])
-      for i, s in enumerate(sums):
-        w.writerow([i, s])
+      w = csv.writer(csvfile, delimiter=",", quoting=csv.QUOTE_NONNUMERIC)
+      w.writerow(["filename", "sum"])
+      for i, future in enumerate(futures):
+        filename, s = future.get()
+        w.writerow([filename, s])
+        sums.append((i, s))
   finally:
     exe.shutdown()
 
