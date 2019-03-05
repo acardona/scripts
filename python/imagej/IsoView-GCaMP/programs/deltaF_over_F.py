@@ -1,6 +1,6 @@
 from __future__ import with_statement
 import sys, os, csv
-sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
+sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0]))
 from lib.io import readN5
 from lib.dogpeaks import createDoG
 from lib.synthetic import virtualPointsRAI

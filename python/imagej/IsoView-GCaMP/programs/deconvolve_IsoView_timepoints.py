@@ -1,5 +1,5 @@
-import sys
-sys.path.append("//home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0]))
 from lib.isoview import deconvolveTimePoints
 from mpicbg.models import RigidModel3D, TranslationModel3D
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
