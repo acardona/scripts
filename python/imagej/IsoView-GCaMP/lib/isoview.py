@@ -19,6 +19,7 @@ from registration import computeOptimizedTransforms, saveMatrices, loadMatrices,
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 from converter import convert, createConverter
 from collections import defaultdict
+from java.lang import Runtime
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
@@ -195,6 +196,8 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
       If the deconvolved images exist, it will neither compute it nor write it."""
   tm_dirname = filepaths[0][filepaths[0].rfind("_TM") + 1:filepaths[0].rfind("_CM")]
 
+  n_threads = max(1, Runtime.getRuntime().availableProcessors() -1)
+
   def prepare(index):
     # Prepare the img for deconvolution:
     # 0. Transform in one step.
@@ -205,7 +208,8 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     imgP = prepareImgForDeconvolution(img, transforms[index], target_interval) # returns of FloatType
     # Copy transformed view into ArrayImg for best performance in deconvolution
     imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(imgP))
-    ImgUtil.copy(ImgView.wrap(imgP, imgA.factory()), imgA)
+    #ImgUtil.copy(ImgView.wrap(imgP, imgA.factory()), imgA)
+    ImgUtil.copy(imgP, imgA, n_threads / 2) # parallel copying
     syncPrint("--Completed preparing %s CM0%i for deconvolution" % (tm_dirname, index))
     imgP = None
     img = None

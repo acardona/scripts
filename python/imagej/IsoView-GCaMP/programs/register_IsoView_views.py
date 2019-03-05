@@ -3,11 +3,10 @@ from net.imglib2.view import Views
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2.realtransform import RealViews, AffineTransform3D, Translation3D
-import os
+import os, sys
 from os.path import basename
 from bdv.util import BdvFunctions, Bdv
-import sys
-sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
+sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0]))
 from lib.registration import computeForwardTransforms, asBackwardConcatTransforms, viewTransformed, saveMatrices, loadMatrices
 from lib.util import newFixedThreadPool, Task
 from lib.io import readFloats

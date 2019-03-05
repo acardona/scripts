@@ -1,5 +1,5 @@
-from org.objectweb.asm import ClassWriter, Opcodes, Type
-from java.lang import Object, Class
+from org.objectweb.asm import ClassWriter, Opcodes, Type, Label
+from java.lang import Object, Class, Math
 from net.imglib2.converter.readwrite import SamplerConverter
 from net.imglib2 import Sampler, RandomAccessibleInterval
 from net.imglib2.converter import Converter, Converters
@@ -349,3 +349,85 @@ def convert(rai, converter, toType):
   # which is not compatible with ImageJFunctions.wrap methods.
   m = Converters.getDeclaredMethod("convert", [RandomAccessibleInterval, Converter, ImgLib2Type])
   return m.invoke(None, rai, converter, toType.newInstance())
+
+
+def makeCompositeToRealConverter(reducer_class=Math,
+                                 reducer_method="max",
+                                 reducer_method_signature="(DD)D",
+                                 classloader=None):
+  """
+  Takes a RealComposite as input and converts it into a RealType,
+  by reducing the list of RealType in RealComposite using a specified function.
+  reducer_class: e.g. Math
+  reducer_method: e.g. "max", a method that takes two doubles and returns one.
+  reducer_method_signature: e.g. "(DD)D", two double arguments, returning a double.
+  """
+  class_name = "my/CompositeToRealConverterVia_" + reducer_class.getName().replace('.', '_') + '_' + reducer_method
+  # Turn e.g. class Math into "java/lang/Math":
+  reducer_class_string = reducer_class.getName().replace('.', '/')
+
+  cw = ClassWriter(0)
+
+  cw.visit(52, Opcodes.ACC_PUBLIC + Opcodes.ACC_SUPER, class_name, "<S::Lnet/imglib2/type/numeric/RealType<TS;>;T::Lnet/imglib2/type/numeric/RealType<TT;>;>Ljava/lang/Object;Lnet/imglib2/converter/Converter<Lnet/imglib2/view/composite/RealComposite<TS;>;TT;>;", "java/lang/Object", ["net/imglib2/converter/Converter"])
+
+
+  mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", None, None)
+  mv.visitCode()
+  mv.visitVarInsn(Opcodes.ALOAD, 0)
+  mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", False)
+  mv.visitInsn(Opcodes.RETURN)
+  mv.visitMaxs(1, 1)
+  mv.visitEnd()
+
+
+  mv = cw.visitMethod(Opcodes.ACC_PUBLIC + Opcodes.ACC_FINAL, "convert", "(Lnet/imglib2/view/composite/RealComposite;Lnet/imglib2/type/numeric/RealType;)V", "(Lnet/imglib2/view/composite/RealComposite<TS;>;TT;)V", None)
+  mv.visitCode()
+  mv.visitVarInsn(Opcodes.ALOAD, 2)
+  mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "net/imglib2/type/numeric/RealType", "setZero", "()V", True);
+  mv.visitVarInsn(Opcodes.ALOAD, 1)
+  mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "net/imglib2/view/composite/RealComposite", "iterator", "()Ljava/util/Iterator;", False)
+  mv.visitVarInsn(Opcodes.ASTORE, 4)
+  l0 = Label()
+  mv.visitJumpInsn(Opcodes.GOTO, l0)
+  l1 = Label()
+  mv.visitLabel(l1)
+  mv.visitFrame(Opcodes.F_FULL, 5, [class_name, "net/imglib2/view/composite/RealComposite", "net/imglib2/type/numeric/RealType", Opcodes.TOP, "java/util/Iterator"], 0, [])
+  mv.visitVarInsn(Opcodes.ALOAD, 4)
+  mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "next", "()Ljava/lang/Object;", True)
+  mv.visitTypeInsn(Opcodes.CHECKCAST, "net/imglib2/type/numeric/RealType")
+  mv.visitVarInsn(Opcodes.ASTORE, 3)
+  mv.visitVarInsn(Opcodes.ALOAD, 2)
+  mv.visitVarInsn(Opcodes.ALOAD, 3)
+  mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "net/imglib2/type/numeric/RealType", "getRealDouble", "()D", True)
+  mv.visitVarInsn(Opcodes.ALOAD, 2)
+  mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "net/imglib2/type/numeric/RealType", "getRealDouble", "()D", True)
+  mv.visitMethodInsn(Opcodes.INVOKESTATIC, reducer_class_string, reducer_method, reducer_method_signature, False)
+  mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "net/imglib2/type/numeric/RealType", "setReal", "(D)V", True)
+  mv.visitLabel(l0)
+  mv.visitFrame(Opcodes.F_SAME, 0, None, 0, None)
+  mv.visitVarInsn(Opcodes.ALOAD, 4)
+  mv.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/util/Iterator", "hasNext", "()Z", True)
+  mv.visitJumpInsn(Opcodes.IFNE, l1)
+  mv.visitInsn(Opcodes.RETURN)
+  mv.visitMaxs(5, 5)
+  mv.visitEnd()
+
+
+  mv = cw.visitMethod(Opcodes.ACC_PUBLIC + Opcodes.ACC_BRIDGE + Opcodes.ACC_SYNTHETIC, "convert", "(Ljava/lang/Object;Ljava/lang/Object;)V", None, None)
+  mv.visitCode()
+  mv.visitVarInsn(Opcodes.ALOAD, 0)
+  mv.visitVarInsn(Opcodes.ALOAD, 1)
+  mv.visitTypeInsn(Opcodes.CHECKCAST, "net/imglib2/view/composite/RealComposite")
+  mv.visitVarInsn(Opcodes.ALOAD, 2)
+  mv.visitTypeInsn(Opcodes.CHECKCAST, "net/imglib2/type/numeric/RealType")
+  mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, class_name, "convert", "(Lnet/imglib2/view/composite/RealComposite;Lnet/imglib2/type/numeric/RealType;)V", False)
+  mv.visitInsn(Opcodes.RETURN)
+  mv.visitMaxs(3, 3)
+  mv.visitEnd()
+
+  cw.visitEnd()
+
+  if not classloader:
+    classloader = CustomClassLoader()
+  return classloader.defineClass(class_name, cw.toByteArray())
+

@@ -4,6 +4,7 @@ from java.util.concurrent.atomic import AtomicInteger
 from java.lang.reflect.Array import newInstance as newArray
 from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character, System
 from net.imglib2.realtransform import AffineTransform3D
+from net.imglib2.view import Views
 
 
 @make_synchronized
@@ -145,3 +146,8 @@ def affine3D(matrix):
   aff = AffineTransform3D()
   aff.set(*matrix)
   return aff
+
+
+def cropView(img, minCoords, maxCoords):
+  return Views.zeroMin(Views.interval(img, minCoords, maxCoords))
+
