@@ -7,6 +7,8 @@ from lib.util import newFixedThreadPool, Task, syncPrint
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.util import Intervals
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
+from java.lang import Runtime, Thread
+from net.imglib2.algorithm.math.ImgMath import compute, maximum
 
 srcDir = "/mnt/keller-s8/SV4/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
 tgtDir = "/groups/cardona/cardonalab/Albert/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
@@ -32,7 +34,7 @@ if os.path.exists(csv_sums_path):
   with open(csv_sums_path, 'r') as csvfile:
     reader = csv.reader(csvfile, delimiter=',', quotechar="\"")
     header = reader.next() # skip
-    sums = [(int(time), float(s)) for time, s in reader]
+    sums = [(filename, float(s)) for i, (filename, s) in enumerate(reader)]
 else:
   # Compute:
   exe = newFixedThreadPool(-1)
@@ -55,7 +57,7 @@ else:
       for i, future in enumerate(futures):
         filename, s = future.get()
         w.writerow([filename, s])
-        sums.append((i, s))
+        sums.append((filename, s))
   finally:
     exe.shutdown()
 
@@ -63,47 +65,47 @@ else:
 # Take the median
 sums.sort(key=itemgetter(1))
 median = sums[len(sums)/2][1]
-maximum = sums[-1][1] # last
-fraction = median / maximum
-threshold = 0.7 # of the maximum value
+max_sum = sums[-1][1] # last
 
-print median, maximum, fraction
+print median, max_sum
 
-"""
-filtered = []
+# Turns out the maximum is infinity.
+# Therefore, discard all infinity values, and also any above 1.5 * median
+threshold = median * 1.5
 
-for index, pixel_sum in sums:
-  if pixel_sum / maximum < threshold:
-    filtered.append(TMs[index])
+filtered = [filename for filename, pixel_sum in sums if pixel_sum < threshold]
 
-exe = newFixedThreadPool(14)
-try:
-  def maximumFn(filenames):
-    first = klb.readFull(os.path.join(srcDir, filenames[0]))
-    r = ArrayImgs.floats(Intervals.dimensionsAsLongArray(first))
-    compute(maximum(first, maximum([klb.readFull(os.path.join(srcDir, filename))
-                                    for filename in filenames[1:]]))).into(r)
-    return r
+class Max(Thread):
+  def __init__(self, dimensions, filenames):
+    super(Thread, self).__init__()
+    self.filenames = filenames
+    self.aimg = ArrayImgs.floats(dimensions)
+    self.klb = KLB.newInstance()
+  def run(self):
+    for filename in self.filenames:
+      img = self.klb.readFull(os.path.join(srcDir, filename))
+      compute(maximum(self.aimg, img)).into(self.aimg)
 
-  chunk_size = 10
-  futures = []
-  max_projection = None
+n_threads = Runtime.getRuntime().availableProcessors()
+threads = []
+chunk_size = len(filtered) / n_threads
+aimgs = []
+first = klb.readFull(os.path.join(srcDir, filtered[0]))
+dimensions = Intervals.dimensionsAsLongArray(first)
 
-  for chunk in (filtered[i:i+chunk_size] for i in xrange(0, len(TMs), chunk_size)):
-    futures.append(exe.submit(Task(maximumFn, chunk)))
-    if len(futures) == 14:
-      if max_projection is None:
-        first = futures[0].get()
-        max_projection = ArrayImgs.floats(Intervals.dimensionsAsLongArray(first))
-      # Compute max for existing images
-      compute(maximum(max_projection, maximum([f.get() for f in futures]))).into(max_projection)
-      futures = []
+for i in xrange(n_threads):
+  m = Max(dimensions, filtered[i * chunk_size : (i +1) * chunk_size])
+  m.start()
+  threads.append(m)
 
-  IL.wrap(max_projection, "max projection").show()
-  
-finally:
-  exe.shutdown()
-"""
+# Await completion of all
+for m in threads:
+  m.join()
+
+# Merge all results into a single maximum projection
+max_projection = compute(maximum([m.aimg for m in threads])).into(ArrayImgs.floats(dimensions))
+
+IL.wrap(max_projection, "max projection").show()
 
 
 
