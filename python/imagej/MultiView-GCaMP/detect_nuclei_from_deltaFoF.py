@@ -49,7 +49,7 @@ else:
     # Store to disk as a CSV file
     with open(os.path.join(tgtDir, "sums.csv"), 'w') as csvfile:
       w = csv.writer(csvfile, delimiter=",", quoting=csv.QUOTE_NONNUMERIC))
-      w.writerow(["time", "sum"])
+      w.writerow(["time", "sum"]) # header
       for i, s in enumerate(sums):
         w.writerow([i, s])
   finally:
