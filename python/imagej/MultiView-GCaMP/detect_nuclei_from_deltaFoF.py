@@ -221,7 +221,7 @@ try:
     # Each time point
     folders = (foldername for foldername in sorted(os.listdir(srcDir)) if foldername.startswith("TM"))
     futures = []
-    for foldername in list(folders)[:11]: # Assumes there are only TM\d+ folders
+    for foldername in folders: # Assumes there are only TM\d+ folders
       print foldername
       index = foldername[2:]
       filename = os.path.join(foldername, "SPM00_TM%s_CM00_CM01_CHN00.weightFused.TimeRegistration.klb" % index)
