@@ -76,6 +76,10 @@ def writeZip(img, path, title=""):
   return imp
 
 
+def readIJ(path):
+  return IJ.openImage(path)
+
+
 class KLBLoader(CacheLoader):
   def __init__(self):
     self.klb = KLB.newInstance()
