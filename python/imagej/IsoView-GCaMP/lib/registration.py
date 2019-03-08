@@ -125,13 +125,13 @@ def computeOptimizedTransforms(img_filenames, img_loader, getCalibration, csv_di
       Then all matches are optimized together using mpicbg.models.TileConfiguration.
       Fixed tiles are specified in a list of indices with params["fixed_tile_index"].
       Expects, in total:
-       * params["n_adjacent"]
-       * params["fixed_tile_index"]
+       * params["n_adjacent"] or params["all_to_all"]
+       * params["fixed_tile_index"] (when absent, defaults to [0]: a list with the first tile index in it)
        * params["maxAllowedError"]
        * params["maxPlateauwidth"]
        * params["maxIterations"]
        * params["damp"]
-      Returns a list of affine 3D matrices, each a double[] with 12 values.
+      Returns a list of affine 3D matrices, each a double[] with 12 values, corresponding to the img_filenames.
   """
   # Ensure features exist in CSV files, or create them
   ensureFeaturesForAll(img_filenames, img_loader, getCalibration, csv_dir, params, exe, verbose=verbose)
