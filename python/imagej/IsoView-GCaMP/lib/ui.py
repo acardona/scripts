@@ -1,12 +1,16 @@
 from net.imglib2.img.display.imagej import ImageJFunctions as IL, ImageJVirtualStackUnsignedShort
 from net.imglib2.view import Views
+from net.imglib2.util import Intervals
 from bdv.util import BdvFunctions, Bdv
-from ij import ImagePlus, CompositeImage, VirtualStack, ImageListener
+from ij import ImagePlus, CompositeImage, VirtualStack, ImageListener, IJ
+from ij.gui import RoiListener, Roi
 from java.awt.event import KeyEvent, KeyAdapter, MouseWheelListener, WindowAdapter
 from javax.swing import JPanel, JLabel, JTextField, JButton, JOptionPane, JFrame
-from java.awt import GridBagLayout, GridBagConstraints
+from java.awt import GridBagLayout, GridBagConstraints as GBC
+from java.lang import System
 from jarray import zeros
 import sys
+from itertools import izip
 
 
 def wrap(img, title="", n_channels=1):
@@ -127,6 +131,7 @@ class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
       return float(self.textfield.getText())
     except:
       print sys.exc_info()
+      raise ValueError("Can't parse number from: %s" % self.textfield.getText())
 
   def keyPressed(self, event):
     print "KeyCode:", event.getKeyCode()
@@ -161,27 +166,27 @@ class CloseControl(WindowAdapter):
       event.getSource().dispose()
 
 
-def makeTranslationUI(affines, imp, show=True):
+def makeTranslationUI(affines, imp, show=True, print_button_text="Print transforms"):
   """ A GUI to control the translation components of a list of AffineTransform3D instances.
       When updated, the ImagePlus is refreshed.
       Returns the JFrame, the main JPanel and the lower JButton panel. """
   panel = JPanel()
   gb = GridBagLayout()
   panel.setLayout(gb)
-  gc = GridBagConstraints()
-  gc.anchor = GridBagConstraints.WEST
-  gc.fill = GridBagConstraints.NONE
+  gc = GBC()
+  gc.anchor = GBC.WEST
+  gc.fill = GBC.NONE
 
   # Column labels
   gc.gridy = 0
   for i, title in enumerate(["Camera", "translation X", "translation Y", "translation Z"]):
     gc.gridx = i
-    gc.anchor = GridBagConstraints.CENTER
+    gc.anchor = GBC.CENTER
     label = JLabel(title)
     gb.setConstraints(label, gc)
     panel.add(label)
 
-  gc.anchor = GridBagConstraints.WEST
+  gc.anchor = GBC.WEST
   
   # One row per affine to control
   for i, affine in enumerate(affines):
@@ -213,14 +218,19 @@ def makeTranslationUI(affines, imp, show=True):
     panel.add(help)
 
   # Buttons
-  printButton = JButton("Print transforms")
+  printButton = JButton(print_button_text)
   
   def printTransforms(event):
     for i, aff in enumerate(affines):
       matrix = zeros(12, 'd')
       aff.toArray(matrix)
-      print "affine matrix " + str(i) + ": "
-      print "[%f, %f, %f, %f,\n %f, %f, %f, %f,\n %f, %f, %f, %f]" % tuple(matrix.tolist())
+      msg = "affine matrix " + str(i) + ": \n" + \
+            "[%f, %f, %f, %f,\n %f, %f, %f, %f,\n %f, %f, %f, %f]" % tuple(matrix.tolist())
+      # Print everywhere
+      print msg
+      IJ.log(msg)
+      System.out.println(msg)
+      
   
   printButton.addActionListener(printTransforms)
   gc.gridx = 0
@@ -239,3 +249,181 @@ def makeTranslationUI(affines, imp, show=True):
   frame.setVisible(show)
 
   return frame, panel, button_panel
+
+
+class RoiMaker(KeyAdapter, MouseWheelListener):
+  def __init__(self, imp, textfields, index):
+    self.imp = imp
+    self.textfields = textfields
+    self.index = index
+  
+  def parse(self):
+    try:
+      return float(self.textfields[self.index].getText())
+    except:
+      print sys.exc_info()
+      raise ValueError("Can't parse number from: %s" % self.textfields[self.index].getText())
+
+  def setRoi(self, value):
+    c = [float(tf.getText()) for tf in self.textfields]
+    self.imp.setRoi(Roi(int(c[0]), int(c[1]), int(c[3] - c[0] + 1), int(c[4] - c[1] + 1)))
+
+
+  def keyPressed(self, event):
+    if KeyEvent.VK_ENTER == event.getKeyCode():
+      self.setRoi(self.parse())
+  
+  def mouseWheelMoved(self, event):
+    value = self.parse() - event.getWheelRotation()
+    self.textfields[self.index].setText(str(value))
+    self.setRoi(value)
+
+  def destroy(self):
+    for tf in self.textfields:
+      tf.setEnabled(False)
+    self.imp = None
+
+
+class RoiFieldListener(RoiListener):
+  def __init__(self, imp, textfields):
+    self.imp = imp
+    self.textfields = textfields # 6
+  def roiModified(self, imp, id):
+    if imp == self.imp:
+      # Whatever the id, do:
+      roi = imp.getRoi()
+      if roi:
+        bounds = roi.getBounds()
+        # Ignore 3rd and 6th fields, which are for Z
+        self.textfields[0].setText(str(bounds.x))
+        self.textfields[1].setText(str(bounds.y))
+        self.textfields[3].setText(str(bounds.x + bounds.width - 1))
+        self.textfields[4].setText(str(bounds.y + bounds.height - 1))
+  def destroy(self):
+    for tf in self.textfields:
+        tf.setEnabled(False)
+    self.textfields = None
+    Roi.removeRoiListeners(self)
+    self.imp = None
+    
+
+class FieldDisabler(ImageListener):
+  def __init__(self, roifieldlistener, roimakers):
+    self.roifieldlistener = roifieldlistener
+    self.roimakers = roimakers
+  def imageUpdated(self, imp):
+    pass
+  def imageOpened(self, imp):
+    pass
+  def imageClosed(self, imp):
+    if imp == self.roifieldlistener.imp:
+      self.roifieldlistener.destroy()
+
+
+def makeCropUI(imp, images, panel=None):
+  """ imp: the ImagePlus to work on.
+      images: the list of ImgLib2 images, one per frame.
+      panel: optional, a JPanel controlled by a GridBagLayout. """
+  independent = None == panel
+  if not panel:
+    panel = JPanel()
+    gb = GridBagLayout()
+    gc = GBC()
+  else:
+    gb = panel.getLayout()
+    # Constraints of the last component
+    gc = gb.getConstraints(panel.getComponent(panel.getComponentCount() - 1))
+
+  # ROI UI header
+  title = JLabel("ROI controls:")
+  gc.gridy +=1
+  gc.anchor = GBC.WEST
+  gc.gridwidth = 4
+  gb.setConstraints(title, gc)
+  panel.add(title)
+
+  # Column labels for the min and max coordinates
+  gc.gridy += 1
+  gc.gridwidth = 1
+  for i, title in enumerate(["", "X", "Y", "Z"]):
+    gc.gridx = i
+    gc.anchor = GBC.CENTER
+    label = JLabel(title)
+    gb.setConstraints(label, gc)
+    panel.add(label)
+
+  textfields = []
+  rms = []
+
+  # Text fields for the min and max coordinates
+  for rowLabel, coords in izip(["min coords", "max coords"],
+                               [[0, 0, 0], [v -1 for v in Intervals.dimensionsAsLongArray(images[0])]]):
+    gc.gridx = 0
+    gc.gridy += 1
+    label = JLabel(rowLabel)
+    gb.setConstraints(label, gc)
+    panel.add(label)
+    for i in xrange(3):
+      gc.gridx += 1
+      tf = JTextField(str(coords[i]), 10)
+      gb.setConstraints(tf, gc)
+      panel.add(tf)
+      textfields.append(tf)
+      listener = RoiMaker(imp, textfields, len(textfields) -1)
+      rms.append(listener)
+      tf.addKeyListener(listener)
+      tf.addMouseWheelListener(listener)
+
+  # Listen to changes in the ROI of imp
+  rfl = RoiFieldListener(imp, textfields)
+  Roi.addRoiListener(rfl)
+  # ... and enable cleanup
+  ImagePlus.addImageListener(FieldDisabler(rfl, rms))
+
+  # Functions for cropping images
+  cropped = None
+  cropped_imp = None
+  
+  def crop(event):
+    global cropped, cropped_imp
+    coords = [int(float(tf.getText())) for tf in textfields]
+    minC = [max(0, c) for c in coords[0:3]]
+    maxC = [min(d -1, c) for d, c in izip(Intervals.dimensionsAsLongArray(images[0]), coords[3:6])]
+    print minC
+    print maxC
+    cropped = [Views.zeroMin(Views.interval(img, minC, maxC)) for img in images]
+    cropped_img = showAsStack(cropped, title="cropped")
+
+  # Buttons to create a ROI and to crop to ROI,
+  # which when activated enables the fine registration buttons
+  crop_button = JButton("Crop to ROI")
+  crop_button.addActionListener(crop)
+  gc.gridy +=1
+  gc.gridwidth = 4
+  gc.anchor = GBC.WEST
+  buttons_panel = JPanel()
+  buttons_panel.add(crop_button)
+  gb.setConstraints(buttons_panel, gc)
+  panel.add(buttons_panel)
+
+  if independent:
+    frame = JFrame("Crop by ROI")
+    frame.getContentPane().add(panel)
+    frame.pack()
+    frame.setVisible(True)
+  else:
+    # Re-pack the JFrame
+    parent = panel.getParent()
+    while not isinstance(parent, JFrame) and parent is not None:
+      parent = parent.getParent()
+
+    if parent:
+      parent.pack()
+      parent.setVisible(True)
+
+  return panel
+  
+
+
+
+
