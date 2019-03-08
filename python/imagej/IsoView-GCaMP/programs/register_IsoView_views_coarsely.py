@@ -7,7 +7,7 @@ import os, sys
 from os.path import basename
 from bdv.util import BdvFunctions, Bdv
 sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0])))
-from lib.ui import showAsStack, makeTranslationUI
+from lib.ui import showAsStack, makeTranslationUI, makeCropUI
 
 
 
@@ -83,8 +83,12 @@ imgT = RealViews.transform(imgI, affine3)
 imgB3 = Views.interval(imgT, [0, 0, 0], maxCoords(img3))
 
 
-imp = showAsStack([imgB0, imgB1, imgB2, imgB3], title="4 views to coarsely register")
+images = [imgB0, imgB1, imgB2, imgB3]
+imp = showAsStack(images, title="4 views to coarsely register")
 
 # Now edit by hand the affines of CM01, CM02 and CM03 relative to the CM00 (which is used as reference and doesn't change)
 
-frame, panel, buttons_panel = makeTranslationUI([affine1, affine2, affine3], imp)
+frame, panel, buttons_panel = makeTranslationUI([affine1, affine2, affine3], imp, print_button_text="Print coarse transforms")
+frame.setTitle("Translate, crop & register")
+makeCropUI(imp, images, panel=panel)
+
