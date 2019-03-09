@@ -118,6 +118,17 @@ class ImageJLoader(CacheLoader):
     return self.get(path)
 
 
+class InRAMLoader(CacheLoader):
+  """ A dummy loader that returns images from a dictionary,
+      where the 'paths' are the keys. """
+  def __init__(self, table):
+    self.table = table
+  def get(self, path):
+    return self.table[path]
+  def load(self, path):
+    return self.get(path)
+
+
 def readN5(path, dataset_name, show=None):
   """ path: filepath to the folder with N5 data.
       dataset_name: name of the dataset to use (there could be more than one).
