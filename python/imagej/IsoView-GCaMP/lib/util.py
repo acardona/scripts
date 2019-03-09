@@ -100,6 +100,8 @@ def newFixedThreadPool(n_threads=0, name="jython-worker"):
     n_threads = max(1, Runtime.getRuntime().availableProcessors() + n_threads)
   return Executors.newFixedThreadPool(n_threads, ThreadFactorySameGroup(name))
 
+def numCPUs():
+  return Runtime.getRuntime().availableProcessors()
 
 class ParallelTasks:
   def __init__(self, name, exe=None):
