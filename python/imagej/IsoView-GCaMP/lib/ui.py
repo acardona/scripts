@@ -1,19 +1,24 @@
-from net.imglib2.img.display.imagej import ImageJFunctions as IL, ImageJVirtualStackUnsignedShort
+from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.view import Views
 from bdv.util import BdvFunctions, Bdv
 from ij import ImagePlus, CompositeImage, VirtualStack
 
 
 def wrap(img, title="", n_channels=1):
-  """ Like ImageJFunctions.wrap but properly choosing the number of channels, slices and frames. """ 
-  stack = ImageJVirtualStackUnsignedShort.wrap(img)
-  imp = ImagePlus(title, stack)
-  n = img.numDimensions()
-  n_slices = img.dimension(2) / n_channels if n > 2 else 1
-  n_frames = img.dimension(3) if n > 3 else 1
-  imp.setDimensions(n_channels, n_slices, n_frames)
-  imp.setOpenAsHyperStack(True)
-  return imp
+  """ Like ImageJFunctions.wrap but, when n_channels=1 (the default),
+      then a new dimension of size 1 is inserted at position 2 to prevent the Z axis
+      from showing as the channels axis.
+      To enable ImageJFunctions.wrap default behavior, set n_channels to a value other than 1. """
+  if 1 == n_channels:
+    # Append a dimension of size 1 at the end
+    # and permute it iteratively so that it becomes the channels dimension (d=2)
+    img = Views.addDimension(img, 1, 1)
+    d = img.numDimensions() -1 # starts with the last: the new one of size 1
+    while d > 2:
+      img = Views.permute(img, d, d -1)
+      d -= 1
+  #
+  return IL.wrap(img, title)
   
 
 def showAsStack(images, title=None, show=True):
