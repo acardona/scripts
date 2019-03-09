@@ -13,6 +13,7 @@ from io import InRAMLoader
 from util import numCPUs, affine3D
 from ui import showAsStack
 from registration import transformedView
+from java.util.concurrent import Executors, TimeUnit
 
 
 class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
@@ -21,6 +22,18 @@ class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
     self.dimension = dimension
     self.textfield = textfield
     self.imp = imp
+    self.refresh = False
+    self.exe = Executors.newSingleThreadScheduledExecutor()
+    def repaint():
+      if self.refresh:
+        self.refresh = False
+        #self.imp.updateAndDraw() # fails for virtual stacks
+        # A solution that works for virtual stacks, by Wayne Rasband:
+        minimum, maximum = self.imp.getDisplayRangeMin(), self.imp.getDisplayRangeMax()
+        self.imp.setProcessor(self.imp.getStack().getProcessor(self.imp.getCurrentSlice()))
+        self.imp.setDisplayRange(minimum, maximum)
+    #
+    self.exe.scheduleAtFixedRate(repaint, 1000, 200, TimeUnit.MILLISECONDS)
 
   def translate(self, value):
     t = self.affine.getTranslation() # 3-slot double array, a copy
@@ -30,11 +43,7 @@ class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
     except:
       print sys.exc_info()
       return False
-    #self.imp.updateAndDraw() # fails for virtual stacks
-    # A solution that works for virtual stacks, by Wayne Rasband:
-    minimum, maximum = self.imp.getDisplayRangeMin(), self.imp.getDisplayRangeMax()
-    self.imp.setProcessor(self.imp.getStack().getProcessor(self.imp.getCurrentSlice()))
-    self.imp.setDisplayRange(minimum, maximum)
+    self.refresh = True
     return True
 
   def parse(self):
@@ -63,6 +72,7 @@ class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
       self.textfield.setEnabled(False)
       self.imp.removeImageListener(self)
       self.imp = None # Release resources
+      self.exe.shutdownNow()
 
 
 class CloseControl(WindowAdapter):
