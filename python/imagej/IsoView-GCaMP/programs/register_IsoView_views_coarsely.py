@@ -16,7 +16,7 @@ from mpicbg.models import RigidModel3D, TranslationModel3D
 
 #srcDir = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/"
 srcDir = "/home/albert/Desktop/t2/IsoView/"
-tgtDir = "/home/albert/Desktop/t2/IsoView/
+tgtDir = "/home/albert/Desktop/t2/IsoView/"
 
 calibration = [1.0, 1.0, 5.0]
 
@@ -37,7 +37,7 @@ paramsDoG = {
 paramsFeatures = {
   # Parameters for features
   "radius": somaDiameter * 15, # for searching nearby peaks
-  "min_angle": 0.25 # in radians, between vectors to p1 and p2
+  "min_angle": 0.25, # in radians, between vectors to p1 and p2
   "max_per_peak": 30, # maximum number of constellations to create per peak
 
   # Parameters for comparing constellations to find point matches
@@ -59,7 +59,7 @@ paramsModel = {
 # Parameters for all to all registration
 paramsTileConfiguration = {
   "all_to_all": True,
-  "fixed_tile_index"]: [0], # tiles that won't move
+  "fixed_tile_index": [0], # tiles that won't move
   "maxAllowedError": 0, # zero, as recommended by Saalfeld
   "maxPlateauwidth": 200, # like in TrakEM2
   "maxIterations": 1000, # like in TrakEM2
@@ -118,7 +118,7 @@ imgB1 = Views.interval(imgT, [0, 0, 0], maxCoords(img1))
 affine2 = AffineTransform3D()
 affine2.set( 0.0, 0.0, 1.0, 0.0,
              0.0, 1.0, 0.0, 0.0,
-            -1.0, 0.0, 0.0, img2.dimension(2) * calibration[2])
+             -1.0, 0.0, 0.0, img2.dimension(2) * calibration[2])
 affine2.concatenate(scale3D)
 imgE = Views.extendZero(img2)
 imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())

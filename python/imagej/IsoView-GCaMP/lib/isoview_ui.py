@@ -68,7 +68,7 @@ class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
 class CloseControl(WindowAdapter):
   def windowClosing(self, event):
     if JOptionPane.NO_OPTION == JOptionPane.showConfirmDialog(event.getSource(),
-                                         "Are you sure you want to close the Translation UI?",
+                                         "Are you sure you want to close?",
                                          "Confirm closing",
                                          JOptionPane.YES_NO_OPTION):
       # Prevent closing
@@ -404,7 +404,9 @@ def makeRegistrationUI(params, images, minC, maxC, cropped):
       panel.add(tf)
 
   # Identity transforms prior to registration
-  affines = [affine3D() for img in cropped]
+  affines = [affine3D([1, 0, 0, 0,
+                       0, 1, 0, 0,
+                       0, 0, 1, 0]) for img in cropped]
   
   def run(event):
     # Dummy for in-RAM reading of isotropic images
@@ -460,6 +462,13 @@ def makeRegistrationUI(params, images, minC, maxC, cropped):
   print_button = JButton("Print affines")
   print_button.addActionListener(printAffines)
   panel_buttons.add(print_button)
+
+  frame = JFrame("Registration")
+  frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE)
+  frame.addWindowListener(CloseControl())
+  frame.getContentPane().add(panel)
+  frame.pack()
+  frame.setVisible(True)
 
   # TODO: missing button to print config file with coarse transforms, ROI, and refined transforms
   # for subsequent use in the next program
