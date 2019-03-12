@@ -1,7 +1,8 @@
 from ij import ImagePlus, IJ, ImageListener
 from ij.gui import RoiListener, Roi
 from java.awt.event import KeyEvent, KeyAdapter, MouseWheelListener, WindowAdapter
-from javax.swing import JPanel, JLabel, JTextField, JButton, JOptionPane, JFrame, JSeparator, SwingUtilities
+from javax.swing import JPanel, JLabel, JTextField, JButton, JOptionPane, JFrame, \
+                        JSeparator, SwingUtilities, BorderFactory
 from java.awt import Dimension, GridBagLayout, GridBagConstraints as GBC
 from java.lang import System, Thread
 from net.imglib2.util import Intervals, ImgUtil
@@ -57,7 +58,6 @@ class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
 
   def parseIncSet(self, inc):
     value = self.parse() + inc
-    print "value was:", self.parse(), " inc:", inc, "value now is: ", value
     if self.translate(value):
       self.textfield.setText(str(value))
 
@@ -79,13 +79,25 @@ class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
     pass
   def imageClosed(self, imp):
     if imp == self.imp:
+      self.destroy()
+
+  def destroy(self):
+    if self.textfield:
       self.textfield.setEnabled(False)
+      self.textfield = None
+    if self.imp:
       self.imp.removeImageListener(self)
       self.imp = None # Release resources
+    if self.exe:
       self.exe.shutdownNow()
+      self.exe = None
 
 
 class CloseControl(WindowAdapter):
+  def __init__(self, destroyables=[]):
+    self.destroyables = set(destroyables) # objects with a "destroy()" method, via duct typing
+  def addDestroyables(self, destroyables):
+   self.destroyables |= set(destroyables)
   def windowClosing(self, event):
     if JOptionPane.NO_OPTION == JOptionPane.showConfirmDialog(event.getSource(),
                                          "Are you sure you want to close?",
@@ -94,7 +106,10 @@ class CloseControl(WindowAdapter):
       # Prevent closing
       event.consume()
     else:
+      for d in self.destroyables:
+        d.destroy()
       event.getSource().dispose()
+      self.destroyables = set()
 
 
 def makeTranslationUI(affines, imp, show=True, print_button_text="Print transforms"):
@@ -105,11 +120,12 @@ def makeTranslationUI(affines, imp, show=True, print_button_text="Print transfor
   affines: a list (will be read multiple times) of one affine transform per image.
   imp: the ImagePlus that hosts the virtual stack with the transformed images.
   show: defaults to True, whether to make the GUI visible.
-  print_button_text: whatver you want the print button to read like, defaults to "Print transforms".
+  print_button_text: whatever you want the print button to read like, defaults to "Print transforms".
    
   Returns the JFrame, the main JPanel and the lower JButton panel.
   """
   panel = JPanel()
+  panel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10))
   gb = GridBagLayout()
   panel.setLayout(gb)
   gc = GBC()
@@ -126,6 +142,7 @@ def makeTranslationUI(affines, imp, show=True, print_button_text="Print transfor
     panel.add(label)
 
   gc.anchor = GBC.WEST
+  listeners = []
   
   # One row per affine to control: skip the first
   for i, affine in enumerate(affines[1:]):
@@ -138,6 +155,7 @@ def makeTranslationUI(affines, imp, show=True, print_button_text="Print transfor
     for dimension, translation in enumerate(affine.getTranslation()):
       tf = JTextField(str(translation), 10)
       listener = MatrixTextFieldListener(affine, dimension, tf, imp)
+      listeners.append(listener)
       imp.addImageListener(listener) # to disable the JTextField when closed
       tf.addKeyListener(listener)
       tf.addMouseWheelListener(listener)
@@ -182,7 +200,7 @@ def makeTranslationUI(affines, imp, show=True, print_button_text="Print transfor
 
   frame = JFrame("Translation control")
   frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE)
-  frame.addWindowListener(CloseControl())
+  frame.addWindowListener(CloseControl(destroyables=listeners))
   frame.getContentPane().add(panel)
   frame.pack()
   frame.setLocationRelativeTo(None) # center in the screen
@@ -226,8 +244,10 @@ class RoiMaker(KeyAdapter, MouseWheelListener):
     self.parseIncSet(- event.getWheelRotation())
 
   def destroy(self):
-    for tf in self.textfields:
-      tf.setEnabled(False)
+    if self.textfields:
+      for tf in self.textfields:
+        tf.setEnabled(False)
+      self.textfields = None
     self.imp = None
 
 
@@ -239,7 +259,6 @@ class RoiFieldListener(RoiListener):
     if imp == self.imp:
       # Whatever the id, do:
       roi = imp.getRoi()
-      print id, roi
       if roi:
         bounds = roi.getBounds()
         # Ignore 3rd and 6th fields, which are for Z
@@ -248,12 +267,13 @@ class RoiFieldListener(RoiListener):
         self.textfields[3].setText(str(bounds.x + bounds.width - 1))
         self.textfields[4].setText(str(bounds.y + bounds.height - 1))
   def destroy(self):
-    for tf in self.textfields:
-        tf.setEnabled(False)
+    if self.textfields:
+      for tf in self.textfields:
+          tf.setEnabled(False)
     self.textfields = None
     Roi.removeRoiListener(self)
     self.imp = None
-    
+
 
 class FieldDisabler(ImageListener):
   def __init__(self, roifieldlistener, roimakers):
@@ -264,10 +284,14 @@ class FieldDisabler(ImageListener):
   def imageOpened(self, imp):
     pass
   def imageClosed(self, imp):
-    if imp == self.roifieldlistener.imp:
+    if self.roifieldlistener and imp == self.roifieldlistener.imp:
       self.roifieldlistener.destroy()
-      for rm in self.roimakers:
-        rm.destroy()
+      self.roifieldlistener = None
+      if self.roimakers:
+        for rm in self.roimakers:
+          rm.destroy()
+        self.roimakers = None
+      ImagePlus.removeImageListener(self)
 
 
 def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
@@ -281,6 +305,7 @@ def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
   independent = None == panel
   if not panel:
     panel = JPanel()
+    panel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10))
     gb = GridBagLayout()
     gc = GBC()
   else:
@@ -359,8 +384,9 @@ def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
     print maxC
     cropped = [Views.zeroMin(Views.interval(img, minC, maxC)) for img in images]
     cropped_imp = showAsStack(cropped, title="cropped")
+    cropped_imp.setDisplayRange(imp.getDisplayRangeMin(), imp.getDisplayRangeMax())
     if cropContinuationFn:
-      cropContinuationFn(images, minC, maxC, cropped)
+      cropContinuationFn(images, minC, maxC, cropped, cropped_imp)
 
   # Buttons to create a ROI and to crop to ROI,
   # which when activated enables the fine registration buttons
@@ -379,6 +405,8 @@ def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
     frame = JFrame("Crop by ROI")
     frame.getContentPane().add(panel)
     frame.pack()
+    frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE)
+    frame.addWindowListener(CloseControl(destroyables=rms + [rfl]))
     frame.setVisible(True)
   else:
     # Re-pack the JFrame
@@ -387,13 +415,22 @@ def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
       parent = parent.getParent()
 
     if parent:
-      parent.pack()
-      parent.setVisible(True)
+      frame = parent
+      frame.pack()
+      found = False
+      for wl in frame.getWindowListeners():
+        if isinstance(wl, CloseControl):
+          wl.addDestroyables(rms + [rfl])
+          found = True
+          break
+      if not found:
+        frame.addWindowListener(CloseControl(destroyables=rms + [rfl]))
+      frame.setVisible(True)
 
   return panel
   
 
-def makeRegistrationUI(original_images, original_calibration, coarse_affines, params, images, minC, maxC, cropped):
+def makeRegistrationUI(original_images, original_calibration, coarse_affines, params, images, minC, maxC, cropped, cropped_imp):
   """
   Register cropped images either all to all or all to the first one,
   and print out a config file with the coarse affines,
@@ -412,6 +449,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
   minC, maxC: the minimum and maximum coordinates of a ROI with which the cropped images were made.
   cropped: the list of images that have been scaled to isotropy, translated and cropped by the ROI.
            (These are really interval views of the images, the latter using nearest neighbor interpolation.)
+  cropped_imp: the ImagePlus holding the virtual stack of cropped image views.
 
   The computed registration will merge the scaling to isotropy + first transform (a translation)
    + roi cropping translation + the params["modelclass"] registration transform, to read directly
@@ -420,6 +458,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
   """
 
   panel = JPanel()
+  panel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10))
   gb = GridBagLayout()
   panel.setLayout(gb)
   gc = GBC()
@@ -456,7 +495,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
       gc.gridwidth = 1
       gc.gridx = 0
       gc.anchor = GBC.EAST
-      name = JLabel(param)
+      name = JLabel(param + ": ")
       gb.setConstraints(name, gc)
       panel.add(name)
       gc.gridx = 1
@@ -503,18 +542,24 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
       # Show registered images
       registered = [transformedView(img, transform, interval=cropped[0])
                     for img, transform in izip(original_images, transforms)]
-      showAsStack(registered, title="Registered with %s" % params["modelclass"].getSimpleName())
-      
-      ##registered = [transformedView(img, affine) for img, affine in zip(cropped, affines)]
-      ##dimensions = Intervals.dimensionsAsLongArray(cropped[0])
+      registered_imp = showAsStack(registered, title="Registered with %s" % params["modelclass"].getSimpleName())
+      registered_imp.setDisplayRange(cropped_imp.getDisplayRangeMin(), cropped_imp.getDisplayRangeMax())
+
+      # TEST: WORKS. But the above doesn't. so "mergeTransforms" is wrong
       # Copy into ArrayImg, otherwise they are rather slow to browse
-      ##def copy(img):
-      ##  aimg = ArrayImgs.unsignedShorts(dimensions)
-      ##  ImgUtil.copy(ImgView.wrap(img, aimg.factory()), aimg)
-      ##  return aimg
-      ##futures = [exe.submit(Task(copy, img)) for img in registered]
-      ##aimgs = [f.get() for f in futures]
-      ##showAsStack(aimgs, title="Registered with %s" % params["modelclass"].getSimpleName())
+      def copy(img1, affine):
+        # Copy in two steps. Otherwise the nearest neighbor interpolation on top of another
+        # nearest neighbor interpolation takes a huge amount of time
+        dimensions = Intervals.dimensionsAsLongArray(img1)
+        aimg1 = ArrayImgs.unsignedShorts(dimensions)
+        ImgUtil.copy(ImgView.wrap(img1, aimg1.factory()), aimg1)
+        img2 = transformedView(aimg1, affine)
+        aimg2 = ArrayImgs.unsignedShorts(dimensions)
+        ImgUtil.copy(ImgView.wrap(img2, aimg2.factory()), aimg2)
+        return aimg2
+      futures = [exe.submit(Task(copy, img, affine)) for img, affine in izip(cropped, affines)]
+      aimgs = [f.get() for f in futures]
+      showAsStack(aimgs, title="DEBUG Registered with %s" % params["modelclass"].getSimpleName())
     except:
       print sys.exc_info()
     finally:
@@ -531,7 +576,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
   def printAffines(event):
     for i, affine in enumerate(affines):
       matrix = zeros(12, 'd')
-      affine.toArray(matrix)
+      affine.toArray(matrix)      
       msg = "# Refined post-crop affine matrix " + str(i) + ": \n" + \
             "affine" + str(i) + ".set(*[%d, %d, %d, %d,\n %d, %d, %d, %d,\n %d, %d, %d, %d])" % tuple(matrix.tolist())
       # Print everywhere
