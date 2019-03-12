@@ -1,18 +1,20 @@
 from ij import ImagePlus, IJ, ImageListener
 from ij.gui import RoiListener, Roi
 from java.awt.event import KeyEvent, KeyAdapter, MouseWheelListener, WindowAdapter
-from javax.swing import JPanel, JLabel, JTextField, JButton, JOptionPane, JFrame, JSeparator
+from javax.swing import JPanel, JLabel, JTextField, JButton, JOptionPane, JFrame, JSeparator, SwingUtilities
 from java.awt import Dimension, GridBagLayout, GridBagConstraints as GBC
-from java.lang import System
-from net.imglib2.util import Intervals
+from java.lang import System, Thread
+from net.imglib2.util import Intervals, ImgUtil
 from net.imglib2.view import Views
+from net.imglib2.img import ImgView
+from net.imglib2.img.array import ArrayImgs
 from jarray import zeros
 import sys
 from itertools import izip
 from io import InRAMLoader
-from util import numCPUs, affine3D
+from util import numCPUs, affine3D, newFixedThreadPool, Task
 from ui import showAsStack
-from registration import transformedView
+from registration import transformedView, computeOptimizedTransforms, mergeTransforms
 from java.util.concurrent import Executors, TimeUnit
 
 
@@ -53,15 +55,23 @@ class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
       print sys.exc_info()
       raise ValueError("Can't parse number from: %s" % self.textfield.getText())
 
-  def keyPressed(self, event):
-    print "KeyCode:", event.getKeyCode()
-    if KeyEvent.VK_ENTER == event.getKeyCode():
-      self.translate(self.parse())
-  
-  def mouseWheelMoved(self, event):
-    value = self.parse() - event.getWheelRotation()
+  def parseIncSet(self, inc):
+    value = self.parse() + inc
+    print "value was:", self.parse(), " inc:", inc, "value now is: ", value
     if self.translate(value):
       self.textfield.setText(str(value))
+
+  def keyPressed(self, event):
+    code = event.getKeyCode()
+    if KeyEvent.VK_ENTER == code:
+      self.translate(self.parse())
+    elif KeyEvent.VK_UP == code or KeyEvent.VK_RIGHT == code:
+      self.parseIncSet(1.0)
+    elif KeyEvent.VK_DOWN == code or KeyEvent.VK_LEFT == code:
+      self.parseIncSet(-1.0)
+  
+  def mouseWheelMoved(self, event):
+    self.parseIncSet(-event.getWheelRotation())
 
   def imageUpdated(self, imp):
     pass
@@ -88,9 +98,17 @@ class CloseControl(WindowAdapter):
 
 
 def makeTranslationUI(affines, imp, show=True, print_button_text="Print transforms"):
-  """ A GUI to control the translation components of a list of AffineTransform3D instances.
-      When updated, the ImagePlus is refreshed.
-      Returns the JFrame, the main JPanel and the lower JButton panel. """
+  """
+  A GUI to control the translation components of a list of AffineTransform3D instances.
+  When updated, the ImagePlus is refreshed.
+
+  affines: a list (will be read multiple times) of one affine transform per image.
+  imp: the ImagePlus that hosts the virtual stack with the transformed images.
+  show: defaults to True, whether to make the GUI visible.
+  print_button_text: whatver you want the print button to read like, defaults to "Print transforms".
+   
+  Returns the JFrame, the main JPanel and the lower JButton panel.
+  """
   panel = JPanel()
   gb = GridBagLayout()
   panel.setLayout(gb)
@@ -109,8 +127,8 @@ def makeTranslationUI(affines, imp, show=True, print_button_text="Print transfor
 
   gc.anchor = GBC.WEST
   
-  # One row per affine to control
-  for i, affine in enumerate(affines):
+  # One row per affine to control: skip the first
+  for i, affine in enumerate(affines[1:]):
     gc.gridx = 0
     gc.gridy += 1
     label = JLabel("CM0%i: " % (i + 1))
@@ -142,11 +160,11 @@ def makeTranslationUI(affines, imp, show=True, print_button_text="Print transfor
   printButton = JButton(print_button_text)
   
   def printTransforms(event):
-    for i, aff in enumerate(affines):
+    for i, aff in enumerate(affines): # print all, including the first
       matrix = zeros(12, 'd')
       aff.toArray(matrix)
-      msg = "affine matrix " + str(i) + ": \n" + \
-            "[%f, %f, %f, %f,\n %f, %f, %f, %f,\n %f, %f, %f, %f]" % tuple(matrix.tolist())
+      msg = "# Coarse affine matrix " + str(i) + ": \n" + \
+            "affine" + str(i) + ".set(*[%d, %d, %d, %d,\n %d, %d, %d, %d,\n %d, %d, %d, %d])" % tuple(matrix.tolist())
       # Print everywhere
       print msg
       IJ.log(msg)
@@ -167,6 +185,7 @@ def makeTranslationUI(affines, imp, show=True, print_button_text="Print transfor
   frame.addWindowListener(CloseControl())
   frame.getContentPane().add(panel)
   frame.pack()
+  frame.setLocationRelativeTo(None) # center in the screen
   frame.setVisible(show)
 
   return frame, panel, button_panel
@@ -189,15 +208,22 @@ class RoiMaker(KeyAdapter, MouseWheelListener):
     c = [float(tf.getText()) for tf in self.textfields]
     self.imp.setRoi(Roi(int(c[0]), int(c[1]), int(c[3] - c[0] + 1), int(c[4] - c[1] + 1)))
 
-
-  def keyPressed(self, event):
-    if KeyEvent.VK_ENTER == event.getKeyCode():
-      self.setRoi(self.parse())
-  
-  def mouseWheelMoved(self, event):
-    value = self.parse() - event.getWheelRotation()
+  def parseIncSet(self, inc):
+    value = self.parse() + inc
     self.textfields[self.index].setText(str(value))
     self.setRoi(value)
+
+  def keyPressed(self, event):
+    code = event.getKeyCode()
+    if KeyEvent.VK_ENTER == code:
+      self.setRoi(self.parse())
+    elif KeyEvent.VK_UP == code or KeyEvent.VK_RIGHT == code:
+      self.parseIncSet(1.0)
+    elif KeyEvent.VK_DOWN == code or KeyEvent.VK_LEFT == code:
+      self.parseIncset(-1.0)
+  
+  def mouseWheelMoved(self, event):
+    self.parseIncSet(- event.getWheelRotation())
 
   def destroy(self):
     for tf in self.textfields:
@@ -213,6 +239,7 @@ class RoiFieldListener(RoiListener):
     if imp == self.imp:
       # Whatever the id, do:
       roi = imp.getRoi()
+      print id, roi
       if roi:
         bounds = roi.getBounds()
         # Ignore 3rd and 6th fields, which are for Z
@@ -224,7 +251,7 @@ class RoiFieldListener(RoiListener):
     for tf in self.textfields:
         tf.setEnabled(False)
     self.textfields = None
-    Roi.removeRoiListeners(self)
+    Roi.removeRoiListener(self)
     self.imp = None
     
 
@@ -239,11 +266,14 @@ class FieldDisabler(ImageListener):
   def imageClosed(self, imp):
     if imp == self.roifieldlistener.imp:
       self.roifieldlistener.destroy()
+      for rm in self.roimakers:
+        rm.destroy()
 
 
 def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
   """ imp: the ImagePlus to work on.
-      images: the list of ImgLib2 images, one per frame.
+      images: the list of ImgLib2 images, one per frame, not original but already isotropic.
+              (These are views that use a nearest neighbor interpolation using the calibration to scale to isotropy.)
       panel: optional, a JPanel controlled by a GridBagLayout.
       cropContinuationFn: optional, a function to execute after cropping,
                           which is given as arguments the original images,
@@ -324,6 +354,7 @@ def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
     coords = [int(float(tf.getText())) for tf in textfields]
     minC = [max(0, c) for c in coords[0:3]]
     maxC = [min(d -1, c) for d, c in izip(Intervals.dimensionsAsLongArray(images[0]), coords[3:6])]
+    print "ROI min and max coordinates"
     print minC
     print maxC
     cropped = [Views.zeroMin(Views.interval(img, minC, maxC)) for img in images]
@@ -362,10 +393,31 @@ def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
   return panel
   
 
-def makeRegistrationUI(params, images, minC, maxC, cropped):
-  """ Register cropped images either all to all or all to the first one,
-      and print out a config file with the coarse affines,
-      the ROI for cropping, and the refined affines post-crop. """
+def makeRegistrationUI(original_images, original_calibration, coarse_affines, params, images, minC, maxC, cropped):
+  """
+  Register cropped images either all to all or all to the first one,
+  and print out a config file with the coarse affines,
+  the ROI for cropping, and the refined affines post-crop.
+
+  original_images: the original, raw images, with original dimensions.
+  original_calibration: the calibration of the images as they are on disk.
+  coarse_affines: list of AffineTransform3D, one per image, that specify the translation between images
+                  as manually set using the makeTranslationUI.
+  params: dictionary with parameters for registering the given cropped images.
+          This includes a calibration that is likely [1.0, 1.0, 1.0] as the cropped images
+          are expected to have been scaled to isotropy.
+  images: the list of near-original images but scaled (by calibration) to isotropy.
+          (These are really views of the original images, using nearest neighbor interpolation
+           to scale them to isotropy.)
+  minC, maxC: the minimum and maximum coordinates of a ROI with which the cropped images were made.
+  cropped: the list of images that have been scaled to isotropy, translated and cropped by the ROI.
+           (These are really interval views of the images, the latter using nearest neighbor interpolation.)
+
+  The computed registration will merge the scaling to isotropy + first transform (a translation)
+   + roi cropping translation + the params["modelclass"] registration transform, to read directly
+   from the original images using a nearest interpolation, for best performance (piling two nearest
+   interpolations over one another would result in very slow access to pixel data).
+  """
 
   panel = JPanel()
   gb = GridBagLayout()
@@ -418,40 +470,70 @@ def makeRegistrationUI(params, images, minC, maxC, cropped):
                        0, 1, 0, 0,
                        0, 0, 1, 0]) for img in cropped]
   
-  def run(event):
-    # Dummy for in-RAM reading of isotropic images
-    img_filenames = [str(i) for i in xrange(len(cropped))]
-    loader = InRAMLoader(dict(zip(img_filenames, cropped)))
-    getCalibration = params.get("getCalibration", None)
-    if not getCalibration:
-      getCalibration = lambda img: [1.0] * len(cropped)
-    csv_dir = params["csv_dir"]
-    modelclass = params["modelclass"]
-    exe = newFixedTheadPool(min(len(cropped), numCPUs()))
+  def run():
+    exe = newFixedThreadPool(min(len(cropped), numCPUs()))
     try:
-      affs = computeOptimizedTransforms(img_filenames, loader, getCalibration,
-                                        csv_dir, exe, modelclass, params)
-      # Store outside
-      for aff, affine in zip(affs, affines):
-        affine.set(aff)
+      # Dummy for in-RAM reading of isotropic images
+      img_filenames = [str(i) for i in xrange(len(cropped))]
+      loader = InRAMLoader(dict(zip(img_filenames, cropped)))
+      getCalibration = params.get("getCalibration", None)
+      if not getCalibration:
+        getCalibration = lambda img: [1.0] * cropped[0].numDimensions()
+      csv_dir = params["csv_dir"]
+      modelclass = params["modelclass"]
+      # Matrices describing the registration on the basis of the cropped images
+      matrices = computeOptimizedTransforms(img_filenames, loader, getCalibration,
+                                            csv_dir, exe, modelclass, params)
+      # Store outside, so they can be e.g. printed, and used beyond here
+      for matrix, affine in zip(matrices, affines):
+        affine.set(*matrix)
+
+      # Combine the transforms: scaling (by calibration)
+      #                         + the coarse registration (i.e. manual translations)
+      #                         + the translation introduced by the ROI cropping
+      #                         + the affine matrices computed above over the cropped images.
+      coarse_matrices = []
+      for coarse_affine in coarse_affines:
+        matrix = zeros(12, 'd')
+        coarse_affine.toArray(matrix)
+        coarse_matrices.append(matrix)
+      
+      transforms = mergeTransforms(original_calibration, coarse_matrices, [minC, maxC], matrices)
       
       # Show registered images
-      registered = [transformedView(img, aff) for img, aff in zip(cropped, affs)]
-      dimensions = Intervals.dimensionsAsLongArray(cropped[0])
+      registered = [transformedView(img, transform, interval=cropped[0])
+                    for img, transform in izip(original_images, transforms)]
+      showAsStack(registered, title="Registered with %s" % params["modelclass"].getSimpleName())
+      
+      ##registered = [transformedView(img, affine) for img, affine in zip(cropped, affines)]
+      ##dimensions = Intervals.dimensionsAsLongArray(cropped[0])
       # Copy into ArrayImg, otherwise they are rather slow to browse
-      aimgs = [ArrayImgs.unsignedShorts(dimensions) for img in registered]
-      for img, aimg in zip(registered, aimgs):
-        ImgUtil.copy(img, aimg)
-      showAsStack(aimgs, title="Registered with %s" % params["modelclass"].getClass().getSimpleName())
+      ##def copy(img):
+      ##  aimg = ArrayImgs.unsignedShorts(dimensions)
+      ##  ImgUtil.copy(ImgView.wrap(img, aimg.factory()), aimg)
+      ##  return aimg
+      ##futures = [exe.submit(Task(copy, img)) for img in registered]
+      ##aimgs = [f.get() for f in futures]
+      ##showAsStack(aimgs, title="Registered with %s" % params["modelclass"].getSimpleName())
+    except:
+      print sys.exc_info()
     finally:
       exe.shutdown()
+      SwingUtilities.invokeLater(lambda: run_button.setEnabled(True))
+
+  def launchRun(event):
+    # Runs on the event dispatch thread
+    run_button.setEnabled(False) # will be re-enabled at the end of run()
+    # Fork:
+    Thread(run).start()
+    
 
   def printAffines(event):
     for i, affine in enumerate(affines):
       matrix = zeros(12, 'd')
       affine.toArray(matrix)
-      msg = "affine matrix " + str(i) + ": \n" + \
-            "[%f, %f, %f, %f,\n %f, %f, %f, %f,\n %f, %f, %f, %f]" % tuple(matrix.tolist())
+      msg = "# Refined post-crop affine matrix " + str(i) + ": \n" + \
+            "affine" + str(i) + ".set(*[%d, %d, %d, %d,\n %d, %d, %d, %d,\n %d, %d, %d, %d])" % tuple(matrix.tolist())
       # Print everywhere
       print msg
       IJ.log(msg)
@@ -466,7 +548,7 @@ def makeRegistrationUI(params, images, minC, maxC, cropped):
   panel.add(panel_buttons)
   
   run_button = JButton("Run")
-  run_button.addActionListener(run)
+  run_button.addActionListener(launchRun)
   panel_buttons.add(run_button)
   
   print_button = JButton("Print affines")
@@ -478,6 +560,7 @@ def makeRegistrationUI(params, images, minC, maxC, cropped):
   frame.addWindowListener(CloseControl())
   frame.getContentPane().add(panel)
   frame.pack()
+  frame.setLocationRelativeTo(None) # center in the screen
   frame.setVisible(True)
 
   # TODO: missing button to print config file with coarse transforms, ROI, and refined transforms

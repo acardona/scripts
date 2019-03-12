@@ -16,7 +16,7 @@ from mpicbg.models import RigidModel3D, TranslationModel3D
 
 #srcDir = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/"
 srcDir = "/home/albert/Desktop/t2/IsoView/"
-tgtDir = "/home/albert/Desktop/t2/IsoView/"
+tgtDir = "/home/albert/Desktop/t2/IsoView/" # to store e.g. CSV files
 
 calibration = [1.0, 1.0, 5.0]
 
@@ -87,6 +87,7 @@ img2 = klb.readFull(paths[2])
 img3 = klb.readFull(paths[3])
 
 
+# Make all isotropic (virtually, as a view)
 scale3D = AffineTransform3D()
 scale3D.set(calibration[0], 0.0, 0.0, 0.0,
             0.0, calibration[1], 0.0, 0.0,
@@ -95,10 +96,15 @@ scale3D.set(calibration[0], 0.0, 0.0, 0.0,
 def maxCoords(img):
   return [int(img.dimension(d) * calibration[d] -1) for d in xrange(img.numDimensions())]
 
+# Identity transform for CM00, scaled to isotropy
+affine0 = AffineTransform3D()
+affine0.identity()
+affine0.concatenate(scale3D)
+
 # Expand camera CM00 to isotropy
 imgE = Views.extendZero(img0)
 imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
-imgT = RealViews.transform(imgI, scale3D)
+imgT = RealViews.transform(imgI, affine0)
 imgB0 = Views.interval(imgT, [0, 0, 0], maxCoords(img0))
 
 
@@ -137,14 +143,28 @@ imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
 imgT = RealViews.transform(imgI, affine3)
 imgB3 = Views.interval(imgT, [0, 0, 0], maxCoords(img3))
 
-
+original_images = [img0, img1, img2, img3]
 images = [imgB0, imgB1, imgB2, imgB3]
 imp = showAsStack(images, title="4 views to coarsely register")
 
-# Now edit by hand the affines of CM01, CM02 and CM03 relative to the CM00 (which is used as reference and doesn't change)
 
-frame, panel, buttons_panel = makeTranslationUI([affine1, affine2, affine3], imp, print_button_text="Print coarse transforms")
-frame.setTitle("Translate, crop & register")
+
+# DEBUG:
+affine1.set(*[-1.000000, 0.000000, 0.000000, 377.000000,
+ 0.000000, 1.000000, 0.000000, 50.000000,
+ 0.000000, 0.000000, 5.000000, 0.000000])
+affine2.set(*[0.000000, 0.000000, 5.000000, -11.000000,
+ 0.000000, 1.000000, 0.000000, 22.000000,
+ -1.000000, 0.000000, 0.000000, 464.000000])
+affine3.set(*[0.000000, 0.000000, 5.000000, -11.000000,
+ 0.000000, 1.000000, 0.000000, 18.000000,
+ 1.000000, 0.000000, 0.000000, -165.000000])
+
+affines = [affine0, affine1, affine2, affine3] # they will be used merely for adjusting translations manually
+
+# Now edit by hand the affines of CM01, CM02 and CM03 relative to the CM00 (which is used as reference and doesn't change)
+frame, panel, buttons_panel = makeTranslationUI(affines, imp, print_button_text="Print coarse transforms")
+frame.setTitle("Translate & crop")
 
 
 # Joint dictionary of parameters
@@ -154,9 +174,11 @@ params.update(paramsFeatures)
 params.update(paramsModel)
 params.update(paramsTileConfiguration)
 
-params["calibration"] = calibration
+params["calibration"] = [1.0, 1.0, 1.0] # images are now isotropic
 params["csv_dir"] = csv_dir
 params["modelclass"] = modelclass
 
-makeCropUI(imp, images, panel=panel, cropContinuationFn=partial(makeRegistrationUI, params))
+makeCropUI(imp, images, panel=panel, cropContinuationFn=partial(makeRegistrationUI,
+                                                                original_images, calibration,
+                                                                affines, params))
 
