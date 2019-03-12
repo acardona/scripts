@@ -8,7 +8,7 @@ from itertools import izip, imap, islice, combinations
 import os, sys, csv
 from os.path import basename
 # local lib functions:
-from util import syncPrint, Task, nativeArray, newFixedThreadPool
+from util import syncPrint, Task, nativeArray, newFixedThreadPool, affine3D
 from features import findPointMatches, ensureFeaturesForAll
 
 
@@ -295,3 +295,36 @@ def registeredView(img_filenames, img_loader, getCalibration, csv_dir, modelclas
     if not original_exe:
       exe.shutdownNow()
 
+
+def mergeTransforms(calibration, fwdMatrices1, roi, fwdMatrices2):
+  """
+  calibration: a sequence like e.g. [1.0, 1.0, 5.0].
+  fwdMatrices1: sequence of one-dimensional arrays with 12 digits, each describing a 3D affine
+                that was computed from the scaled images (according to the calibration).
+  roi: a two-dimensional sequence, with the minimum coordinates at 0 and the maximum at 1.
+  fwdMatrices2: sequence of one-dimensional arrays with 12 digits, each describing a 3D affine
+                that applies after the translation introduced by the ROI is accounted for.
+  
+  Returns a list of AffineTransform3D, each expressing the combined
+          scaling (by calibration) + tranform + translation + transform.
+  """
+  # Scale to isotropy
+  scale3D = AffineTransform3D()
+  scale3D.set(calibration[0], 0.0, 0.0, 0.0,
+              0.0, calibration[1], 0.0, 0.0,
+              0.0, 0.0, calibration[2], 0.0)
+  # Translate to ROI origin of coords
+  roi_translation = affine3D([1, 0, 0, -roi[0][0],
+                              0, 1, 0, -roi[0][1],
+                              0, 0, 1, -roi[0][2]])
+    
+  transforms = []
+  for m1, m2 in izip(fwdMatrices1, fwdMatrices2):
+    aff = AffineTransform3D()
+    aff.set(*m1)
+    aff.concatenate(scale3D)
+    aff.preConcatenate(roi_translation)
+    aff.preConcatenate(affine3D(m2).inverse())
+    transforms.append(aff)
+    
+  return transforms
