@@ -178,7 +178,9 @@ params["calibration"] = [1.0, 1.0, 1.0] # images are now isotropic
 params["csv_dir"] = csv_dir
 params["modelclass"] = modelclass
 
-makeCropUI(imp, images, panel=panel, cropContinuationFn=partial(makeRegistrationUI,
-                                                                original_images, calibration,
-                                                                affines, params))
+makeCropUI(imp, images, tgtDir,
+           panel=panel,
+           cropContinuationFn=partial(makeRegistrationUI,
+                                      original_images, calibration,
+                                      affines, params))
 

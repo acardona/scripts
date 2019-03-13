@@ -10,7 +10,7 @@ from net.imglib2.view import Views
 from net.imglib2.img import ImgView
 from net.imglib2.img.array import ArrayImgs
 from jarray import zeros
-import sys
+import os, sys, csv
 from itertools import izip
 from io import InRAMLoader
 from util import numCPUs, affine3D, newFixedThreadPool, Task
@@ -110,6 +110,7 @@ class CloseControl(WindowAdapter):
         d.destroy()
       event.getSource().dispose()
       self.destroyables = set()
+      event.getSource().removeWindowListener(self)
 
 
 def makeTranslationUI(affines, imp, show=True, print_button_text="Print transforms"):
@@ -238,7 +239,7 @@ class RoiMaker(KeyAdapter, MouseWheelListener):
     elif KeyEvent.VK_UP == code or KeyEvent.VK_RIGHT == code:
       self.parseIncSet(1.0)
     elif KeyEvent.VK_DOWN == code or KeyEvent.VK_LEFT == code:
-      self.parseIncset(-1.0)
+      self.parseIncSet(-1.0)
   
   def mouseWheelMoved(self, event):
     self.parseIncSet(- event.getWheelRotation())
@@ -294,10 +295,11 @@ class FieldDisabler(ImageListener):
       ImagePlus.removeImageListener(self)
 
 
-def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
+def makeCropUI(imp, images, tgtDir, panel=None, cropContinuationFn=None):
   """ imp: the ImagePlus to work on.
       images: the list of ImgLib2 images, one per frame, not original but already isotropic.
               (These are views that use a nearest neighbor interpolation using the calibration to scale to isotropy.)
+      tgtDir: the target directory where e.g. CSV files will be stored, for ROI, features, pointmatches.
       panel: optional, a JPanel controlled by a GridBagLayout.
       cropContinuationFn: optional, a function to execute after cropping,
                           which is given as arguments the original images,
@@ -345,9 +347,24 @@ def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
   textfields = []
   rms = []
 
+  # Load stored ROI if any
+  roi_path = path = os.path.join(tgtDir, "crop-roi.csv")
+  if os.path.exists(roi_path):
+    with open(roi_path, 'r') as csvfile:
+      reader = csv.reader(csvfile, delimiter=',', quotechar="\"")
+      reader.next() # header
+      minC = map(int, reader.next()[1:])
+      maxC = map(int, reader.next()[1:])
+      # Place the ROI over the ImagePlus
+      imp.setRoi(Roi(minC[0], minC[1], maxC[0] + 1 - minC[0], maxC[1] + 1 - minC[1]))
+  else:
+    # Use whole image dimensions
+    minC = [0, 0, 0]
+    maxC = [v -1 for v in Intervals.dimensionsAsLongArray(images[0])]
+
   # Text fields for the min and max coordinates
   for rowLabel, coords in izip(["min coords: ", "max coords: "],
-                               [[0, 0, 0], [v -1 for v in Intervals.dimensionsAsLongArray(images[0])]]):
+                               [minC, maxC]):
     gc.gridx = 0
     gc.gridy += 1
     label = JLabel(rowLabel)
@@ -373,12 +390,38 @@ def makeCropUI(imp, images, panel=None, cropContinuationFn=None):
   # Functions for cropping images
   cropped = None
   cropped_imp = None
+
+  def storeRoi(minC, maxC):
+    if os.path.exists(roi_path):
+      # Load ROI
+      with open(path, 'r') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar="\"")
+        reader.next() # header
+        same = True
+        for a, b in izip(minC + maxC, map(int, reader.next()[1:] + reader.next()[1:])):
+          print a, b
+          if a != b:
+            same = False
+            # Invalidate any CSV files for features and pointmatches: different cropping
+            for filename in os.listdir(tgtDir):
+              if filename.endswith("features.csv") or filename.endswith("pointmatches.csv"):
+                os.remove(os.path.join(tgtDir, filename))
+            break
+        if same:
+          return
+    # Store the ROI as crop-roi.csv
+    with open(roi_path, 'w') as csvfile:
+      w = csv.writer(csvfile, delimiter=',', quotechar="\"", quoting=csv.QUOTE_NONNUMERIC)
+      w.writerow(["coords", "x", "y", "z"])
+      w.writerow(["min"] + map(int, minC))
+      w.writerow(["max"] + map(int, maxC))
   
   def crop(event):
     global cropped, cropped_imp
     coords = [int(float(tf.getText())) for tf in textfields]
     minC = [max(0, c) for c in coords[0:3]]
     maxC = [min(d -1, c) for d, c in izip(Intervals.dimensionsAsLongArray(images[0]), coords[3:6])]
+    storeRoi(minC, maxC)
     print "ROI min and max coordinates"
     print minC
     print maxC
@@ -537,7 +580,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
         coarse_affine.toArray(matrix)
         coarse_matrices.append(matrix)
       
-      transforms = mergeTransforms(original_calibration, coarse_matrices, [minC, maxC], matrices)
+      transforms = mergeTransforms([1.0, 1.0, 1.0], coarse_matrices, [minC, maxC], matrices)
       
       # Show registered images
       registered = [transformedView(img, transform, interval=cropped[0])
