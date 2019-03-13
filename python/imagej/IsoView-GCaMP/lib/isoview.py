@@ -56,8 +56,8 @@ def deconvolveTimePoints(srcDir,
                       which can be computed from fluorescent beads with the BigStitcher functions
                       and which must have odd dimensions.
      calibration: the array of [x, y, z] dimensions.
-     camera_transformations: a map of camera index vs the 12-digit 3D affine matrices describing
-                             the transform to register the camera view onto the camera at index 0.
+     cameraTransformations: a function that returns a map of camera index vs the 12-digit 3D affine matrices describing
+                            the transform to register the camera view onto the camera at index 0.
      fineTransformsPostROICrop: a list of the transform matrices to be applied after both the coarse transform and the ROI crop.
      params: a dictionary with all the necessary parameters for feature extraction, registration and deconvolution.
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
