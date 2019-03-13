@@ -399,7 +399,6 @@ def makeCropUI(imp, images, tgtDir, panel=None, cropContinuationFn=None):
         reader.next() # header
         same = True
         for a, b in izip(minC + maxC, map(int, reader.next()[1:] + reader.next()[1:])):
-          print a, b
           if a != b:
             same = False
             # Invalidate any CSV files for features and pointmatches: different cropping
@@ -579,8 +578,9 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
         matrix = zeros(12, 'd')
         coarse_affine.toArray(matrix)
         coarse_matrices.append(matrix)
-      
-      transforms = mergeTransforms([1.0, 1.0, 1.0], coarse_matrices, [minC, maxC], matrices)
+
+      # NOTE: both coarse_matrices and matrices are from the camera X to camera 0. No need to invert them.
+      transforms = mergeTransforms([1.0, 1.0, 1.0], coarse_matrices, [minC, maxC], matrices, invert2=False)
       
       # Show registered images
       registered = [transformedView(img, transform, interval=cropped[0])
@@ -588,7 +588,8 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
       registered_imp = showAsStack(registered, title="Registered with %s" % params["modelclass"].getSimpleName())
       registered_imp.setDisplayRange(cropped_imp.getDisplayRangeMin(), cropped_imp.getDisplayRangeMax())
 
-      # TEST: WORKS. But the above doesn't. so "mergeTransforms" is wrong
+      """
+      # TEST: same as above, but without merging the transforms. WORKS, same result
       # Copy into ArrayImg, otherwise they are rather slow to browse
       def copy(img1, affine):
         # Copy in two steps. Otherwise the nearest neighbor interpolation on top of another
@@ -603,6 +604,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
       futures = [exe.submit(Task(copy, img, affine)) for img, affine in izip(cropped, affines)]
       aimgs = [f.get() for f in futures]
       showAsStack(aimgs, title="DEBUG Registered with %s" % params["modelclass"].getSimpleName())
+      """
     except:
       print sys.exc_info()
     finally:

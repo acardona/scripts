@@ -296,14 +296,14 @@ def registeredView(img_filenames, img_loader, getCalibration, csv_dir, modelclas
       exe.shutdownNow()
 
 
-def mergeTransforms(calibration, fwdMatrices1, roi, fwdMatrices2):
+def mergeTransforms(calibration, matrices1, roi, matrices2, invert2=False):
   """
   calibration: a sequence like e.g. [1.0, 1.0, 5.0].
-  fwdMatrices1: sequence of one-dimensional arrays with 12 digits, each describing a 3D affine
-                that was computed from the scaled images (according to the calibration).
+  matrices1: sequence of one-dimensional arrays with 12 digits, each describing a 3D affine
+             that was computed from the scaled images (according to the calibration).
   roi: a two-dimensional sequence, with the minimum coordinates at 0 and the maximum at 1.
-  fwdMatrices2: sequence of one-dimensional arrays with 12 digits, each describing a 3D affine
-                that applies after the translation introduced by the ROI is accounted for.
+  matrices2: sequence of one-dimensional arrays with 12 digits, each describing a 3D affine
+             that applies after the translation introduced by the ROI is accounted for.
   
   Returns a list of AffineTransform3D, each expressing the combined
           scaling (by calibration) + tranform + translation + transform.
@@ -319,12 +319,12 @@ def mergeTransforms(calibration, fwdMatrices1, roi, fwdMatrices2):
                               0, 0, 1, -roi[0][2]])
     
   transforms = []
-  for m1, m2 in izip(fwdMatrices1, fwdMatrices2):
+  for m1, m2 in izip(matrices1, matrices2):
     aff = AffineTransform3D()
     aff.set(*m1)
     aff.concatenate(scale3D)
     aff.preConcatenate(roi_translation)
-    aff.preConcatenate(affine3D(m2).inverse())
+    aff.preConcatenate(affine3D(m2).inverse() if invert2 else affine3D(m2))
     transforms.append(aff)
     
   return transforms
