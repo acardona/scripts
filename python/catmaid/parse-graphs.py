@@ -10,7 +10,7 @@ def graph0(brain_neurons_synapses_csv_path, threshold=2):
       and edges have as weight the number of synapses
       from one neuron to another.
       
-      Header: pre_skeleton_id, pre_treenode_id, ost_skeleton_id, post_treenode_id
+      Header: pre_skeleton_id, pre_treenode_id, post_skeleton_id, post_treenode_id
       We ignore the treenode ids (a 'treenode' is a node of a skeleton
       in CATMAID parlance).
       
@@ -30,7 +30,7 @@ def graph0(brain_neurons_synapses_csv_path, threshold=2):
     # I use here a dictionary of source node keys vs. a dictionary of
     # target node keys vs synaptic counts.
     # The defaultdict enables us to create keys on they fly if they don't exist,
-    # and the partial is a technique to define how to instantiate they values
+    # and the partial is a technique to define how to instantiate their values
     # when they don't exist yet, in this case being another defaultdict
     # whose values are initialized to the integer zero, via executing int().
     edges = defaultdict(partial(defaultdict, int))
