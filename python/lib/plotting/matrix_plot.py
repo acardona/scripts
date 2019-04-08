@@ -42,7 +42,7 @@ def show_values(pc, fmt="%.2f", hideZeros=True, **kw):
         ax.text(x, y, fmt(value), ha="center", va="center", color=color, **kw)
 
 
-def show_circles(pc, radiusFn, cmap):
+def show_circles(pc, radiusFn, cmap, hideZeros=True, colored=False):
     """
       Show a circle with a radius proprotional to the value at each cell.
       'pc': the value returned from ax.pcolor(...), a PolyCollection.
@@ -58,10 +58,11 @@ def show_circles(pc, radiusFn, cmap):
         else:
             color = (1.0, 1.0, 1.0)
         """
-        if value <= 0:
+        if hideZeros and value <= 0:
             continue
         # Color could also be cmap=cmap(value) instead of black color=(0.0, 0.0, 0.0) or max like now cmap(1.0)
-        ax.add_patch(Circle((x, y), radiusFn(value), color=(0.0, 0.0, 0.0), fill=True))
+        color = cmap(value) if colored else (0.0, 0.0, 0.0) # black
+        ax.add_patch(Circle((x, y), radiusFn(value), color=color, fill=True))
 
 
 def cm2inch(*tup):
@@ -89,8 +90,10 @@ def matrix_plot(
         hideZeros=True,
         value_range=(0.0, 1.0),
         cm_dimensions=(40, 20),
-        shrink=0.2,
+        shrink=0.2, # the color bar height relative to the plot
+        showColorbar=True,
         fontsize=8,
+        fontsizeTickLabels=8,
         show=False):
     """
      'matrix': numpy 2d-shaped array with the values to plot.
@@ -117,10 +120,17 @@ def matrix_plot(
     # Plot it out
     fig, ax = plt.subplots()
 
+    # Ensure names are visible on the Y, X axis
+    plt.subplots_adjust(left=0.2, top=0.8)
+
+    cmapCells = cmap
+    if with_circles:
+        cmapCells = colormapConstantWhite()
+
     if type(matrix) == list:
         matrix = np.array(matrix)
 
-    c = ax.pcolor(matrix, edgecolors='k', linestyle='dashed', linewidths=0.2, cmap=cmap, vmin=value_range[0], vmax=value_range[1])
+    c = ax.pcolor(matrix, edgecolors='k', linestyle='dashed', linewidths=0.2, cmap=cmapCells, vmin=value_range[0], vmax=value_range[1])
 
     # put the major ticks at the middle of each cell
     ax.set_yticks(np.arange(matrix.shape[0]) + 0.5, minor=False)
@@ -131,13 +141,13 @@ def matrix_plot(
     # Could use also:
     # ax.tick_params(labelbottom='off',labeltop='on')
 
-    ax.set_xticklabels(xticklabels, minor=False, rotation='vertical', verticalalignment='bottom')
-    ax.set_yticklabels(yticklabels, minor=False)
+    ax.set_xticklabels(xticklabels, minor=False, rotation='vertical', verticalalignment='bottom', fontsize=fontsizeTickLabels)
+    ax.set_yticklabels(yticklabels, minor=False, fontsize=fontsizeTickLabels)
 
     # set title and x/y labels
     if title:
         if x_axis_at_top:
-            plt.title(title, y=1.08)
+            plt.title(title, y=1.2)
         else:
             plt.title(title)
             # Note: could also use plt.text(...) for absolute positioning
@@ -163,7 +173,12 @@ def matrix_plot(
     ax.invert_yaxis()
 
     # Add color bar
-    plt.colorbar(c, shrink=shrink)
+    if showColorbar:
+        #plt.colorbar(c, shrink=shrink)
+        # Manually, because plt.colorbar doesn't accept a cmap argument
+        # which is needed when using with_circles
+        cax, _ = matplotlib.colorbar.make_axes(ax, shrink=shrink, fontsize=fontsize)
+        cbar = matplotlib.colorbar.ColorbarBase(cax, cmap=cmap)
 
     # Add circles
     if with_circles:
@@ -171,9 +186,9 @@ def matrix_plot(
         # Circle area = 2 * PI * pow(radius, 2)
         # radius = sqrt(area / (2 * PI))
         radiusFn = lambda value: radius_scaling * math.sqrt(value / (2 * math.pi))
-        show_circles(c, radiusFn, cmap)
+        show_circles(c, radiusFn, cmap, colored=showColorbar, hideZeros=hideZeros)
 
-    # Add text in each cell 
+    # Add text in each cell
     if with_values: show_values(c, fmt=fmt, hideZeros=hideZeros, fontsize=fontsize)
 
     # resize 
@@ -182,6 +197,9 @@ def matrix_plot(
 
     # Ensure fonts will be exported as text rather than as paths:
     matplotlib.rcParams['svg.fonttype'] = 'none'
+
+    # NOPE: places colorbar over the plot
+    #plt.tight_layout()
 
     if show:
         plt.show()
