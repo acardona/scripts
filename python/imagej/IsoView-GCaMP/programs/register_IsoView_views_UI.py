@@ -1,3 +1,85 @@
+# Script to register and deconvolve 4D series acquired with the IsoView microscope
+# by Raghav Chhetri et al. 2015 Nature Methods (Philipp Keller's lab at HHMI Janelia)
+#
+# Albert Cardona, 2018-2019
+#
+# *** INSTRUCTIONS ***
+# User: please edit
+#
+# 1. The source folder 'srcDir',
+# 2. The target folder 'tgtDir' (should be writable),
+# 3. The 'calibration',
+# 4. The 'somaDiameter',
+# 5. Optionally, the registration model 'modelclass',
+# 5. Optionally, any of the parameters in the 'params' dictionaries.
+#
+# ... and then push the 'Run' button in this Fiji Script Editor window.
+#
+# A graphical user interface (GUI) will open, showing:
+# - A 4D stack with the 4 3D stacks, one per view, of the first time point.
+#   In ImageJ parlance, each 3D stack is a time frame, or frame. We are
+#   using here the 4th dimension not as time but as the 4 cameras.
+#   Note that each view has already been rotated so as to be in the same
+#   orientation as the view of the first camera (named CM00 in the IsoView files).
+# 
+# - A window titled "Translate & Crop" with fields and buttons showing the X, Y, Z
+#   translations of each of the 3D stacks except for the first one (CM00), which is
+#   used as reference and it is not meant to be moved.
+#   The window has buttons for setting a 2D region of interest (ROI) for cropping
+#   prior to launching the new little window for the registration parameters.
+#
+# Scroll to the middle of the stack (to a slice that you expect will have data)
+# and then push "shift+C" to open the Brightness & Contrast dialog. Click on "Auto" for a
+# good initial setting.
+#
+# Browse around the first frame (the first 3D view, which is already the visible one)
+# until finding a remarkable feature that you are confident you will see in other views.
+# Draw an ROI over it, with the rectangle tool available (selected by default) in the
+# Fiji/ImageJ main window. This ROI serves as a reference point.
+#
+# Now use the bottom slider in the 4D window to view the second frame (the second camera
+# view, which would be named CM01 in IsoView parlance). The ROI is still visible,
+# as it is independent of the frame. Write down, or remember, which slice (Z coordinate)
+# you are in.
+# 
+# Move the UI window with the X, Y, Z fields near the 4D window, and click on the Z field
+# of the "CM01" row. Either use the scroll wheel, or up/down arrows, or type in a number
+# (and push return), to edit the translation in the Z axis. The image in the 4D window
+# will move accordingly. Try to bring the feature that you saw under the ROI drawn
+# over CM00 to the current slice.
+#
+# Now repeat for the X and Y axes, to bring the feature inside the ROI.
+# Then scroll back, using the bottom slider, to the first frame (CM00), and then
+# forward again to the second frame (CM01), and check that they look reasonbly
+# in register.
+# 
+# Now repeat for frames 3 (CM02) and 4 (CM03).
+#
+# When all 4 frames (all 4 camera views) are reasonably in register, draw a large ROI
+# enclosing the parts of the image that you want to work with from now on.
+# Then using the first slider in the 4D image window, scroll to the first Z where
+# any data can be seen, and write that in the "min coords" Z field under "ROI controls".
+# Do the same for the last slide.
+#
+# When done, push "Crop to ROI". Two new windows open:
+# - A new 4D window just like before, but cropped in X, Y, Z as desired.
+# - A new window titled "Registration", listing all the parameters available
+#   below in this script (and which you may have edited).
+#   Note that the calibration is now set to 1.0, 1.0, 1.0: that's because
+#   the images here are interpolated so as to be isotropic.
+#
+# Push "Run" (here in the "Registration" window) and soon a new 4D window opens,
+# with the same data as before but with the registration now refined using e.g.
+# a RigidModel3D (translation and rotation only), or using a TranslationModel3D,
+# depending on which model you chose here below in the params dictionaries.
+# (An AffineModel3D is overkill, and would require regularization.)
+#
+# Now, in the window "Translate & Crop", push "Print coarse transforms",
+# and in the window "Registration", push "Print affines".
+# These two sets of transforms are what is needed to seed the registration
+# of the whole 4D series, using another script.
+
+
 from org.janelia.simview.klb import KLB
 from net.imglib2.view import Views
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
@@ -12,7 +94,7 @@ from lib.isoview_ui import makeTranslationUI, makeCropUI, makeRegistrationUI
 from functools import partial
 from mpicbg.models import RigidModel3D, TranslationModel3D
 
-
+# START EDITING HERE
 
 #srcDir = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/"
 srcDir = "/home/albert/Desktop/t2/IsoView/"
@@ -22,7 +104,7 @@ calibration = [1.0, 1.0, 5.0]
 
 # Parameters for feature-based registration
 csv_dir = tgtDir # Folder to store CSV files
-modelclass = RigidModel3D #TranslationModel3D
+modelclass = RigidModel3D # or use TranslationModel3D
 
 # Parameters for DoG difference of Gaussian to detect soma positions
 somaDiameter = 8 * calibration[0]
@@ -67,7 +149,8 @@ paramsTileConfiguration = {
 }
 
 
-# Don't edit beyond this point
+# STOP EDITING HERE
+
 
 
 klb = KLB.newInstance()
@@ -149,7 +232,7 @@ imp = showAsStack(images, title="4 views to coarsely register")
 
 
 
-# DEBUG:
+# DEBUG: so that I don't have to adjust the test data set manually every time
 affine1.set(*[-1.000000, 0.000000, 0.000000, 377.000000,
  0.000000, 1.000000, 0.000000, 50.000000,
  0.000000, 0.000000, 5.000000, 0.000000])
