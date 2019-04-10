@@ -68,11 +68,28 @@
 #   Note that the calibration is now set to 1.0, 1.0, 1.0: that's because
 #   the images here are interpolated so as to be isotropic.
 #
+# Note the chosen ROI will be stored in the target folder 'tgtDir'. Upon reusing
+# the same target folder, if the ROI file is present, it will be loaded.
+# This is indended for convenience, for either reuse with e.g. different
+# parts of the same 4D series, or for a re-run with different parameters.
+#
 # Push "Run" (here in the "Registration" window) and soon a new 4D window opens,
 # with the same data as before but with the registration now refined using e.g.
 # a RigidModel3D (translation and rotation only), or using a TranslationModel3D,
 # depending on which model you chose here below in the params dictionaries.
 # (An AffineModel3D is overkill, and would require regularization.)
+#
+# Note, the extracted features and point matches will be stored in CSV files
+# in the target folder 'tgtDir', along with the parameters used for extracting
+# them. Upon re-run, if the parameters haven't changed, these CSV files will
+# be loaded (avoiding re-computing features and pointmatches), and the model
+# estimated from them, saving lots of time.
+# This is intended for re-running quickly to e.g. see the registration computed
+# for e.h. the first time point as applied to e.g. another time point.
+#
+# IMPORTANT: If you have changed the ROI, though, the crop will be different,
+# and you should remove these CSV files from the target folder 'tgtDir', as
+# the program has no way of knowing what you did.
 #
 # Now, in the window "Translate & Crop", push "Print coarse transforms",
 # and in the window "Registration", push "Print affines".
