@@ -621,7 +621,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
   def printAffines(event):
     for i, affine in enumerate(affines):
       matrix = zeros(12, 'd')
-      affine.toArray(matrix)      
+      affine.toArray(matrix)
       msg = "# Refined post-crop affine matrix " + str(i) + ": \n" + \
             "affine" + str(i) + ".set(*[%d, %d, %d, %d,\n %d, %d, %d, %d,\n %d, %d, %d, %d])" % tuple(matrix.tolist())
       # Print everywhere
