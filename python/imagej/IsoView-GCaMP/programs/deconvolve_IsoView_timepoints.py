@@ -76,9 +76,6 @@ fineTransformsPostROICrop = \
      -0.0034501662251717287, 0.003016621335310332, 0.9999894981192247, 2.447694931285838]]
 
 
-# The transformation model for registering views onto each other
-modelclass = RigidModel3D
-
 deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                     cameraTransformations, fineTransformsPostROICrop,
                     params, roi, subrange=range(0, 400))
