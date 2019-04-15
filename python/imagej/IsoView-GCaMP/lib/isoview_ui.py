@@ -1,5 +1,7 @@
 from ij import ImagePlus, IJ, ImageListener
 from ij.gui import RoiListener, Roi
+from ij.io import OpenDialog
+from java.awt import Color
 from java.awt.event import KeyEvent, KeyAdapter, MouseWheelListener, WindowAdapter
 from javax.swing import JPanel, JLabel, JTextField, JButton, JOptionPane, JFrame, \
                         JSeparator, SwingUtilities, BorderFactory
@@ -11,12 +13,13 @@ from net.imglib2.img import ImgView
 from net.imglib2.img.array import ArrayImgs
 from jarray import zeros
 import os, sys, csv
-from itertools import izip
+from itertools import izip, imap
 from io import InRAMLoader
 from util import numCPUs, affine3D, newFixedThreadPool, Task
 from ui import showAsStack
 from registration import transformedView, computeOptimizedTransforms, mergeTransforms
 from java.util.concurrent import Executors, TimeUnit
+from datetime import datetime
 
 
 class MatrixTextFieldListener(KeyAdapter, MouseWheelListener, ImageListener):
@@ -652,7 +655,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
     run_button.setEnabled(False) # will be re-enabled at the end of run()
     # Fork:
     Thread(run).start()
-    
+
 
   def printAffines(event):
     for i, affine in enumerate(affines):
@@ -664,6 +667,25 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
       print msg
       IJ.log(msg)
       System.out.println(msg)
+
+  def prepareDeconvolutionScriptUI(event):
+    """
+    # DEBUG generateDeconvolutionScriptUI: generate params as a loadable serialized file
+    with open("/tmp/parameters.pickle", 'w') as f:
+      import pickle
+      def asArrays(affines):
+        arrays = []
+        for affine in affines:
+          matrix = zeros(12, 'd')
+          affine.toArray(matrix)
+          arrays.append(matrix)
+        return arrays
+        
+      pickle.dump([params["srcDir"], params["tgtDir"], calibration,
+                   asArrays(coarse_affines), [minC, maxC], asArrays(affines)], f)
+    """
+    generateDeconvolutionScriptUI(params["srcDir"], params["tgtDir"], calibration,
+                                  coarse_affines, [minC, maxC], affines)
   
   # Buttons
   panel_buttons = JPanel()
@@ -675,11 +697,16 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
   
   run_button = JButton("Run")
   run_button.addActionListener(launchRun)
+  gb.setConstraints(run_button, gc)
   panel_buttons.add(run_button)
   
   print_button = JButton("Print affines")
   print_button.addActionListener(printAffines)
   panel_buttons.add(print_button)
+
+  prepare_button = JButton("Prepare deconvolution script")
+  prepare_button.addActionListener(prepareDeconvolutionScriptUI)
+  panel_buttons.add(prepare_button)
 
   frame = JFrame("Registration")
   frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE)
@@ -689,6 +716,179 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
   frame.setLocationRelativeTo(None) # center in the screen
   frame.setVisible(True)
 
-  # TODO: missing button to print config file with coarse transforms, ROI, and refined transforms
-  # for subsequent use in the next program
 
+def generateDeconvolutionScriptUI(srcDir,
+                                  tgtDir,
+                                  calibration,
+                                  preCropAffines,
+                                  ROI,
+                                  postCropAffines):
+  """
+  Open an UI to automatically generate a script to:
+  1. Register the views of each time point TM folder, and deconvolve them.
+  2. Register deconvolved time points to each other, for a range of consecutive time points.
+
+  Will ask for the file path to the kernel file,
+  and also for the range of time points to process,
+  and for the deconvolution iterations for CM00-CM01, and CM02-CM03.
+  """
+
+  template = """
+# AUTOMATICALLY GENERATED - %s
+
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0]))
+from lib.isoview import deconvolveTimePoints
+from mpicbg.models import RigidModel3D, TranslationModel3D
+from net.imglib2.img.display.imagej import ImageJFunctions as IL
+
+# The folder with the sequence of TM\d+ folders, one per time poi  nt in the 4D series.
+# Each folder should contain 4 KLB files, one per camera view of the IsoView microscope.
+srcDir = "%s"
+
+# A folder to save deconvolved images in, and CSV files describing features, point matches and transformations
+targetDir = "%s"
+
+# Path to the volume describing the point spread function (PSF)
+kernelPath = "%s"
+
+calibration = [%s] # An array with 3 floats
+
+# The transformations of each timepoint onto the camera at index zero.
+def cameraTransformations(dims0, dims1, dims2, dims3, calibration):
+  return {
+    0: [1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0],
+    1: [%s],
+    2: [%s],
+    3: [%s]
+  }
+
+# Deconvolution parameters
+paramsDeconvolution = {
+  "blockSizes": None, # None means the image size + kernel size. Otherwise specify like e.g. [[128, 128, 128]] for img in images]
+  "CM_0_1_n_iterations": %i,
+  "CM_2_3_n_iterations": %i,
+}
+
+# Joint dictionary of parameters
+params = {}
+params.update(paramsDeconvolution)
+
+# A region of interest for each camera view, for cropping after registration but prior to deconvolution
+roi = ([%s], # array of 3 integers, top-left coordinates
+       [%s]) # array of 3 integers, bottom-right coordinates
+
+# All 4 cameras relative to CM00
+fineTransformsPostROICrop = \
+   [[1, 0, 0, 0,
+     0, 1, 0, 0,
+     0, 0, 1, 0],
+    [%s],
+    [%s],
+    [%s]]
+
+deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
+                    cameraTransformations, fineTransformsPostROICrop,
+                    params, roi, subrange=range(%i, %i))
+  """
+
+  od = OpenDialog("Choose kernel file", srcDir)
+  kernel_path = od.getPath()
+  if not kernel_path:
+    JOptionPane.showMessageDialog(None, "Can't proceed without a filepath to the kernel", "Alert", JOptionPane.ERROR_MESSAGE)
+    return
+
+  panel = JPanel()
+  panel.setBorder(BorderFactory.createEmptyBorder(10,10,10,10))
+  gb = GridBagLayout()
+  panel.setLayout(gb)
+  gc = GBC()
+
+  msg = ["Edit parameters, then push the button",
+         "to generate a script that, when run,",
+         "will execute the deconvolution for each time point",
+         "saving two 3D stacks per time point as ZIP files",
+         "in the target directory under subfolder 'deconvolved'.",
+         "Find the script in a new Script Editor window.",
+         " "]
+  gc.gridy = -1 # init
+  for line in msg:
+    label = JLabel(line)
+    gc.anchor = GBC.WEST
+    gc.gridx = 0
+    gc.gridy += 1
+    gc.gridwidth = 2
+    gc.gridheight = 1
+    gb.setConstraints(label, gc)
+    panel.add(label)
+
+  strings = [["Deconvolution iterations",
+              "CM_0_1_n_iterations", "CM_2_3_n_iterations"],
+             ["Range",
+              "First time point", "Last time point"]]
+  params = {"CM_0_1_n_iterations": 5,
+            "CM_2_3_n_iterations": 7,
+            "First time point": 0,
+            "Last time point": -1} # -1 means last
+  insertFloatFields(panel, gb, gc, params, strings)
+
+  def asString(affine):
+    matrix = zeros(12, 'd')
+    affine.toArray(matrix)
+    return ",".join(imap(str, matrix))
+
+  def generateScript(event):
+    script = template % (str(datetime.now()),
+                         srcDir,
+                         tgtDir,
+                         kernel_path,
+                         ", ".join(imap(str, calibration)),
+                         asString(preCropAffines[1]),
+                         asString(preCropAffines[2]),
+                         asString(preCropAffines[3]),
+                         params["CM_0_1_n_iterations"],
+                         params["CM_2_3_n_iterations"],
+                         ", ".join(imap(str, ROI[0])),
+                         ", ".join(imap(str, ROI[1])),
+                         asString(postCropAffines[1]),
+                         asString(postCropAffines[2]),
+                         asString(postCropAffines[3]),
+                         params["First time point"],
+                         params["Last time point"])
+    tab = None
+    for frame in JFrame.getFrames():
+      if str(frame).startswith("org.scijava.ui.swing.script.TextEditor["):
+        try:
+          tab = frame.newTab(script, "python")
+          break
+        except:
+          print sys.exc_info()
+    if not tab:
+      try:
+        now = datetime.now()
+        with open(os.path.join(System.getProperty("java.io.tmpdir"),
+                               "script-%i-%i-%i_%i:%i.py" % (now.year, now.month, now.day,
+                                                             now.hour, now.minute)), 'w') as f:
+          f.write(script)
+      except:
+        print sys.exc_info()
+        print script
+  
+
+  gen = JButton("Generate script")
+  gen.addActionListener(generateScript)
+  gc.anchor = GBC.CENTER
+  gc.gridx = 0
+  gc.gridy += 1
+  gc.gridwidth = 2
+  gb.setConstraints(gen, gc)
+  panel.add(gen)
+
+  frame = JFrame("Generate deconvolution script")
+  frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
+  frame.getContentPane().add(panel)
+  frame.pack()
+  frame.setLocationRelativeTo(None) # center in the screen
+  frame.setVisible(True)
