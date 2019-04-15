@@ -51,6 +51,10 @@ $ git clone https://github.com/acardona/scripts.git
 
 ## Running the programs
 
+### A note on overwriting files
+
+Programs have a source directory from which they read in files (and never write into), and a target directory into which they write (and read) files. Files in the target directory will either be overwritten upon rerunning the program, or read in as the means to avoid recomputing an expensive operation. In order to force a recomputation, the relevant output files will have to be removed manually from the target directory.
+
 ### Step 1: register views to each other
 
 First we must discover the coarse transformations from all other cameras (CM01, CM02, CM03) to the first camera (CM00).

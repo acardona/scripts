@@ -76,6 +76,10 @@ def writeZip(img, path, title=""):
   return imp
 
 
+def readIJ(path):
+  return IJ.openImage(path)
+
+
 class KLBLoader(CacheLoader):
   def __init__(self):
     self.klb = KLB.newInstance()
@@ -110,6 +114,17 @@ class TransformedLoader(CacheLoader):
 class ImageJLoader(CacheLoader):
   def get(self, path):
     return IL.wrap(IJ.openImage(path))
+  def load(self, path):
+    return self.get(path)
+
+
+class InRAMLoader(CacheLoader):
+  """ A dummy loader that returns images from a dictionary,
+      where the 'paths' are the keys. """
+  def __init__(self, table):
+    self.table = table
+  def get(self, path):
+    return self.table[path]
   def load(self, path):
     return self.get(path)
 
