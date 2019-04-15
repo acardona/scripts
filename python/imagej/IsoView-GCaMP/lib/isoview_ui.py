@@ -470,7 +470,60 @@ def makeCropUI(imp, images, tgtDir, panel=None, cropContinuationFn=None):
       frame.setVisible(True)
 
   return panel
-  
+
+
+class NumberTextFieldListener(KeyAdapter):
+  def __init__(self, key, params, parse=float):
+    self.key = key
+    self.params = params
+    self.parse = parse
+  def keyPressed(self, event):
+    text = event.getSource().getText()
+    try:
+      # Attempt to parse number, will throw an error when not possible
+      value = self.parse(text)
+      # Update the params dictionary
+      self.params[self.key] = value
+      # Signal success
+      event.getSource().setBackgroundColor(Color.white)
+    except:
+      print "Can't parse number from: %s" % text
+      event.getSource().setBackgroundColor(Color(1.0, 82/255.0, 82/255.0))
+
+
+def insertFloatFields(panel, gb, gc, params, strings):
+  """
+  strings: an array of arrays, which each array having at least 2 strings,
+           with the first string being the title of the section,
+           and subsequent strings being the label of the parameter
+           as well as the key in the params dictionary to retrieve the value
+           to show as default in the textfield.
+  When a value is typed in and it is a valid float number, the entry in params is updated.
+  When invalid, the text field background is turned red.
+  """
+  for block in strings:
+    title = JLabel(block[0])
+    gc.gridx = 0
+    gc.gridy += 1
+    gc.gridwidth = 2
+    gc.anchor = GBC.WEST
+    gb.setConstraints(title, gc)
+    panel.add(title)
+    for param in block[1:]:
+      gc.gridy += 1
+      gc.gridwidth = 1
+      gc.gridx = 0
+      gc.anchor = GBC.EAST
+      name = JLabel(param + ": ")
+      gb.setConstraints(name, gc)
+      panel.add(name)
+      gc.gridx = 1
+      gc.anchor = GBC.WEST
+      tf = JTextField(str(params[param]), 10)
+      tf.addKeyListener(NumberTextFieldListener(param, params, parse=float))
+      gb.setConstraints(tf, gc)
+      panel.add(tf)
+
 
 def makeRegistrationUI(original_images, original_calibration, coarse_affines, params, images, minC, maxC, cropped, cropped_imp):
   """
@@ -524,27 +577,10 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
               "n_iterations", "maxTrust"],
              ["All to all registration",
               "maxAllowedError", "maxPlateauwidth", "maxIterations", "damp"]]
-  for block in strings:
-    title = JLabel(block[0])
-    gc.gridx = 0
-    gc.gridy += 1
-    gc.gridwidth = 2
-    gc.anchor = GBC.WEST
-    gb.setConstraints(title, gc)
-    panel.add(title)
-    for param in block[1:]:
-      gc.gridy += 1
-      gc.gridwidth = 1
-      gc.gridx = 0
-      gc.anchor = GBC.EAST
-      name = JLabel(param + ": ")
-      gb.setConstraints(name, gc)
-      panel.add(name)
-      gc.gridx = 1
-      gc.anchor = GBC.WEST
-      tf = JTextField(str(params[param]), 10)
-      gb.setConstraints(tf, gc)
-      panel.add(tf)
+  # Insert all as fields, with values populated from the params dictionary
+  # and updating dynamically the params dictionary
+  params = dict(params) # copy, will be updated
+  insertFloatFields(panel, gb, gc, params, strings)
 
   # Identity transforms prior to registration
   affines = [affine3D([1, 0, 0, 0,
