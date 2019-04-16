@@ -737,7 +737,7 @@ def generateDeconvolutionScriptUI(srcDir,
 # AUTOMATICALLY GENERATED - %s
 
 import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0]))
+sys.path.append("%s")
 from lib.isoview import deconvolveTimePoints
 from mpicbg.models import RigidModel3D, TranslationModel3D
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
@@ -841,6 +841,7 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
 
   def generateScript(event):
     script = template % (str(datetime.now()),
+                         filter(lambda path: path.endswith("IsoView-GCaMP"), sys.path)[-1],
                          srcDir,
                          tgtDir,
                          kernel_path,
