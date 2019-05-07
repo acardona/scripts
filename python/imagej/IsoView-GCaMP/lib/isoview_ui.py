@@ -186,7 +186,7 @@ def makeTranslationUI(affines, imp, show=True, print_button_text="Print transfor
       matrix = zeros(12, 'd')
       aff.toArray(matrix)
       msg = "# Coarse affine matrix " + str(i) + ": \n" + \
-            "affine" + str(i) + ".set(*[%d, %d, %d, %d,\n %d, %d, %d, %d,\n %d, %d, %d, %d])" % tuple(matrix.tolist())
+            "affine" + str(i) + ".set(*[%f, %f, %f, %f,\n %f, %f, %f, %f,\n %f, %f, %f, %f])" % tuple(matrix.tolist())
       # Print everywhere
       print msg
       IJ.log(msg)
@@ -662,7 +662,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
       matrix = zeros(12, 'd')
       affine.toArray(matrix)
       msg = "# Refined post-crop affine matrix " + str(i) + ": \n" + \
-            "affine" + str(i) + ".set(*[%d, %d, %d, %d,\n %d, %d, %d, %d,\n %d, %d, %d, %d])" % tuple(matrix.tolist())
+            "affine" + str(i) + ".set(*[%f, %f, %f, %f,\n %f, %f, %f, %f,\n %f, %f, %f, %f])" % tuple(matrix.tolist())
       # Print everywhere
       print msg
       IJ.log(msg)
