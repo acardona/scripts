@@ -742,7 +742,7 @@ from lib.isoview import deconvolveTimePoints
 from mpicbg.models import RigidModel3D, TranslationModel3D
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
-# The folder with the sequence of TM\d+ folders, one per time poi  nt in the 4D series.
+# The folder with the sequence of TM\d+ folders, one per time point in the 4D series.
 # Each folder should contain 4 KLB files, one per camera view of the IsoView microscope.
 srcDir = "%s"
 
