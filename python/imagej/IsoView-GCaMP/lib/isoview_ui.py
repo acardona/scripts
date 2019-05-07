@@ -488,10 +488,10 @@ class NumberTextFieldListener(KeyAdapter):
       # Update the params dictionary
       self.params[self.key] = value
       # Signal success
-      event.getSource().setBackgroundColor(Color.white)
+      event.getSource().setBackground(Color.white)
     except:
       print "Can't parse number from: %s" % text
-      event.getSource().setBackgroundColor(Color(1.0, 82/255.0, 82/255.0))
+      event.getSource().setBackground(Color(1.0, 82/255.0, 82/255.0))
 
 
 def insertFloatFields(panel, gb, gc, params, strings):
