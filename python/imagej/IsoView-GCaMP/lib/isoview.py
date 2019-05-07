@@ -19,7 +19,7 @@ from registration import computeOptimizedTransforms, saveMatrices, loadMatrices,
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 from converter import convert, createConverter
 from collections import defaultdict
-from java.lang import Runtime
+from java.lang import Runtime, Thread
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
@@ -170,6 +170,7 @@ def deconvolveTimePoints(srcDir,
   # The registration uses 2 parallel threads, and deconvolution all possible available threads.
   # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
   for i, filepaths in enumerate(TMs):
+    if Thread.currentThread().isInterrupted(): break
     syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
     deconvolveTimePoint(filepaths, targetDir, klb_loader,
                         transforms, target_interval,
@@ -242,6 +243,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
   # So do one at a time.
   last_future = None
   for indices in todo:
+    if Thread.currentThread().isInterrupted(): break
     images = [prepared[index] for index in indices]
     syncPrint("Invoked deconvolution for %s %s" % (tm_dirname, " ".join("%i" % i for i in indices)))
     # Deconvolve: merge two views into a single volume
