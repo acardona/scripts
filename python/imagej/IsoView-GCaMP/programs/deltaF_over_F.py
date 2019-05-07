@@ -24,6 +24,9 @@ dataset_name = "2017-5-10_1018_0-399_X203_Y155_Z65"
 # Load entire 4D IsoView deconvolved and registered data set
 img4D = readN5(n5dir, dataset_name)
 
+# A mask: only nuclei whose x,y,z coordinate has a non-zero value in the mask will be considered
+mask = None
+
 # Split CM00+CM01 (odd) from CM02+CM03 (even) into two series
 series = ["CM00-CM01", "CM02-CM03"]
 img4Da = Views.subsample(img4D,
@@ -83,7 +86,7 @@ imp = showStack(spheresRAI, title="nuclei (min_count=%i)" % params["min_count"])
 
 # Simpler: given a sufficiently good registration, use maximum intensity projection over time
 
-def measureFluorescence(series_name, img4D):
+def measureFluorescence(series_name, img4D, mask=None):
   csv_fluorescence = os.path.join(srcDir, "%s_fluorescence.csv" % series_name)
   if not os.path.exists(csv_fluorescence):
     # Generate projection over time (the img3D) and extract peaks with difference of Gaussian using the params
@@ -160,7 +163,7 @@ def computeBaselineFluorescence(measurements, window_size):
   return baselines
 
 
-def computeDeltaFOverF(series_name, img4D, params, imgCameraNoise=None):
+def computeDeltaFOverF(series_name, img4D, params, mask=None, imgCameraNoise=None):
   """
     delta_F_over_F = (fluorescence - baseline) / (baseline - camera_noise + regularizing_factor)
 
@@ -170,7 +173,7 @@ def computeDeltaFOverF(series_name, img4D, params, imgCameraNoise=None):
     This regularizing factor prevents divisions by zero
     and also enabling comparisons across different data sets (different imaging sessions).
   """
-  peaks, measurements = measureFluorescence(series_name, img4D)
+  peaks, measurements = measureFluorescence(series_name, img4D, mask=mask)
   baselines = computeBaselineFluorescence(measurements, params["baseline_window_size"])
 
   # In the absence of measured camera noise, use a pixel value of 0
@@ -222,7 +225,7 @@ def computeDeltaFOverF(series_name, img4D, params, imgCameraNoise=None):
 # Given that it's most likely constant, I try first with zero as camera noise.
 
 # Ignoring series 1 for now
-peaks, measurements, baselines, dFoF = computeDeltaFOverF(series[0], img4Da, params)
+peaks, measurements, baselines, dFoF = computeDeltaFOverF(series[0], img4Da, params, mask=mask)
 
 with open(os.path.join(srcDir, "%s_deltaFoF.csv" % series[0]), 'w') as csvfile:
   w = csv.writer(csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
