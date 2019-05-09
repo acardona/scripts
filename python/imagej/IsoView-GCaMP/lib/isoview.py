@@ -15,7 +15,7 @@ from itertools import izip, chain, repeat
 from operator import itemgetter
 from util import newFixedThreadPool, Task, syncPrint, affine3D
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
-from registration import computeOptimizedTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
+from registration import computeOptimizedTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView, mergeTransforms
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 from converter import convert, createConverter
 from collections import defaultdict
@@ -34,6 +34,7 @@ def deconvolveTimePoints(srcDir,
                          roi,
                          subrange=None,
                          camera_groups=((0, 1), (2, 3)),
+                         fine_fwd=False,
                          n_threads=0): # 0 means all
   """
      Main program entry point.
@@ -63,6 +64,8 @@ def deconvolveTimePoints(srcDir,
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
      subrange: defaults to None. Can be a list specifying the indices of time points to deconvolve.
      camera_groups: the camera views to fuse and deconvolve together. Defaults to two: ((0, 1), (2, 3))
+     fine_fwd: whether the fineTransformsPostROICrop were computed all-to-all, which optimizes the pose and produces direct transforms,
+               or, when False, the fineTransformsPostROICrop were computed from 0 to 1, 0 to 2, and 0 to 3, so they are inverted.
      n_threads: number of threads to use. Zero (default) means as many as possible.
   """
   kernel = readFloats(kernel_filepath, [19, 19, 25], header=434)
@@ -116,31 +119,12 @@ def deconvolveTimePoints(srcDir,
                 for index, filepath in sorted(TMs[0].items(), key=itemgetter(0))]
 
   cmTransforms = cameraTransformations(dimensions[0], dimensions[1], dimensions[2], dimensions[3], calibration)
-  
-  def prepareTransforms():
-    # Scale to isotropy
-    scale3D = AffineTransform3D()
-    scale3D.set(calibration[0], 0.0, 0.0, 0.0,
-                0.0, calibration[1], 0.0, 0.0,
-                0.0, 0.0, calibration[2], 0.0)
-    # Translate to ROI origin of coords
-    roi_translation = affine3D([1, 0, 0, -roi[0][0],
-                                0, 1, 0, -roi[0][1],
-                                0, 0, 1, -roi[0][2]])
-    
-    transforms = []
-    for camera_index in sorted(cmTransforms.keys()):
-      aff = AffineTransform3D()
-      aff.set(*cmTransforms[camera_index])
-      aff.concatenate(scale3D)
-      aff.preConcatenate(roi_translation)
-      aff.preConcatenate(affine3D(fineTransformsPostROICrop[index]).inverse())
-      transforms.append(aff)
-    
-    return transforms
 
   # Transforms apply to all time points equally
-  transforms = prepareTransforms()
+  #   If fine_fwd, the fine transform was forward.
+  #   Otherwise, it was from CM00 to e.g. CM01, so backwards for CM01, needing an inversion.
+  transforms = mergeTransforms(calibration, [cmTransforms[i] for i in sorted(cmTransforms.keys())],
+                               roi, fineTransformsPostROICrop, invert2=not fine_fwd)
   
   # Create target folder for storing deconvolved images
   if not os.path.exists(os.path.join(targetDir, "deconvolved")):

@@ -789,7 +789,7 @@ fineTransformsPostROICrop = \
 
 deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                     cameraTransformations, fineTransformsPostROICrop,
-                    params, roi, subrange=range(%i, %i))
+                    params, roi, fine_fwd=True, subrange=range(%i, %i))
   """
 
   od = OpenDialog("Choose kernel file", srcDir)
