@@ -619,7 +619,14 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
         coarse_matrices.append(matrix)
 
       # NOTE: both coarse_matrices and matrices are from the camera X to camera 0. No need to invert them.
+      # NOTE: uses identity calibration because the coarse_matrices already include the calibration scaling to isotropy
       transforms = mergeTransforms([1.0, 1.0, 1.0], coarse_matrices, [minC, maxC], matrices, invert2=False)
+
+      print "calibration:", [1.0, 1.0, 1.0]
+      print "cmTransforms:\n    %s\n    %s\n    %s\n    %s" % tuple(str(m) for m in coarse_matrices)
+      print "ROI", [minC, maxC]
+      print "fineTransformsPostROICrop:\n    %s\n    %s\n    %s\n    %s" % tuple(str(m) for m in matrices)
+      print "invert2:", False
       
       # Show registered images
       registered = [transformedView(img, transform, interval=cropped[0])
@@ -752,7 +759,8 @@ targetDir = "%s"
 # Path to the volume describing the point spread function (PSF)
 kernelPath = "%s"
 
-calibration = [%s] # An array with 3 floats
+calibration = [%s] # An array with 3 floats (identity--all 1.0--because the coarse affines, that is,
+                   # the camera transformations, already include the scaling to isotropy computed using the original calibration.
 
 # The transformations of each timepoint onto the camera at index zero.
 def cameraTransformations(dims0, dims1, dims2, dims3, calibration):
