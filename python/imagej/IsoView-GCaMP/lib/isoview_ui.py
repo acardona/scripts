@@ -757,9 +757,7 @@ calibration = [%s] # An array with 3 floats
 # The transformations of each timepoint onto the camera at index zero.
 def cameraTransformations(dims0, dims1, dims2, dims3, calibration):
   return {
-    0: [1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0],
+    0: [%s],
     1: [%s],
     2: [%s],
     3: [%s]
@@ -846,6 +844,7 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                          tgtDir,
                          kernel_path,
                          ", ".join(imap(str, calibration)),
+                         asString(preCropAffines[0]),
                          asString(preCropAffines[1]),
                          asString(preCropAffines[2]),
                          asString(preCropAffines[3]),
