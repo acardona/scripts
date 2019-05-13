@@ -77,8 +77,6 @@ def deconvolveTimePoints(srcDir,
   # Regular expression pattern describing KLB files to include
   pattern = re.compile("^SPM00_TM\d+_CM(\d+)_CHN0[01]\.klb$")
 
-  exe = newFixedThreadPool(n_threads=n_threads)
-
   # Find all time point folders with pattern TM\d{6} (a TM followed by 6 digits)
   def iterTMs():
     """ Return a generator over dicts of 4 KLB file paths for each time point. """
@@ -149,21 +147,23 @@ def deconvolveTimePoints(srcDir,
 
   target_interval = FinalInterval([0, 0, 0],
                                   [maxC - minC for minC, maxC in izip(roi[0], roi[1])])
-  
-  # Submit for registration + deconvolution
-  # The registration uses 2 parallel threads, and deconvolution all possible available threads.
-  # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
-  for i, filepaths in enumerate(TMs):
-    if Thread.currentThread().isInterrupted(): break
-    syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
-    deconvolveTimePoint(filepaths, targetDir, klb_loader,
-                        transforms, target_interval,
-                        params, PSF_kernels, exe, output_converter,
-                        camera_groups=camera_groups)
 
-  exe.shutdown() # Not accepting any more tasks but letting currently executing tasks to complete.
-  # Wait until the last task (writing the last file) completes execution.
-  exe.awaitTermination(5, TimeUnit.MINUTES)
+  exe = newFixedThreadPool(n_threads=n_threads)
+  try:
+    # Submit for registration + deconvolution
+    # The registration uses 2 parallel threads, and deconvolution all possible available threads.
+    # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
+    for i, filepaths in enumerate(TMs):
+      if Thread.currentThread().isInterrupted(): break
+      syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
+      deconvolveTimePoint(filepaths, targetDir, klb_loader,
+                          transforms, target_interval,
+                          params, PSF_kernels, exe, output_converter,
+                          camera_groups=camera_groups)
+  finally:
+    exe.shutdown() # Not accepting any more tasks but letting currently executing tasks to complete.
+    # Wait until the last task (writing the last file) completes execution.
+    exe.awaitTermination(5, TimeUnit.MINUTES)
 
 
 def deconvolveTimePoint(filepaths, targetDir, klb_loader,
