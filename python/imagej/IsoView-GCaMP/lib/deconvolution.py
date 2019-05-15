@@ -128,11 +128,11 @@ def multiviewDeconvolution(images, blockSizes, PSF_kernels, n_iterations, lambda
                            for d in xrange(image.numDimensions())])
         syncPrint("blockSize:" + str(blockSizes[-1]))
 
-    cptf = createFactory(exe, lambda_val, blockSizes[0]) # TODO which blockSize to give here?
+    cptf = createFactory(mvd_exe, lambda_val, blockSizes[0]) # TODO which blockSize to give here?
     filterBlocksForContent = False # Run once with True, none were removed
     dviews = [DeconView(mvd_exe, img, weight, PSF_kernel, PSF_type, blockSize, 1, filterBlocksForContent)
               for img, blockSize, weight, PSF_kernel in izip(images, blockSizes, mvd_weights, PSF_kernels)]
-    decon = MultiViewDeconvolutionSeq(DeconViews(dviews, exe), n_iterations, PsiInitBlurredFusedFactory(), cptf, ArrayImgFactory(FloatType()))
+    decon = MultiViewDeconvolutionSeq(DeconViews(dviews, mvd_exe), n_iterations, PsiInitBlurredFusedFactory(), cptf, ArrayImgFactory(FloatType()))
     if not decon.initWasSuccessful():
       printFn("Something went wrong initializing MultiViewDeconvolution")
       return None
