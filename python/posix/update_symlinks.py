@@ -25,19 +25,25 @@ match_string = sys.argv[3] if len(sys.argv) > 3 else None
 
 count = 0
 
-for root, folders, filenames in os.walk(top_folder):
-  print("At folder: " + root)
+last_folder = None
+
+for root, folders, filenames in os.walk(top_folder, topdown=True):
+  folders.sort()
   for filename in filenames:
     path = os.path.join(root, filename)
     if os.path.islink(path):
       if match_string and -1 == os.readlink(path).find(match_string):
         continue
+      if last_folder != root:
+        last_folder = root
+        print("At folder: " + root)
       # Would work too, but can't overwrite existing symlink
       #os.remove(path)
       #os.symlink(redirect_target, path)
       # Less ops: emit a command instead:
-      command = "ln -sf %s %s" % (redirect_target, path)
-      print("Will run: " + command)
+      #command = "ln -sf %s %s" % (redirect_target, path)
+      command = f"ln -sf {redirect_target} {path}"
+      #print("Will run: " + command)
       if 0 != os.system(command):
         print("FAILED: " + command)
       count += 1
