@@ -10,6 +10,7 @@ from net.imglib2.img import ImgView
 from net.imglib2.cache import CacheLoader
 from net.imglib2.realtransform import RealViews
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
+from net.imglib2.type.numeric.integer import UnsignedByteType, UnsignedShortType
 from ij.io import FileSaver
 from ij import ImagePlus, IJ
 from synchronize import make_synchronized
@@ -158,3 +159,56 @@ def writeN5(img, path, dataset_name, blockSize, gzip_compression_level=4, n_thre
                dataset_name, blockSize,
                GzipCompression(gzip_compression_level),
                newFixedThreadPool(n_threads))
+
+def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, header=0):
+  """ Read a region of interest (the interval) of an image in a file.
+      Assumes the image is written with the first dimension moving slowest.
+
+      path: the file path to the image file.
+      dimensions: a sequence of integer values e.g. [512, 512, 512]
+      interval: two sequences of integer values defining the min and max coordinates, e.g.
+                [[20, 0], [400, 550]]
+      pixeltype: e.g. UnsignedShortType, FloatType
+      header: defaults to zero, the number of bytes between the start of the file and the start of the image data.
+
+      Supports only these types: UnsignedByteType, UnsignedShortType, FloatType.
+
+      Returns an ArrayImg of the given type.
+  """
+  ra = RandomAccessFile(path, 'r')
+  try:
+    width, height = dimensions
+    minX, minY = interval[0]
+    maxX, maxY = interval[1]
+    roi_width, roi_height = maxX - minX + 1, maxY - minY + 1
+    tailX = width - roi_width - minX
+
+    print minX, minY
+    print maxX, maxY
+    print roi_width, roi_height
+
+    size = roi_width * roi_height
+    n_bytes_per_pixel = pixelType().getBitsPerPixel() / 8
+
+    print n_bytes_per_pixel
+
+    bytes = zeros(size * n_bytes_per_pixel, 'b')
+
+    # Read only the 2D ROI
+    ra.seek(header + (minY * width + minX) * n_bytes_per_pixel)
+    for h in xrange(roi_height):
+      ra.readFully(bytes, h * roi_width * n_bytes_per_pixel, roi_width * n_bytes_per_pixel)
+      ra.skipBytes((tailX + minX) * n_bytes_per_pixel)
+    # Make an image
+    if UnsignedByteType == pixelType:
+      return ArrayImgs.unsignedBytes(bytes, [roi_width, roi_height])
+    if UnsignedShortType == pixelType:
+      shorts = zeros(size, 'h')
+      ByteBuffer.wrap(bytes).asShortBuffer().get(shorts)
+      return ArrayImgs.shorts(shorts, [roi_width, roi_height])
+    if FloatType == pixelType:
+      floats = zeros(size, 'f')
+      ByteBuffer.wrap(bytes).asFloatBuffer().get(floats)
+      return ArrayImgs.floats(floats, dimensions)
+  finally:
+    ra.close()
