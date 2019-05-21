@@ -184,14 +184,14 @@ def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, head
     roi_width, roi_height = maxX - minX + 1, maxY - minY + 1
     tailX = width - roi_width - minX
 
-    print minX, minY
-    print maxX, maxY
-    print roi_width, roi_height
+    #print minX, minY
+    #print maxX, maxY
+    #print roi_width, roi_height
 
     size = roi_width * roi_height
     n_bytes_per_pixel = pixelType().getBitsPerPixel() / 8
 
-    print n_bytes_per_pixel
+    #print n_bytes_per_pixel
 
     bytes = zeros(size * n_bytes_per_pixel, 'b')
 
@@ -201,15 +201,16 @@ def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, head
       ra.readFully(bytes, h * roi_width * n_bytes_per_pixel, roi_width * n_bytes_per_pixel)
       ra.skipBytes((tailX + minX) * n_bytes_per_pixel)
     # Make an image
+    roiDims = [roi_width, roi_height]
     if UnsignedByteType == pixelType:
-      return ArrayImgs.unsignedBytes(bytes, [roi_width, roi_height])
+      return ArrayImgs.unsignedBytes(bytes, roiDims)
     if UnsignedShortType == pixelType:
       shorts = zeros(size, 'h')
       ByteBuffer.wrap(bytes).asShortBuffer().get(shorts)
-      return ArrayImgs.shorts(shorts, [roi_width, roi_height])
+      return ArrayImgs.shorts(shorts, roiDims)
     if FloatType == pixelType:
       floats = zeros(size, 'f')
       ByteBuffer.wrap(bytes).asFloatBuffer().get(floats)
-      return ArrayImgs.floats(floats, dimensions)
+      return ArrayImgs.floats(floats, roiDims)
   finally:
     ra.close()
