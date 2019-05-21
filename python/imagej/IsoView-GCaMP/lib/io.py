@@ -11,6 +11,7 @@ from net.imglib2.cache import CacheLoader
 from net.imglib2.realtransform import RealViews
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2.type.numeric.integer import UnsignedByteType, UnsignedShortType
+from net.imglib2.type.numeric.real import FloatType
 from ij.io import FileSaver
 from ij import ImagePlus, IJ
 from synchronize import make_synchronized
