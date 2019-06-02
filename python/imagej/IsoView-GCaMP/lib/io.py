@@ -53,6 +53,10 @@ def readUnsignedBytes(path, dimensions, header=0):
   """ Read a file as an ArrayImg of UnsignedShortType """
   ra = RandomAccessFile(path, 'r')
   try:
+    if header < 0:
+      # Interpret from the end: useful for files with variable header lengths
+      # such as some types of uncompressed TIFF formats
+      header = ra.length() - header
     ra.skipBytes(header)
     bytes = zeros(reduce(operator.mul, dimensions), 'b')
     ra.read(bytes)
