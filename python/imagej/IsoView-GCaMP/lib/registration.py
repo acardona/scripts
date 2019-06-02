@@ -63,7 +63,9 @@ def saveMatrices(name, matrices, csv_dir):
     with open(path, 'w') as csvfile:
       w = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
       # Write header: 12 m<i><j> names
-      w.writerow(tuple("m%i%i" % (i,j) for i in (0,1,2) for j in (0,1,2,3)))
+      # handle 2D (length 6) and 3D matrices (length 12)
+      iseq, jseq = ((0,1,2), (0,1,2,3)) if 12 == len(matrices[0]) else ((0,1), (0,1,2))
+      w.writerow(tuple("m%i%i" % (i,j) for i in iseq for j in jseq))
       for matrix in matrices:
         w.writerow(matrix)
       csvfile.flush()
