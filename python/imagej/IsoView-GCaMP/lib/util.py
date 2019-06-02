@@ -5,6 +5,9 @@ from java.lang.reflect.Array import newInstance as newArray
 from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character, System
 from net.imglib2.realtransform import AffineTransform3D
 from net.imglib2.view import Views
+from java.util import LinkedHashMap, Collections
+from java.lang.ref import SoftReference
+from java.util.concurrent import locks.ReentrantLock
 
 
 @make_synchronized
@@ -153,3 +156,60 @@ def affine3D(matrix):
 def cropView(img, minCoords, maxCoords):
   return Views.zeroMin(Views.interval(img, minCoords, maxCoords))
 
+
+
+class LRUCache(LinkedHashMap):
+  def __init__(self, max_entries):
+    # initialCapacity 16 (the default)
+    # loadFactor 0.75 (the default)
+    # accessOrder True (default is False)
+    super(LinkedHashMap, self).__init__(10, 0.75, True)
+    self.max_entries = max_entries
+  def removeEldestEntry(self, eldest):
+    if self.size() > self.max_entries:
+      return True
+
+class SoftMemoize:
+  def __init__(self, fn, maxsize=30):
+    self.fn = fn
+    # Synchronize map to ensure correctness in a multi-threaded application:
+    # (I.e. concurrent threads will wait on each other to access the cache)
+    self.m = Collections.synchronizedMap(LRUCache(maxsize))
+    self.locks = {}
+  
+  @make_synchronized
+  def getOrMakeLock(self, key):
+    lock = self.locks.get(key, None)
+    if not lock:
+      lock = ReentrantLock()
+      self.locks[key] = lock
+    return lock
+
+  @make_synchronized
+  def releaseLock(self, lock):
+    lock = self.locks.get(key, None)
+    if lock:
+      lock.unlock()
+    # cleanup
+    for key, lock in self.locks.items(): # a copy
+      if lock.getQueuedThreads() < 1:
+        del self.locks[key]
+
+  def __call__(self, key):
+    """ Locks on the key, and waits, when needing to execute the memoized function. """
+    lock = self.getOrMakeLock(key)
+    try:
+      lock.lockInterruptibly()
+      softref = self.m.get(key, None) # self.m is a synchronized map
+      o = softref.get() if softref else None
+      if o:
+        return o
+      else:
+        # Either not present, or garbage collector discarded it
+        # Invoke the memoized function
+        o = this.fn(key)
+        # Store return value wrapped in a SoftReference
+        this.m.put(key, SoftReference(o))
+        return o
+    finally:
+      self.releaseLock(lock)
