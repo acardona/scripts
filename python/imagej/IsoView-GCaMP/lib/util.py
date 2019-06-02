@@ -105,7 +105,7 @@ def numCPUs():
 
 class ParallelTasks:
   def __init__(self, name, exe=None):
-    self.exe = exe if exe else newFixedThreadPool()
+    self.exe = exe if exe else newFixedThreadPool(name=name)
     self.futures = []
   def add(self, fn, *args, **kwargs):
     future = self.exe.submit(Task(fn, *args, **kwargs))
