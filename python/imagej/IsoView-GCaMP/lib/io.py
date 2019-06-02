@@ -161,7 +161,8 @@ def writeN5(img, path, dataset_name, blockSize, gzip_compression_level=4, n_thre
                GzipCompression(gzip_compression_level),
                newFixedThreadPool(n_threads))
 
-def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, header=0):
+
+def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, header=0, byte_order=ByteBuffer.LITTLE_ENDIAN):
   """ Read a region of interest (the interval) of an image in a file.
       Assumes the image is written with the first dimension moving slowest.
 
@@ -206,11 +207,11 @@ def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, head
       return ArrayImgs.unsignedBytes(bytes, roiDims)
     if UnsignedShortType == pixelType:
       shorts = zeros(size, 'h')
-      ByteBuffer.wrap(bytes).asShortBuffer().get(shorts)
+      ByteBuffer.wrap(bytes).order(byte_order).asShortBuffer().get(shorts)
       return ArrayImgs.shorts(shorts, roiDims)
     if FloatType == pixelType:
       floats = zeros(size, 'f')
-      ByteBuffer.wrap(bytes).asFloatBuffer().get(floats)
+      ByteBuffer.wrap(bytes).order(byte_order).asFloatBuffer().get(floats)
       return ArrayImgs.floats(floats, roiDims)
   finally:
     ra.close()
