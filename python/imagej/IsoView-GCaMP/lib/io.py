@@ -49,6 +49,25 @@ def readFloats(path, dimensions, header=0, byte_order=ByteBuffer.LITTLE_ENDIAN):
     ra.close()
 
 
+def readUnsignedShorts(path, dimensions, header=0, return_array=False, byte_order=ByteBuffer.LITTLE_ENDIAN):
+  """ Read a file as an ArrayImg of UnsignedShortType """
+  size = reduce(operator.mul, dimensions)
+  ra = RandomAccessFile(path, 'r')
+  try:
+    if header < 0:
+      # Interpret from the end: useful for files with variable header lengths
+      # such as some types of uncompressed TIFF formats
+      header = ra.length() - header
+    ra.skipBytes(header)
+    bytes = zeros(size * 4, 'b')
+    ra.read(bytes)
+    shorts = zeros(size, 's')
+    ByteBuffer.wrap(bytes).order(byte_order).asShortBuffer().get(shorts)
+    return shorts if return_array else ArrayImgs.unsignedShorts(shorts, dimensions)
+  finally:
+    ra.close()
+
+
 def readUnsignedBytes(path, dimensions, header=0):
   """ Read a file as an ArrayImg of UnsignedShortType """
   ra = RandomAccessFile(path, 'r')
