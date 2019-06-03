@@ -2,7 +2,8 @@ from __future__ import with_statement
 import sys, os, csv
 from org.janelia.simview.klb import KLB
 from operator import itemgetter
-sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP")
+#sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP")
+sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP")
 from lib.util import newFixedThreadPool, Task, syncPrint
 from net.imglib2 import RealPoint
 from net.imglib2.img.array import ArrayImgs
@@ -20,11 +21,11 @@ from net.imglib2.roi import Masks, Regions
 from itertools import imap, islice, izip
 from jarray import zeros, array
 
-srcDir = "/home/albert/shares/keller-s8/SV4/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
-tgtDir = "/home/albert/shares/cardonalab/Albert/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
+#srcDir = "/home/albert/shares/keller-s8/SV4/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
+#tgtDir = "/home/albert/shares/cardonalab/Albert/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
 
-#srcDir = "/mnt/keller-s8/SV4/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
-#tgtDir = "/groups/cardona/cardonalab/Albert/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
+srcDir = "/mnt/keller-s8/SV4/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
+tgtDir = "/groups/cardona/cardonalab/Albert/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/Results/WeightFused.dFF_offset50_preMed_postMed/"
 
 
 if not os.path.exists(tgtDir):
@@ -196,7 +197,7 @@ insides = [Regions.iterable(
 
 count = float(Regions.countTrue(insides[0])) # same for all
 
-def measurePeaks(filename):
+def measurePeaks(filename, retry=0):
   img3D = klb.readFull(os.path.join(srcDir, filename))
   """
   mean_intensities = []
@@ -209,7 +210,14 @@ def measurePeaks(filename):
     print s, count, Regions.countTrue(inside), str([peak.getFloatPosition(d) for d in [0,1,2]])
     mean_intensities.append(s / count)
   """
-  mean_intensities = [(sum(t.get() for t in Regions.sample(inside, img3D)) / count) for inside in insides]
+  try:
+    mean_intensities = [(sum(t.get() for t in Regions.sample(inside, img3D)) / count) for inside in insides]
+    return mean_intensities
+  except:
+    syncPrint(sys.exc_info())
+    if retry < 2:
+      syncPrint("Retrying %s" % filename)
+      return measurePeaks(filename, retry=retry+1)
   return mean_intensities
 
 exe = newFixedThreadPool(-1)
