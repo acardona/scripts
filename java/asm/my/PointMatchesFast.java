@@ -81,17 +81,14 @@ public final class PointMatchesFast
 
 	public final double[][] toRows()
 	{
-		final double[][] rows = new double[this.pointmatches.size()][6];
+		final int n = this.pointmatches.get(0).getP1().getW().length;
+		final double[][] rows = new double[this.pointmatches.size()][n + n];
 		for (int i=0; i<pointmatches.size(); ++i) {
 			final PointMatch pm = pointmatches.get(i);
 			final double[] p1 = pm.getP1().getW(),
 						         p2 = pm.getP2().getW();
-			rows[i][0] = p1[0];
-			rows[i][1] = p1[1];
-			rows[i][2] = p1[2];
-			rows[i][3] = p2[0];
-			rows[i][4] = p2[1];
-			rows[i][5] = p2[2];
+			for (int j=0; j<n; ++j) rows[i][j] = p1[j];
+			for (int j=0; j<n; ++j) rows[i][n+j] = p2[j];
 		}
 		return rows;
 	}
@@ -101,33 +98,30 @@ public final class PointMatchesFast
 		final List<PointMatch> pointmatches = new ArrayList<PointMatch>();
 		while (rows.hasNext()) {
 		  final List<String> row = rows.next();
-			pointmatches.add(new PointMatch(
-						new Point(new double[]{Double.parseDouble(row.get(0)),
-						                       Double.parseDouble(row.get(1)),
-												 					 Double.parseDouble(row.get(2))}),
-					  new Point(new double[]{Double.parseDouble(row.get(3)),
-                                   Double.parseDouble(row.get(4)),
-                                   Double.parseDouble(row.get(5))})));
+			final int n = row.size() / 2;
+			final double[] d1 = new double[n],
+			               d2 = new double[n];
+			for (int i=0; i<n; ++i) d1[i] = Double.parseDouble(row.get(i));
+			for (int i=0; i<n; ++i) d2[i] = Double.parseDouble(row.get(n+i));
+			pointmatches.add(new PointMatch(new Point(d1), new Point(d2)));
 		}
 		return new PointMatchesFast(pointmatches);
 	}
 
-	static public final String[] csvHeader()
+	static public final String[] csvHeader(final PointMatch pm)
 	{
-		return new String[]{"x1", "y1", "z1", "x2", "y2", "z2"};
+		return 3 == pm.getP1().getW().length ?
+			  new String[]{"x1", "y1", "z1", "x2", "y2", "z2"}
+			: new String[]{"x1", "y1", "x2", "y2"};
 	}
 
 	static public final double[] asRow(final PointMatch pm)
 	{
-		final double[] row = new double[6],
-									 p1 = pm.getP1().getW(),
-									 p2 = pm.getP2().getW();
-		row[0] = p1[0];
-		row[1] = p1[1];
-		row[2] = p1[2];
-		row[3] = p2[0];
-		row[4] = p2[1];
-		row[5] = p2[2];
+		final double[] p1 = pm.getP1().getW(),
+									 p2 = pm.getP2().getW(),
+                   row = new double[p1.length + p2.length];
+		for (int i=0; i<p1.length; ++i) row[i] = p1[i];
+		for (int i=0; i<p2.length; ++i) row[p1.length + i] = p2[i];
 		return row;
 	}
 }
