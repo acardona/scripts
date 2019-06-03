@@ -25,7 +25,7 @@ from mpicbg.imagefeatures import FloatArray2DSIFT
 from java.util import ArrayList
 from java.lang import Double
 from lib.io import readUnsignedShorts, read2DImageROI
-from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCPUs, nativeArray
+from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCPUs, nativeArray, syncPrint
 from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
 from lib.ui import showStack, wrap
@@ -35,11 +35,13 @@ from ij.process import FloatProcessor
 from ij import IJ
 from net.imglib2.img.io.proxyaccess import ShortAccessProxy
 from net.imglib2.img.cell import LazyCellImg, Cell, CellGrid
+from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
 tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
 
-filepaths = [filepath for filepath in sorted(os.listdir(srcDir))
+filepaths = [os.path.join(srcDir, filepath)
+             for filepath in sorted(os.listdir(srcDir))
              if filepath.endswith("InLens_raw.tif")]
 
 # Image properties: ASSUMES all images have the same properties
@@ -57,13 +59,13 @@ params = {
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': int(dimensions[0] / 10.0),
- 'blockRadius': int(dimensions[0] / 10.0) * 2
+ 'searchRadius': 200, # a low value: we expect little translation
+ 'blockRadius': 400 # small, yet enough
 }
 
 # Parameters for computing the transformation models
 paramsTileConfiguration = {
-  "n_adjacent": 5, # minimum of 1; Number of adjacent sections to pair up
+  "n_adjacent": 2, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends 1000
@@ -89,19 +91,15 @@ csvDir = os.path.join(tgtDir, "csvs")
 if not os.path.exists(csvDir):
   os.mkdir(csvDir)
 
-def loadImg(filepath):
-  #if interval:
-  #  return read2DImageRoi(filepath, dimensions, interval,
-  #                          pixelType=pixelType, header=header)
-  #return readUnsignedShorts(filepath, dimensions, header=header)
+def loadImp(filepath):
   # Images are TIFF with bit pack compression: can't byte-read array
-  return wrap(IJ.openImage(filepath), title=basename(filepath))
+  syncPrint("Loading image " + filepath)
+  return IJ.openImage(filepath)
 
 def loadFloatProcessor(filepath):
-  return FloatProcessor(dimensions[0], dimensions[1],
-                        loadImg(filepath).update(None).getCurrentStorageArray())
+  return loadImp(filepath).getProcessor().convertToFloatProcessor()
 
-loadImgMem = SoftMemoize(loadImg, maxsize=64)
+loadImpMem = SoftMemoize(loadImp, maxsize=64)
 loadFPMem = SoftMemoize(loadFloatProcessor, maxsize=64)
 
 
@@ -129,6 +127,8 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
   PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
   # List to fill
   sourceMatches = ArrayList() # of PointMatch from filepath1 to filepath2
+
+  syncPrint("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
   
   BlockMatching.matchByMaximalPMCC(
     		futures[0].get(), # FloatProcessor
@@ -146,7 +146,7 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
 			params["maxCurvature"], # float
 			sourcePoints,
 			sourceMatches,
-			ErrorStatistic())
+			ErrorStatistic(1))
 
   if len(sourceMatches) < 1:
     # Can fail if there is a shift larger than the searchRadius
@@ -172,18 +172,27 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
                    params)
 
 
-def pointmatchingTasks(filepaths, csvdir, params, n_adjacent, exeload):
+def pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload):
   for i in xrange(len(filepaths) - n_adjacent + 1):
     for inc in xrange(1, n_adjacent):
-      return Task(extractBlockMatches, filepaths[i], filepaths[i + inc], csvDir, params, exeload)
+      syncPrint("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
+      yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, csvDir, exeload)
+
 
 def ensurePointMatches(filepaths, csvDir, params, n_adjacent):
   """ If a pointmatches csv file doesn't exist, will create it. """
-  w = ParallelTasks("ensurePointMatches")
+  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(4))
   exeload = newFixedThreadPool()
   try:
-    w.chunkConsume(numCPUs() * 2, pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload))
+    count = 1
+    for result in w.chunkConsume(numCPUs() * 2, pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload)):
+      syncPrint("Completed %i/%i" % (count, len(filepaths)))
+      count += 1
+    syncPrint("Awaiting all remaining pointmatching tasks to finish.")
     w.awaitAll()
+    syncPrint("Finished all pointmatching tasks.")
+  except:
+    print sys.exc_info()
   finally:
     exeload.shutdown()
     w.destroy()
@@ -242,7 +251,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.cell_dimensions = cell_dimensions
     #self.m = Views.getDeclaredMethod("translate", [RandomAccessibleInterval, ???? TODO class of long[] ])
   def get(self, index):
-    img = loadImgMem(self.filepaths[index])
+    img = IL.wrap(loadImpMem(self.filepaths[index]))
     matrix = matrices[index]
     dx, dy = int(matrix[2] + 0.5), int(matrix[5] + 0.5)
     return Cell(self.cell_dimensions,
@@ -260,7 +269,7 @@ def viewAligned(filepaths, csvDir, params, paramsTileConfiguration):
   
 
 # TEST: first 10 sections
-viewAligned(filepaths[0:10], csvDir, params, paramsTileConfiguration)
+viewAligned(filepaths[0:4], csvDir, params, paramsTileConfiguration)
 
 
 
