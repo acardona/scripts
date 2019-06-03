@@ -187,7 +187,6 @@ class SoftMemoize:
 
   @make_synchronized
   def releaseLock(self, lock):
-    lock = self.locks.get(key, None)
     if lock:
       lock.unlock()
     # cleanup
