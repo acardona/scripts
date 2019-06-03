@@ -27,7 +27,7 @@ from lib.io import readUnsignedShorts, read2DImageROI
 from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCPUs, nativeArray
 from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
-from lib.ui import showStack
+from lib.ui import showStack, wrap
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
@@ -39,7 +39,7 @@ tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
 filepaths = [filepath for filepath in sorted(os.listdir(srcDir)) if filepath.endswith(".bin")]
 
 # Image properties: ASSUMES all images have the same properties
-dimensions = [16384, 16384]
+dimensions = [16875, 18125]
 interval = None #[[4096, 4096],
                 # [12288 -1, 12288 -1]] # to open only that, or None
 pixelType = UnsignedShortType
@@ -89,10 +89,12 @@ if not os.path.exists(csvDir):
   os.mkdir(csvDir)
 
 def loadImg(filepath):
-  if interval:
-    return read2DImageRoi(filepath, dimensions, interval,
-                            pixelType=pixelType, header=header)
-  return readUnsignedShorts(filepath, dimensions, header=header)
+  #if interval:
+  #  return read2DImageRoi(filepath, dimensions, interval,
+  #                          pixelType=pixelType, header=header)
+  #return readUnsignedShorts(filepath, dimensions, header=header)
+  # Images are TIFF with bit pack compression: can't byte-read array
+  return wrap(IJ.openImage(filepath), title=basename(filepath))
 
 def loadFloatProcessor(filepath):
   return FloatProcessor(dimensions[0], dimensions[1],
