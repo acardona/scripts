@@ -17,8 +17,9 @@
 # 4. Export volume for CATMAID.
 
 import os, sys
+sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")
 from os.path import basename
-from mpicbg.ij import BlockMatching
+from mpicbg.ij.blockmatching import BlockMatching
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from java.util import ArrayList
@@ -31,12 +32,15 @@ from lib.ui import showStack, wrap
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
+from ij import IJ
 from net.imglib2.img.io.proxyaccess import ShortAccessProxy
+from net.imglib2.img.cell import LazyCellImg, Cell, CellGrid
 
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
 tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
 
-filepaths = [filepath for filepath in sorted(os.listdir(srcDir)) if filepath.endswith(".bin")]
+filepaths = [filepath for filepath in sorted(os.listdir(srcDir))
+             if filepath.endswith("InLens_raw.tif")]
 
 # Image properties: ASSUMES all images have the same properties
 dimensions = [16875, 18125]
@@ -58,11 +62,8 @@ params = {
 }
 
 # Parameters for computing the transformation models
-
-# Number of adjacent sections to pair up
-n_adjacent = 5 # minimum of 1
-
 paramsTileConfiguration = {
+  "n_adjacent": 5, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends 1000
@@ -124,7 +125,7 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
   
   # Define points from the mesh
   sourcePoints = ArrayList()
-  mesh = TransformMesh( params["meshResolution"], dimensions[0], dimensions[1]) )
+  mesh = TransformMesh(params["meshResolution"], dimensions[0], dimensions[1])
   PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
   # List to fill
   sourceMatches = ArrayList() # of PointMatch from filepath1 to filepath2
@@ -171,28 +172,28 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
                    params)
 
 
-def pointmatchingTasks(filepaths, csvdir, params, exeload):
+def pointmatchingTasks(filepaths, csvdir, params, n_adjacent, exeload):
   for i in xrange(len(filepaths) - n_adjacent + 1):
-    for inc in xrange(1, n):
+    for inc in xrange(1, n_adjacent):
       return Task(extractBlockMatches, filepaths[i], filepaths[i + inc], csvDir, params, exeload)
 
-def ensurePointMatches(filepaths, csvDir, params):
+def ensurePointMatches(filepaths, csvDir, params, n_adjacent):
   """ If a pointmatches csv file doesn't exist, will create it. """
-  w = ParallelTasks()
+  w = ParallelTasks("ensurePointMatches")
   exeload = newFixedThreadPool()
   try:
-    w.chunkConsume(numCPUs() * 2, pointmatchingTasks(filepaths, csvDir, params, exeload))
+    w.chunkConsume(numCPUs() * 2, pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload))
     w.awaitAll()
   finally:
     exeload.shutdown()
     w.destroy()
 
 # When done, optimize tile pose globally
-def makeLinkedTiles(filepaths, csvDir, params):
-  ensurePointMatches(filepaths, csvDir, params)
-  tiles = [Tile(modelClass()) for _ in filepaths]
-  for i in xrange(len(filepaths) - n_adjcent + 1):
-    for inc in xrange(1, n):
+def makeLinkedTiles(filepaths, csvDir, params, n_adjacent):
+  ensurePointMatches(filepaths, csvDir, params, n_adjacent)
+  tiles = [Tile(TranslationModel2D()) for _ in filepaths]
+  for i in xrange(len(filepaths) - n_adjacent + 1):
+    for inc in xrange(1, n_adjacent):
       pointmatches = loadPointMatches(os.path.basename(filepaths[i]),
                                       os.path.basename(filepaths[i + inc]),
                                       csvDir,
@@ -203,12 +204,12 @@ def makeLinkedTiles(filepaths, csvDir, params):
 
 def align(filepaths, csvDir, params, paramsTileConfiguration):
   name = "matrices"
-  matrices = loadMatrices(name, csvDir, params)
+  matrices = loadMatrices(name, csvDir)
   if matrices:
     return matrices
   
   # Optimize
-  tiles = makeLinkedTiles(filepaths, csvDir)
+  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsTileConfiguration["n_adjacent"])
   tc = TileConfiguration()
   tc.addTiles(tiles)
   tc.fixTile(tiles[len(tiles) / 2]) # middle tile
@@ -245,12 +246,15 @@ class TranslatedSectionGet(LazyCellImg.Get):
     matrix = matrices[index]
     dx, dy = int(matrix[2] + 0.5), int(matrix[5] + 0.5)
     return Cell(self.cell_dimensions,
-               [0, 0, 0, index],
+               [0, 0, index],
                img.update(None) if dx < 1 and dy < 1 else proxyType(Views.translate(img, [dx, dy])))
 
 
 def viewAligned(filepaths, csvDir, params, paramsTileConfiguration):
   matrices = align(filepaths, csvDir, params, paramsTileConfiguration)
+  grid = [1 * dimensions[0],
+          1 * dimensions[1],
+          len(filepaths)]
   cellImg = LazyCellImg(grid, pixelType(), TransformedSectionGet(filepaths, matrices))
   return showStack(cellImg, title=srcDir.split('/')[-2])
   
