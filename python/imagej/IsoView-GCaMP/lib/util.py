@@ -121,8 +121,8 @@ class ParallelTasks:
     Returns a generator with the results.
     """
     for task in tasks:
-      self.futures.add(self.exe.submit(task))
-      if len(futures) > chunk_size:
+      self.futures.append(self.exe.submit(task))
+      if len(self.futures) > chunk_size:
         while len(self.futures) > 0:
           yield self.futures.pop(0).get()
   def awaitAll(self):
@@ -191,7 +191,7 @@ class SoftMemoize:
       lock.unlock()
     # cleanup
     for key, lock in self.locks.items(): # a copy
-      if lock.getQueuedThreads() < 1:
+      if not lock.hasQueuedThreads():
         del self.locks[key]
 
   def __call__(self, key):
@@ -199,16 +199,16 @@ class SoftMemoize:
     lock = self.getOrMakeLock(key)
     try:
       lock.lockInterruptibly()
-      softref = self.m.get(key, None) # self.m is a synchronized map
+      softref = self.m.get(key) # self.m is a synchronized map
       o = softref.get() if softref else None
       if o:
         return o
       else:
         # Either not present, or garbage collector discarded it
         # Invoke the memoized function
-        o = this.fn(key)
+        o = self.fn(key)
         # Store return value wrapped in a SoftReference
-        this.m.put(key, SoftReference(o))
+        self.m.put(key, SoftReference(o))
         return o
     finally:
       self.releaseLock(lock)
