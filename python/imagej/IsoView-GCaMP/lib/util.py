@@ -7,7 +7,7 @@ from net.imglib2.realtransform import AffineTransform3D
 from net.imglib2.view import Views
 from java.util import LinkedHashMap, Collections
 from java.lang.ref import SoftReference
-from java.util.concurrent import locks.ReentrantLock
+from java.util.concurrent.locks import ReentrantLock
 
 
 @make_synchronized
