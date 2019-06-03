@@ -1,7 +1,7 @@
 from java.io import RandomAccessFile
 from net.imglib2.img.array import ArrayImgs
 from jarray import zeros
-from java.nio import ByteBuffer
+from java.nio import ByteBuffer, ByteOrder
 import operator
 from net.imglib2 import RandomAccessibleInterval, IterableInterval
 from net.imglib2.view import Views
@@ -30,7 +30,7 @@ except:
 from com.google.gson import GsonBuilder
 
 
-def readFloats(path, dimensions, header=0, byte_order=ByteBuffer.LITTLE_ENDIAN):
+def readFloats(path, dimensions, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
   """ Read a file as an ArrayImg of FloatType """
   size = reduce(operator.mul, dimensions)
   ra = RandomAccessFile(path, 'r')
@@ -49,7 +49,7 @@ def readFloats(path, dimensions, header=0, byte_order=ByteBuffer.LITTLE_ENDIAN):
     ra.close()
 
 
-def readUnsignedShorts(path, dimensions, header=0, return_array=False, byte_order=ByteBuffer.LITTLE_ENDIAN):
+def readUnsignedShorts(path, dimensions, header=0, return_array=False, byte_order=ByteOrder.LITTLE_ENDIAN):
   """ Read a file as an ArrayImg of UnsignedShortType """
   size = reduce(operator.mul, dimensions)
   ra = RandomAccessFile(path, 'r')
@@ -189,7 +189,7 @@ def writeN5(img, path, dataset_name, blockSize, gzip_compression_level=4, n_thre
                newFixedThreadPool(n_threads))
 
 
-def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, header=0, byte_order=ByteBuffer.LITTLE_ENDIAN):
+def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
   """ Read a region of interest (the interval) of an image in a file.
       Assumes the image is written with the first dimension moving slowest.
 
