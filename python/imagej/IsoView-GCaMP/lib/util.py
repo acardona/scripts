@@ -192,6 +192,9 @@ class SoftMemoize:
     # cleanup
     for key, lock in self.locks.items(): # a copy
       if not lock.hasQueuedThreads():
+        ref = self.locks[key]
+        if ref:
+          ref.clear()
         del self.locks[key]
 
   def __call__(self, key):
