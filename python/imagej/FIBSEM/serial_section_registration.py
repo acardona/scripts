@@ -36,6 +36,9 @@ from ij import IJ
 from net.imglib2.img.io.proxyaccess import ShortAccessProxy
 from net.imglib2.img.cell import LazyCellImg, Cell, CellGrid
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
+from net.imglib2.img.array import ArrayImgs
+from net.imglib2.img import ImgView
+from net.imglib2.util import ImgUtil
 
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
 tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
@@ -59,13 +62,13 @@ params = {
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 200, # a low value: we expect little translation
- 'blockRadius': 400 # small, yet enough
+ 'searchRadius': 100, # a low value: we expect little translation
+ 'blockRadius': 200 # small, yet enough
 }
 
 # Parameters for computing the transformation models
 paramsTileConfiguration = {
-  "n_adjacent": 2, # minimum of 1; Number of adjacent sections to pair up
+  "n_adjacent": 4, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends 1000
@@ -99,7 +102,7 @@ def loadImp(filepath):
 def loadFloatProcessor(filepath):
   return loadImp(filepath).getProcessor().convertToFloatProcessor()
 
-loadImpMem = SoftMemoize(loadImp, maxsize=64)
+loadImpMem = SoftMemoize(loadImp, maxsize=128)
 loadFPMem = SoftMemoize(loadFloatProcessor, maxsize=64)
 
 
@@ -249,27 +252,37 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.filepaths = filepaths
     self.matrices = matrices
     self.cell_dimensions = cell_dimensions
+    self.aimg = ArrayImgs.unsignedShorts(cell_dimensions[:-1])
     #self.m = Views.getDeclaredMethod("translate", [RandomAccessibleInterval, ???? TODO class of long[] ])
   def get(self, index):
-    img = IL.wrap(loadImpMem(self.filepaths[index]))
-    matrix = matrices[index]
+    img = IL.wrap(loadImpMem(self.filepaths[index])) # an ArrayImg
+    matrix = self.matrices[index]
     dx, dy = int(matrix[2] + 0.5), int(matrix[5] + 0.5)
+    ImgUtil.copy(ImgView.wrap(Views.translate(img, [dx, dy]), self.aimg.factory()),
+                 self.aimg,
+                 max(1, numCPUs() -1))
     return Cell(self.cell_dimensions,
                [0, 0, index],
-               img.update(None) if dx < 1 and dy < 1 else proxyType(Views.translate(img, [dx, dy])))
+               self.aimg.update(None))
 
 
 def viewAligned(filepaths, csvDir, params, paramsTileConfiguration):
   matrices = align(filepaths, csvDir, params, paramsTileConfiguration)
-  grid = [1 * dimensions[0],
-          1 * dimensions[1],
-          len(filepaths)]
-  cellImg = LazyCellImg(grid, pixelType(), TransformedSectionGet(filepaths, matrices))
+  voldims = [1 * dimensions[0],
+             1 * dimensions[1],
+             len(filepaths)]
+  cell_dimensions = [dimensions[0],
+                     dimensions[1],
+                     1]
+  grid = CellGrid(voldims, cell_dimensions)
+  # TODO perhaps this should use interpolation, rather than a nearest neighbor.
+  cellImg = LazyCellImg(grid, pixelType(), TranslatedSectionGet(filepaths, matrices, cell_dimensions))
+  print cellImg
   return showStack(cellImg, title=srcDir.split('/')[-2])
   
 
-# TEST: first 10 sections
-viewAligned(filepaths[0:4], csvDir, params, paramsTileConfiguration)
+# TEST: first N sections
+viewAligned(filepaths, csvDir, params, paramsTileConfiguration)
 
 
 
