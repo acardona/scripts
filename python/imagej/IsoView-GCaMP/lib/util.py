@@ -159,14 +159,17 @@ def cropView(img, minCoords, maxCoords):
 
 
 class LRUCache(LinkedHashMap):
-  def __init__(self, max_entries):
+  def __init__(self, max_entries, eldestFn=None):
     # initialCapacity 16 (the default)
     # loadFactor 0.75 (the default)
     # accessOrder True (default is False)
     super(LinkedHashMap, self).__init__(10, 0.75, True)
     self.max_entries = max_entries
+    self.eldestFn = eldestFn
   def removeEldestEntry(self, eldest):
     if self.size() > self.max_entries:
+      if self.eldestFn:
+        self.eldestFn(eldest.getValue())
       return True
 
 class SoftMemoize:
@@ -174,7 +177,7 @@ class SoftMemoize:
     self.fn = fn
     # Synchronize map to ensure correctness in a multi-threaded application:
     # (I.e. concurrent threads will wait on each other to access the cache)
-    self.m = Collections.synchronizedMap(LRUCache(maxsize))
+    self.m = Collections.synchronizedMap(LRUCache(maxsize, eldestFn=lambda ref: ref.clear()))
     self.locks = {}
   
   @make_synchronized
@@ -192,9 +195,6 @@ class SoftMemoize:
     # cleanup
     for key, lock in self.locks.items(): # a copy
       if not lock.hasQueuedThreads():
-        ref = self.locks[key]
-        if ref:
-          ref.clear()
         del self.locks[key]
 
   def __call__(self, key):
