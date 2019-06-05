@@ -98,11 +98,10 @@ def measureFluorescence(series_name, img4D, mask=None):
     # by averaging the signal within a radius of each peak.
     measurement_radius = somaDiameter / 3.0
     spheres = [ClosedWritableSphere([peak.getFloatPosition(d) for d in xrange(3)], measurement_radius) for peak in peaks]
-    interval = Intervals.largestContainedInterval(spheres[0])
     insides = [Regions.iterable(
                  Views.interval(
                    Views.raster(Masks.toRealRandomAccessible(sphere)),
-                   interval))
+                   Intervals.largestContainedInterval(sphere))
                for sphere in spheres]
 
     count = float(Regions.countTrue(insides[0])) # same for all
