@@ -9,7 +9,7 @@ from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
 from net.imglib2.view import Views
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.util import ImgUtil, Intervals
-from net.imglib2.algorithm.math.ImgMath import compute, add, sub
+from net.imglib2.algorithm.math.ImgMath import compute, add, sub, maximum
 
 
 def doGPeaks(img, params):
@@ -142,7 +142,7 @@ def maxProjectLastDimension(img, strategy="1by1", chunk_size=0):
     exe = newFixedThreadPool()
     try:
       n_threads = exe.getCorePoolSize()
-      imgTs = [ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img)) for i in xrange(n_threads)]
+      imgTs = [ArrayImgs.unsignedShorts(list(Intervals.dimensionsAsLongArray(img))[:-1]) for i in xrange(n_threads)]
       
       def mergeMax(img1, img2, imgT):
         return compute(maximum(img1, img2)).into(imgT)
