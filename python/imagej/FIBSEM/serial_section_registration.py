@@ -16,12 +16,14 @@
 # 3. Jointly optimize the pose of every section.
 # 4. Export volume for CATMAID.
 
-import os, sys
+import os, sys, traceback
 sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")
 from os.path import basename
 from mpicbg.ij.blockmatching import BlockMatching
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration
 from mpicbg.imagefeatures import FloatArray2DSIFT
+from mpicbg.ij.util import Filter, Util
+from mpicbg.ij import SIFT
 from java.util import ArrayList
 from java.lang import Double
 from lib.io import readUnsignedShorts, read2DImageROI
@@ -68,7 +70,7 @@ params = {
 
 # Parameters for computing the transformation models
 paramsTileConfiguration = {
-  "n_adjacent": 4, # minimum of 1; Number of adjacent sections to pair up
+  "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends 1000
@@ -99,8 +101,16 @@ def loadImp(filepath):
   syncPrint("Loading image " + filepath)
   return IJ.openImage(filepath)
 
-def loadFloatProcessor(filepath):
-  return loadImp(filepath).getProcessor().convertToFloatProcessor()
+def loadFloatProcessor(filepath, scale=True):
+  try:
+    fp = loadImp(filepath).getProcessor().convertToFloatProcessor()
+    # Preprocess images: Gaussian-blur to scale down, then normalize contrast
+    if scale:
+      fp = Filter.createDownsampled(fp, params["scale"], 0.5, 1.6)
+      Util.normalizeContrast(fp)
+    return fp
+  except:
+    syncPrint(sys.exc_info())
 
 loadImpMem = SoftMemoize(loadImp, maxsize=128)
 loadFPMem = SoftMemoize(loadFloatProcessor, maxsize=64)
@@ -120,64 +130,72 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
   if os.path.exists(csvpath):
     return
 
-  # Load files in parallel
-  futures = [exeload.submit(Task(load, filepath1)),
-             exeload.submit(Task(load, filepath2))]
+  try:
+
+    # Load files in parallel
+    futures = [exeload.submit(Task(load, filepath1)),
+               exeload.submit(Task(load, filepath2))]
   
-  # Define points from the mesh
-  sourcePoints = ArrayList()
-  mesh = TransformMesh(params["meshResolution"], dimensions[0], dimensions[1])
-  PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
-  # List to fill
-  sourceMatches = ArrayList() # of PointMatch from filepath1 to filepath2
+    # Define points from the mesh
+    sourcePoints = ArrayList()
+    mesh = TransformMesh(params["meshResolution"], dimensions[0], dimensions[1])
+    PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
+    # List to fill
+    sourceMatches = ArrayList() # of PointMatch from filepath1 to filepath2
 
-  syncPrint("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
-  
-  BlockMatching.matchByMaximalPMCC(
-    		futures[0].get(), # FloatProcessor
-    		futures[1].get(), # FloatProcessor
-    		None, # sourceMask
-			None, # targetMask
-			params["scale"], # float
-			TranslationModel2D(), # identity: zero translation is expected
-			params["blockRadius"], # X
-			params["blockRadius"], # Y
-			params["searchRadius"], # X
-			params["searchRadius"], # Y
-			params["minR"], # float
-			params["rod"], # float
-			params["maxCurvature"], # float
-			sourcePoints,
-			sourceMatches,
-			ErrorStatistic(1))
+    syncPrint("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
 
-  if len(sourceMatches) < 1:
-    # Can fail if there is a shift larger than the searchRadius
-    # Try SIFT features, which are location independent
-    ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
-    features1 = ArrayList() # of Point instances
-    ijSIFT.extractFeatures(futures[0].get(), features1)
-    features2 = ArrayList() # of Point instances
-    ijSIFT.extractFeatures(futures[1].get(), features2)
-    # Vector of PointMatch instances
-    sourceMatches = FloatArray2DSIFT.createMatches(features1,
-                                                   features2,
-                                                   1.5, # max_sd
-                                                   TranslationModel2D(),
-                                                   Double.MAX_VALUE,
-                                                   params["rod"]) # rod: ratio of best vs second best
+    BlockMatching.matchByMaximalPMCCFromPreScaledImages(
+              futures[0].get(), # FloatProcessor
+              futures[1].get(), # FloatProcessor
+              params["scale"], # float
+              params["blockRadius"], # X
+              params["blockRadius"], # Y
+              params["searchRadius"], # X
+              params["searchRadius"], # Y
+              params["minR"], # float
+              params["rod"], # float
+              params["maxCurvature"], # float
+              sourcePoints,
+              sourceMatches)
 
-  # Store pointmatches
-  savePointMatches(os.path.basename(filepath1),
-                   os.path.basename(filepath2),
-                   sourceMatches,
-                   csvDir,
-                   params)
+    # At least some should match to accept the translation
+    if len(sourceMatches) < max(20, len(sourcePoints) / 5) / 2:
+      syncPrint("Found only %i blockmatching pointmatches (from %i source points)" % (len(sourceMatches), len(sourcePoints)))
+      syncPrint("... therefore invoking SIFT pointmatching for:\n  S: " + basename(filepath1) + "\n  T: " + basename(filepath2))
+      # Can fail if there is a shift larger than the searchRadius
+      # Try SIFT features, which are location independent
+      #
+      # Images are now scaled: load originals
+      futures = [exeload.submit(Task(loadFloatProcessor, filepath1, scale=False)),
+                 exeload.submit(Task(loadFloatProcessor, filepath2, scale=False))]
+      ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
+      features1 = ArrayList() # of Point instances
+      ijSIFT.extractFeatures(futures[0].get(), features1)
+      features2 = ArrayList() # of Point instances
+      ijSIFT.extractFeatures(futures[1].get(), features2)
+      # Vector of PointMatch instances
+      sourceMatches = FloatArray2DSIFT.createMatches(features1,
+                                                     features2,
+                                                     1.5, # max_sd
+                                                     TranslationModel2D(),
+                                                     Double.MAX_VALUE,
+                                                     params["rod"]) # rod: ratio of best vs second best
+
+    # Store pointmatches
+    savePointMatches(os.path.basename(filepath1),
+                     os.path.basename(filepath2),
+                     sourceMatches,
+                     csvDir,
+                     params)
+  except:
+    syncPrint(sys.exc_info())
+    syncPrint("".join(traceback.format_exception()), out="stderr")
 
 
 def pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload):
-  for i in xrange(len(filepaths) - n_adjacent + 1):
-    for inc in xrange(1, n_adjacent):
+  for i in xrange(len(filepaths) - n_adjacent):
+    for inc in xrange(1, n_adjacent + 1):
       syncPrint("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
       yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, csvDir, exeload)
 
@@ -189,7 +207,7 @@ def ensurePointMatches(filepaths, csvDir, params, n_adjacent):
   try:
     count = 1
     for result in w.chunkConsume(numCPUs() * 2, pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload)):
-      syncPrint("Completed %i/%i" % (count, len(filepaths)))
+      syncPrint("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
       count += 1
     syncPrint("Awaiting all remaining pointmatching tasks to finish.")
     w.awaitAll()
@@ -204,8 +222,8 @@ def ensurePointMatches(filepaths, csvDir, params, n_adjacent):
 def makeLinkedTiles(filepaths, csvDir, params, n_adjacent):
   ensurePointMatches(filepaths, csvDir, params, n_adjacent)
   tiles = [Tile(TranslationModel2D()) for _ in filepaths]
-  for i in xrange(len(filepaths) - n_adjacent + 1):
-    for inc in xrange(1, n_adjacent):
+  for i in xrange(len(filepaths) - n_adjacent):
+    for inc in xrange(1, n_adjacent + 1):
       pointmatches = loadPointMatches(os.path.basename(filepaths[i]),
                                       os.path.basename(filepaths[i + inc]),
                                       csvDir,
@@ -258,7 +276,8 @@ class TranslatedSectionGet(LazyCellImg.Get):
     img = IL.wrap(loadImpMem(self.filepaths[index])) # an ArrayImg
     matrix = self.matrices[index]
     dx, dy = int(matrix[2] + 0.5), int(matrix[5] + 0.5)
-    ImgUtil.copy(ImgView.wrap(Views.translate(img, [dx, dy]), self.aimg.factory()),
+    imgS = Views.interval(Views.translate(Views.extendZero(img), [dx, dy]), self.aimg)
+    ImgUtil.copy(ImgView.wrap(imgS, self.aimg.factory()),
                  self.aimg,
                  max(1, numCPUs() -1))
     return Cell(self.cell_dimensions,
