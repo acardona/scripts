@@ -40,7 +40,11 @@ from net.imglib2.img.cell import LazyCellImg, Cell, CellGrid
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.img import ImgView
-from net.imglib2.util import ImgUtil
+from net.imglib2.util import ImgUtil, Intervals
+from net.imglib2.realtransform import RealViews, AffineTransform2D
+from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
+from net.imglib2 import FinalInterval
+from java.awt.event import KeyAdapter, KeyEvent
 
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
 tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
@@ -253,12 +257,12 @@ def align(filepaths, csvDir, params, paramsTileConfiguration):
 
   # TODO problem: can fail when there are 0 inliers
 
-  # Return model matrices as double[] arrays with 12 values
+  # Return model matrices as double[] arrays with 6 values
   matrices = []
   for tile in tiles:
-    a = nativeArray('d', [3, 4])
+    a = nativeArray('d', [2, 3])
     tile.getModel().toMatrix(a) # Can't use model.toArray: different order of elements
-    matrices.append(a[0] + a[1] + a[2]) # Concat: flatten to 1-dimensional array
+    matrices.append(a[0] + a[1]) # Concat: flatten to 1-dimensional array
 
   saveMatrices(name, matrices, csvDir) # TODO check: saving correctly, now that it's 2D?
   
@@ -266,18 +270,36 @@ def align(filepaths, csvDir, params, paramsTileConfiguration):
 
 
 class TranslatedSectionGet(LazyCellImg.Get):
-  def __init__(self, filepaths, matrices, cell_dimensions):
+  def __init__(self, filepaths, matrices, interval):
     self.filepaths = filepaths
     self.matrices = matrices
-    self.cell_dimensions = cell_dimensions
-    self.aimg = ArrayImgs.unsignedShorts(cell_dimensions[:-1])
-    #self.m = Views.getDeclaredMethod("translate", [RandomAccessibleInterval, ???? TODO class of long[] ])
+    dims = Intervals.dimensionsAsLongArray(interval)
+    self.cell_dimensions = [dims[0], dims[1], 1]
+    self.aimg = ArrayImgs.unsignedShorts(dims)
+    self.interval = interval # when smaller than the image, will crop
+
+  def translate(self, dx, dy):
+    a = zeros(2, 'l')
+    self.interval.min(a)
+    self.interval = FinalInterval([a[0] + dx, a[1] + dy], [self.cell_dimensions[0] -1, self.cell_dimensions[1] - 1])
+
   def get(self, index):
-    img = IL.wrap(loadImpMem(self.filepaths[index])) # an ArrayImg
+    imp = loadImpMem(self.filepaths[index])
+    img = ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
     matrix = self.matrices[index]
-    dx, dy = int(matrix[2] + 0.5), int(matrix[5] + 0.5)
-    imgS = Views.interval(Views.translate(Views.extendZero(img), [dx, dy]), self.aimg)
-    ImgUtil.copy(ImgView.wrap(imgS, self.aimg.factory()),
+    if matrix[0] == 1.0 and matrix[1] == 0.0 and matrix[3] == 0.0 and matrix[4] == 1.0:
+      # Translation-only
+      dx, dy = int(matrix[2] + 0.5), int(matrix[5] + 0.5)
+      imgT = Views.zeroMin(Views.interval(Views.translate(Views.extendZero(img), [dx, dy]), self.interval))
+    else:
+      # Affine
+      affine = AffineTransform2D()
+      affine.set(matrix)
+      imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
+      imgA = RealViews.transform(imgI, affine)
+      imgT = Views.zeroMin(Views.interval(imgA, self.interval))
+    #
+    ImgUtil.copy(ImgView.wrap(imgT, self.aimg.factory()),
                  self.aimg,
                  max(1, numCPUs() -1))
     return Cell(self.cell_dimensions,
@@ -285,23 +307,71 @@ class TranslatedSectionGet(LazyCellImg.Get):
                self.aimg.update(None))
 
 
-def viewAligned(filepaths, csvDir, params, paramsTileConfiguration):
+class SourcePanning(KeyAdapter):
+  def __init__(self, cellGet, imp, shift=100, alt=10):
+    """
+      cellGet: the LazyCellImg.Get onto which to set a translation of the source pixels
+      imp: the ImagePlus to update
+      shift: defaults to 100, when the shift key is down, move by 100 pixels
+      alt: defaults to 10, when the alt key is down, move by 10 pixels
+      If both shift and alt are down, move by shift*alt = 1000 pixels by default.
+    """
+    self.cellGet = cellGet
+    self.delta = {KeyEvent.VK_UP: (0, -1),
+                  KeyEvent.VK_DOWN: (0, 1),
+                  KeyEvent.VK_RIGHT: (1, 0),
+                  KeyEvent.VK_LEFT: (-1, 0)}
+    self.shift = shift
+    self.alt = alt
+    self.imp = imp
+  def keyPressed(self, event):
+    dx, dy = self.delta.get(event.getKeyCode(), (0, 0))
+    if dx + dy == 0:
+      return
+    if event.isShiftDown():
+      dx *= self.shift
+      dy *= self.shift
+    if event.isAltDown():
+      dx *= self.alt
+      dy *= self.alt
+    self.cellGet.translate(dx, dy)
+    self.imp.updateAndDraw()
+    event.consume()
+
+
+def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, cropInterval):
   matrices = align(filepaths, csvDir, params, paramsTileConfiguration)
-  voldims = [1 * dimensions[0],
-             1 * dimensions[1],
+  dims = Intervals.dimensionsAsLongArray(cropInterval)
+  voldims = [dims[0],
+             dims[1],
              len(filepaths)]
-  cell_dimensions = [dimensions[0],
-                     dimensions[1],
+  cell_dimensions = [dims[0],
+                     dims[1],
                      1]
   grid = CellGrid(voldims, cell_dimensions)
-  # TODO perhaps this should use interpolation, rather than a nearest neighbor.
-  cellImg = LazyCellImg(grid, pixelType(), TranslatedSectionGet(filepaths, matrices, cell_dimensions))
+  cellGet = TranslatedSectionGet(filepaths, matrices, cropInterval)
+  cellImg = LazyCellImg(grid, pixelType(), cellGet)
   print cellImg
-  return showStack(cellImg, title=srcDir.split('/')[-2])
-  
+  comp = showStack(cellImg, title=srcDir.split('/')[-2], proper=False)
+  # Add the SourcePanning KeyListener as the first one
+  canvas = comp.getWindow().getCanvas()
+  kls = canvas.getKeyListeners()
+  for kl in kls:
+    canvas.removeKeyListener(kl)
+  canvas.addKeyListener(SourcePanning(cellGet, comp))
+  for kl in kls:
+    canvas.addKeyListener(kl)
 
-# TEST: first N sections
-viewAligned(filepaths, csvDir, params, paramsTileConfiguration)
+
+
+# Show only a cropped middle area
+x0 = 3 * dimensions[0] / 8
+y0 = 3 * dimensions[1] / 8
+x1 = x0 + 2 * dimensions[0] / 8 -1
+y1 = y0 + 2 * dimensions[1] / 8 -1
+print "Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y0 + 1)
+viewAligned(filepaths, csvDir, params, paramsTileConfiguration,
+            FinalInterval([x0, y0], [x1, y1]))
 
 
 
