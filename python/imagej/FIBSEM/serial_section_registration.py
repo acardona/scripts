@@ -27,7 +27,7 @@ from mpicbg.ij import SIFT
 from java.util import ArrayList
 from java.lang import Double
 from lib.io import readUnsignedShorts, read2DImageROI
-from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCPUs, nativeArray, syncPrint
+from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCPUs, nativeArray, syncPrint, LRUCache
 from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
 from lib.ui import showStack, wrap
@@ -45,6 +45,9 @@ from net.imglib2.realtransform import RealViews, AffineTransform2D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2 import FinalInterval
 from java.awt.event import KeyAdapter, KeyEvent
+from java.lang.ref import SoftReference
+from jarray import zeros
+from java.util import Collections
 
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
 tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
@@ -270,38 +273,68 @@ def align(filepaths, csvDir, params, paramsTileConfiguration):
 
 
 class TranslatedSectionGet(LazyCellImg.Get):
-  def __init__(self, filepaths, matrices, interval):
+  def __init__(self, filepaths, matrices, cell_dimensions, interval):
     self.filepaths = filepaths
     self.matrices = matrices
-    dims = Intervals.dimensionsAsLongArray(interval)
-    self.cell_dimensions = [dims[0], dims[1], 1]
-    self.aimg = ArrayImgs.unsignedShorts(dims)
+    self.cell_dimensions = cell_dimensions # x,y must match dims of interval
     self.interval = interval # when smaller than the image, will crop
+    self.cache = self.makeCache()
+
+  def makeCache(self):
+    return Collections.synchronizedMap(LRUCache(1000, eldestFn=lambda ref: ref.clear()))
 
   def translate(self, dx, dy):
     a = zeros(2, 'l')
     self.interval.min(a)
     self.interval = FinalInterval([a[0] + dx, a[1] + dy], [self.cell_dimensions[0] -1, self.cell_dimensions[1] - 1])
+    self.cache = self.makeCache()
 
   def get(self, index):
+    ref = self.cache.get(index)
+    if ref:
+      cell = ref.get()
+      if cell:
+        return cell
+    cell = self.makeCell(index)
+    self.cache[index] = SoftReference(cell)
+    return cell
+
+  def makeCell(self, index):
+    syncPrint("Loading image at index %i or getting it from the cache" % index)
     imp = loadImpMem(self.filepaths[index])
     img = ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
+    self.aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(self.interval))
     matrix = self.matrices[index]
+    syncPrint("Matrix:" + str(matrix))
+    """
     if matrix[0] == 1.0 and matrix[1] == 0.0 and matrix[3] == 0.0 and matrix[4] == 1.0:
+      syncPrint("Translation-only view")
       # Translation-only
       dx, dy = int(matrix[2] + 0.5), int(matrix[5] + 0.5)
       imgT = Views.zeroMin(Views.interval(Views.translate(Views.extendZero(img), [dx, dy]), self.interval))
     else:
+      syncPrint("Affine view")
       # Affine
       affine = AffineTransform2D()
       affine.set(matrix)
       imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
       imgA = RealViews.transform(imgI, affine)
       imgT = Views.zeroMin(Views.interval(imgA, self.interval))
+    """
+    # Always interpolate:
+    syncPrint("Affine view")
+    # Affine
+    affine = AffineTransform2D()
+    affine.set(matrix)
+    imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
+    imgA = RealViews.transform(imgI, affine)
+    imgT = Views.zeroMin(Views.interval(imgA, self.interval))
     #
+    syncPrint("Copying transformed view into ArrayImg")
     ImgUtil.copy(ImgView.wrap(imgT, self.aimg.factory()),
                  self.aimg,
                  max(1, numCPUs() -1))
+    syncPrint("Returning Cell")
     return Cell(self.cell_dimensions,
                [0, 0, index],
                self.aimg.update(None))
@@ -349,7 +382,7 @@ def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, cropInterval
                      dims[1],
                      1]
   grid = CellGrid(voldims, cell_dimensions)
-  cellGet = TranslatedSectionGet(filepaths, matrices, cropInterval)
+  cellGet = TranslatedSectionGet(filepaths, matrices, cell_dimensions, cropInterval)
   cellImg = LazyCellImg(grid, pixelType(), cellGet)
   print cellImg
   comp = showStack(cellImg, title=srcDir.split('/')[-2], proper=False)
