@@ -46,7 +46,7 @@ from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2 import FinalInterval
 from java.awt.event import KeyAdapter, KeyEvent
 from java.lang.ref import SoftReference
-from jarray import zeros
+from jarray import zeros, array
 from java.util import Collections
 
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
@@ -80,7 +80,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 1000, # Saalfeld recommends 1000
+  "maxIterations": 2, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
 }
 
@@ -130,12 +130,14 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
   params: dictionary of parameters necessary for BlockMatching.
   exeload: an ExecutorService for parallel loading of image files.
   load: a function that knows how to load the image from the filepath.
+
+  return False if the CSV file already exists, True if it has to be computed.
   """
 
   # Skip if pointmatches CSV file exists already:
   csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepath2) + ".pointmatches.csv")
   if os.path.exists(csvpath):
-    return
+    return False
 
   try:
 
@@ -195,6 +197,8 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
                      sourceMatches,
                      csvDir,
                      params)
+
+    return True
   except:
     syncPrint(sys.exc_info())
     syncPrint("".join(traceback.format_exception()), out="stderr")
@@ -203,18 +207,19 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
 def pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload):
   for i in xrange(len(filepaths) - n_adjacent):
     for inc in xrange(1, n_adjacent + 1):
-      syncPrint("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
+      #syncPrint("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
       yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, csvDir, exeload)
 
 
 def ensurePointMatches(filepaths, csvDir, params, n_adjacent):
   """ If a pointmatches csv file doesn't exist, will create it. """
-  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(4))
+  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(numCPUs()))
   exeload = newFixedThreadPool()
   try:
     count = 1
     for result in w.chunkConsume(numCPUs() * 2, pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload)):
-      syncPrint("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
+      if result: # is False when CSV file already exists
+        syncPrint("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
       count += 1
     syncPrint("Awaiting all remaining pointmatching tasks to finish.")
     w.awaitAll()
@@ -225,18 +230,36 @@ def ensurePointMatches(filepaths, csvDir, params, n_adjacent):
     exeload.shutdown()
     w.destroy()
 
+
+def loadPointMatchesPlus(filepaths, i, j, csvDir, params):
+  return i, j, loadPointMatches(os.path.basename(filepaths[i]),
+                                os.path.basename(filepaths[j]),
+                                csvDir,
+                                params,
+                                verbose=False)
+
+def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
+  for i in xrange(len(filepaths) - n_adjacent):
+    for inc in xrange(1, n_adjacent + 1):
+      yield Task(loadPointMatchesPlus, filepaths, i, i + inc, csvDir, params)
+
 # When done, optimize tile pose globally
 def makeLinkedTiles(filepaths, csvDir, params, n_adjacent):
   ensurePointMatches(filepaths, csvDir, params, n_adjacent)
-  tiles = [Tile(TranslationModel2D()) for _ in filepaths]
-  for i in xrange(len(filepaths) - n_adjacent):
-    for inc in xrange(1, n_adjacent + 1):
-      pointmatches = loadPointMatches(os.path.basename(filepaths[i]),
-                                      os.path.basename(filepaths[i + inc]),
-                                      csvDir,
-                                      params)
-      tiles[i].connect(tiles[i + inc], pointmatches) # reciprocal connection
-  return tiles
+  try:
+    tiles = [Tile(TranslationModel2D()) for _ in filepaths]
+    # FAILS when running in parallel, for mysterious reasons related to jython internals, perhaps syncPrint fails
+    #w = ParallelTasks("loadPointMatches")
+    #for i, j, pointmatches in w.chunkConsume(numCPUs() * 2, loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
+    syncPrint("Loading all pointmatches.")
+    for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
+      i, j, pointmatches = task.call()
+      tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
+    syncPrint("Finsihed loading all pointmatches.")
+    return tiles
+  finally:
+    #w.destroy()
+    pass
 
 
 def align(filepaths, csvDir, params, paramsTileConfiguration):
@@ -263,9 +286,14 @@ def align(filepaths, csvDir, params, paramsTileConfiguration):
   # Return model matrices as double[] arrays with 6 values
   matrices = []
   for tile in tiles:
-    a = nativeArray('d', [2, 3])
-    tile.getModel().toMatrix(a) # Can't use model.toArray: different order of elements
-    matrices.append(a[0] + a[1]) # Concat: flatten to 1-dimensional array
+    # BUG in TransformationModel2D.toMatrix
+    #a = nativeArray('d', [2, 3])
+    #tile.getModel().toMatrix(a)
+    #matrices.append(a[0] + a[1])
+    # Instead:
+    a = zeros(6, 'd')
+    tile.getModel().toArray(a)
+    matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
 
   saveMatrices(name, matrices, csvDir) # TODO check: saving correctly, now that it's 2D?
   
@@ -273,21 +301,26 @@ def align(filepaths, csvDir, params, paramsTileConfiguration):
 
 
 class TranslatedSectionGet(LazyCellImg.Get):
-  def __init__(self, filepaths, matrices, cell_dimensions, interval):
+  def __init__(self, filepaths, matrices, img_dimensions, cell_dimensions, interval):
     self.filepaths = filepaths
     self.matrices = matrices
+    self.img_dimensions = img_dimensions
     self.cell_dimensions = cell_dimensions # x,y must match dims of interval
     self.interval = interval # when smaller than the image, will crop
-    self.cache = self.makeCache()
-
-  def makeCache(self):
-    return Collections.synchronizedMap(LRUCache(1000, eldestFn=lambda ref: ref.clear()))
+    self.cache = Collections.synchronizedMap(LRUCache(1000, eldestFn=lambda ref: ref.clear()))
+    syncPrint(str(Intervals.dimensionsAsLongArray(self.interval)))
 
   def translate(self, dx, dy):
     a = zeros(2, 'l')
     self.interval.min(a)
-    self.interval = FinalInterval([a[0] + dx, a[1] + dy], [self.cell_dimensions[0] -1, self.cell_dimensions[1] - 1])
-    self.cache = self.makeCache()
+    width = self.cell_dimensions[0]
+    height = self.cell_dimensions[1]
+    x0 = max(0, min(a[0] + dx, self.img_dimensions[0] - width))
+    y0 = max(0, min(a[1] + dy, self.img_dimensions[1] - height))
+    self.interval = FinalInterval([x0, y0],
+                                  [x0 + width -1, y0 + height - 1])
+    syncPrint(str(Intervals.dimensionsAsLongArray(self.interval)))
+    self.cache.clear()
 
   def get(self, index):
     ref = self.cache.get(index)
@@ -302,7 +335,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
   def makeCell(self, index):
     syncPrint("Loading image at index %i or getting it from the cache" % index)
     imp = loadImpMem(self.filepaths[index])
-    img = ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
+    img = ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), self.img_dimensions)
     self.aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(self.interval))
     matrix = self.matrices[index]
     syncPrint("Matrix:" + str(matrix))
@@ -358,21 +391,26 @@ class SourcePanning(KeyAdapter):
     self.alt = alt
     self.imp = imp
   def keyPressed(self, event):
-    dx, dy = self.delta.get(event.getKeyCode(), (0, 0))
-    if dx + dy == 0:
-      return
-    if event.isShiftDown():
-      dx *= self.shift
-      dy *= self.shift
-    if event.isAltDown():
-      dx *= self.alt
-      dy *= self.alt
-    self.cellGet.translate(dx, dy)
-    self.imp.updateAndDraw()
-    event.consume()
+    try:
+      syncPrint("Translating source")
+      dx, dy = self.delta.get(event.getKeyCode(), (0, 0))
+      if dx + dy == 0:
+        return
+      if event.isShiftDown():
+        dx *= self.shift
+        dy *= self.shift
+      if event.isAltDown():
+        dx *= self.alt
+        dy *= self.alt
+      syncPrint("... by x=%i, y=%i" % (dx, dy))
+      self.cellGet.translate(dx, dy)
+      self.imp.updateAndDraw()
+      event.consume()
+    except:
+      syncPrint(str(sys.exc_info()))
 
 
-def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, cropInterval):
+def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensions, cropInterval):
   matrices = align(filepaths, csvDir, params, paramsTileConfiguration)
   dims = Intervals.dimensionsAsLongArray(cropInterval)
   voldims = [dims[0],
@@ -382,7 +420,7 @@ def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, cropInterval
                      dims[1],
                      1]
   grid = CellGrid(voldims, cell_dimensions)
-  cellGet = TranslatedSectionGet(filepaths, matrices, cell_dimensions, cropInterval)
+  cellGet = TranslatedSectionGet(filepaths, matrices, img_dimensions, cell_dimensions, cropInterval)
   cellImg = LazyCellImg(grid, pixelType(), cellGet)
   print cellImg
   comp = showStack(cellImg, title=srcDir.split('/')[-2], proper=False)
@@ -403,7 +441,7 @@ y0 = 3 * dimensions[1] / 8
 x1 = x0 + 2 * dimensions[0] / 8 -1
 y1 = y0 + 2 * dimensions[1] / 8 -1
 print "Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y0 + 1)
-viewAligned(filepaths, csvDir, params, paramsTileConfiguration,
+viewAligned(filepaths, csvDir, params, paramsTileConfiguration, dimensions,
             FinalInterval([x0, y0], [x1, y1]))
 
 
