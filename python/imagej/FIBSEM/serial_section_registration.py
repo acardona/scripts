@@ -28,14 +28,14 @@ from mpicbg.ij.plugin import NormalizeLocalContrast
 from java.util import ArrayList
 from java.lang import Double
 from lib.io import readUnsignedShorts, read2DImageROI
-from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCPUs, nativeArray, syncPrint, LRUCache
+from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCPUs, nativeArray, syncPrint
 from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
 from lib.ui import showStack, wrap
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
-from ij import IJ
+from ij import IJ, ImageListener, ImagePlus
 from net.imglib2.img.io.proxyaccess import ShortAccessProxy
 from net.imglib2.img.cell import LazyCellImg, Cell, CellGrid
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
@@ -46,9 +46,8 @@ from net.imglib2.realtransform import RealViews, AffineTransform2D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2 import FinalInterval
 from java.awt.event import KeyAdapter, KeyEvent
-from java.lang.ref import SoftReference
 from jarray import zeros, array
-from java.util import Collections
+from functools import partial
 
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
 tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
@@ -306,7 +305,7 @@ def align(filepaths, csvDir, params, paramsTileConfiguration):
 
 
 class TranslatedSectionGet(LazyCellImg.Get):
-  def __init__(self, filepaths, loadImg, matrices, img_dimensions, cell_dimensions, interval, copy_threads=1, preload=1):
+  def __init__(self, filepaths, loadImg, matrices, img_dimensions, cell_dimensions, interval, copy_threads=1, preload=None):
     self.filepaths = filepaths
     self.loadImg = loadImg # function to load images
     self.matrices = matrices
@@ -315,7 +314,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.interval = interval # when smaller than the image, will crop
     self.copy_threads = max(1, copy_threads)
     self.cache = SoftMemoize(partial(TranslatedSectionGet.makeCell, self), maxsize=256)
-    self.exe = newFixedThreadPool(-1)
+    self.exe = newFixedThreadPool(-1) # BEWARE native memory leak if not closed
     self.preload = preload
 
   def translate(self, dx, dy):
@@ -331,11 +330,6 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.cache.clear()
 
   def get(self, index):
-    ref = self.cache.get(index)
-    if ref:
-      cell = ref.get()
-      if cell:
-        return cell
     return self.cache(index)
 
   def makeCell(self, index):
@@ -350,13 +344,14 @@ class TranslatedSectionGet(LazyCellImg.Get):
                  aimg,
                  self.copy_threads)
     # Submit jobs to concurrently preload cells ahead into the cache, if not there already
-    if self.preload > 1:
-      for inc in xrange(1, self.preload + 1)
-        self.exe.submit(Task, self.cache, index + inc)
+    if self.preload is not None and 0 == index % self.preload:
+      # e.g. if index=0 and preload=5, will load [1,2,3,4]
+      for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
+        self.exe.submit(Task(self.cache, i))
     #
     return Cell(self.cell_dimensions,
                [0, 0, index],
-               self.aimg.update(None))
+               aimg.update(None))
 
 
 class SourcePanning(KeyAdapter):
@@ -378,10 +373,10 @@ class SourcePanning(KeyAdapter):
     self.imp = imp
   def keyPressed(self, event):
     try:
-      syncPrint("Translating source")
       dx, dy = self.delta.get(event.getKeyCode(), (0, 0))
       if dx + dy == 0:
         return
+      syncPrint("Translating source")
       if event.isShiftDown():
         dx *= self.shift
         dy *= self.shift
@@ -396,7 +391,7 @@ class SourcePanning(KeyAdapter):
       syncPrint(str(sys.exc_info()))
 
 
-def makeImg(filepaths, loadImg, img_dimensions, cropInterval, copy_threads, preload):
+def makeImg(filepaths, loadImg, img_dimensions, matrices, cropInterval, copy_threads, preload):
   dims = Intervals.dimensionsAsLongArray(cropInterval)
   voldims = [dims[0],
              dims[1],
@@ -407,12 +402,23 @@ def makeImg(filepaths, loadImg, img_dimensions, cropInterval, copy_threads, prel
   grid = CellGrid(voldims, cell_dimensions)
   cellGet = TranslatedSectionGet(filepaths, loadImg, matrices, img_dimensions, cell_dimensions,
                                  cropInterval, copy_threads=copy_threads, preload=preload)
-  return LazyCellImg(grid, pixelType(), cellGet)
+  return LazyCellImg(grid, pixelType(), cellGet), cellGet
 
+class OnClosing(ImageListener):
+  def __init__(self, imp, cellGet):
+    self.imp = imp
+    self.cellGet = cellGet
+  def imageClosed(self, imp):
+    if imp == self.imp:
+      self.cellGet.exe.shutdownNow()
+  def imageOpened(self, imp):
+    pass
+  def imageUpdated(self, imp):
+    pass
 
 def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensions, cropInterval):
   matrices = align(filepaths, csvDir, params, paramsTileConfiguration)
-  cellImg = makeImg(filepaths, loadUnsighedShort, img_dimensions, cropInterval, 1, max(1, numCPUs() -1))
+  cellImg, cellGet = makeImg(filepaths, loadUnsignedShort, img_dimensions, matrices, cropInterval, 1, 5)
   print cellImg
   comp = showStack(cellImg, title=srcDir.split('/')[-2], proper=False)
   # Add the SourcePanning KeyListener as the first one
@@ -423,6 +429,7 @@ def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensio
   canvas.addKeyListener(SourcePanning(cellGet, comp))
   for kl in kls:
     canvas.addKeyListener(kl)
+  ImagePlus.addImageListener(OnClosing(comp, cellGet))
 
 
 def loadAsUnsignedByte(blockRadius, stds, center, stretch, filepath):
@@ -435,7 +442,7 @@ def loadAsUnsignedByte(blockRadius, stds, center, stretch, filepath):
 
 def export8bitN5(filepaths,
                  img_dimensions,
-                 matrices_csv,
+                 matrices,
                  name,
                  exportDir,
                  interval,
@@ -451,9 +458,10 @@ def export8bitN5(filepaths,
   gzip_compression: defaults to 6 as suggested by Saalfeld.
   block_size: defaults to 128x128x128 px.
   """
-  img3D = makeImg(filepaths, partial(loadAsUnsignedByte, 400, 3, True, True), img_dimensions,
-                  interval, 1, max(1, min(numCPUs(), block_size[2])))
-  writeN5(img3D, exportDir, name, block_size, gzip_compression=gzip_compression, n_threads=0)
+  cellImg, cellGet = makeImg(filepaths, partial(loadAsUnsignedByte, 400, 3, True, True), img_dimensions,
+                             matrices, interval, 1, max(1, min(numCPUs(), block_size[2])))
+  writeN5(cellImg, exportDir, name, block_size, gzip_compression=gzip_compression, n_threads=0)
+  cellGet.exe.shutdown()
 
 
 # Show only a cropped middle area
