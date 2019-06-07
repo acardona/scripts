@@ -24,6 +24,7 @@ from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, Poi
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT
+from mpicbg.ij.plugin import NormalizeLocalContrast
 from java.util import ArrayList
 from java.lang import Double
 from lib.io import readUnsignedShorts, read2DImageROI
@@ -107,6 +108,10 @@ def loadImp(filepath):
   # Images are TIFF with bit pack compression: can't byte-read array
   syncPrint("Loading image " + filepath)
   return IJ.openImage(filepath)
+
+def loadUnsignedShort(filepath):
+    imp = loadImp(filepath)
+    return ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
 
 def loadFloatProcessor(filepath, scale=True):
   try:
@@ -301,14 +306,17 @@ def align(filepaths, csvDir, params, paramsTileConfiguration):
 
 
 class TranslatedSectionGet(LazyCellImg.Get):
-  def __init__(self, filepaths, matrices, img_dimensions, cell_dimensions, interval):
+  def __init__(self, filepaths, loadImg, matrices, img_dimensions, cell_dimensions, interval, copy_threads=1, preload=1):
     self.filepaths = filepaths
+    self.loadImg = loadImg # function to load images
     self.matrices = matrices
     self.img_dimensions = img_dimensions
     self.cell_dimensions = cell_dimensions # x,y must match dims of interval
     self.interval = interval # when smaller than the image, will crop
-    self.cache = Collections.synchronizedMap(LRUCache(1000, eldestFn=lambda ref: ref.clear()))
-    syncPrint(str(Intervals.dimensionsAsLongArray(self.interval)))
+    self.copy_threads = max(1, copy_threads)
+    self.cache = SoftMemoize(partial(TranslatedSectionGet.makeCell, self), maxsize=256)
+    self.exe = newFixedThreadPool(-1)
+    self.preload = preload
 
   def translate(self, dx, dy):
     a = zeros(2, 'l')
@@ -328,46 +336,24 @@ class TranslatedSectionGet(LazyCellImg.Get):
       cell = ref.get()
       if cell:
         return cell
-    cell = self.makeCell(index)
-    self.cache[index] = SoftReference(cell)
-    return cell
+    return self.cache(index)
 
   def makeCell(self, index):
-    syncPrint("Loading image at index %i or getting it from the cache" % index)
-    imp = loadImpMem(self.filepaths[index])
-    img = ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), self.img_dimensions)
-    self.aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(self.interval))
-    matrix = self.matrices[index]
-    syncPrint("Matrix:" + str(matrix))
-    """
-    if matrix[0] == 1.0 and matrix[1] == 0.0 and matrix[3] == 0.0 and matrix[4] == 1.0:
-      syncPrint("Translation-only view")
-      # Translation-only
-      dx, dy = int(matrix[2] + 0.5), int(matrix[5] + 0.5)
-      imgT = Views.zeroMin(Views.interval(Views.translate(Views.extendZero(img), [dx, dy]), self.interval))
-    else:
-      syncPrint("Affine view")
-      # Affine
-      affine = AffineTransform2D()
-      affine.set(matrix)
-      imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
-      imgA = RealViews.transform(imgI, affine)
-      imgT = Views.zeroMin(Views.interval(imgA, self.interval))
-    """
-    # Always interpolate:
-    syncPrint("Affine view")
-    # Affine
+    img = self.loadImg(self.filepaths[index])
     affine = AffineTransform2D()
-    affine.set(matrix)
+    affine.set(self.matrices[index])
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
     imgA = RealViews.transform(imgI, affine)
     imgT = Views.zeroMin(Views.interval(imgA, self.interval))
+    aimg = img.factory().create(self.interval)
+    ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),
+                 aimg,
+                 self.copy_threads)
+    # Submit jobs to concurrently preload cells ahead into the cache, if not there already
+    if self.preload > 1:
+      for inc in xrange(1, self.preload + 1)
+        self.exe.submit(Task, self.cache, index + inc)
     #
-    syncPrint("Copying transformed view into ArrayImg")
-    ImgUtil.copy(ImgView.wrap(imgT, self.aimg.factory()),
-                 self.aimg,
-                 max(1, numCPUs() -1))
-    syncPrint("Returning Cell")
     return Cell(self.cell_dimensions,
                [0, 0, index],
                self.aimg.update(None))
@@ -410,8 +396,7 @@ class SourcePanning(KeyAdapter):
       syncPrint(str(sys.exc_info()))
 
 
-def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensions, cropInterval):
-  matrices = align(filepaths, csvDir, params, paramsTileConfiguration)
+def makeImg(filepaths, loadImg, img_dimensions, cropInterval, copy_threads, preload):
   dims = Intervals.dimensionsAsLongArray(cropInterval)
   voldims = [dims[0],
              dims[1],
@@ -420,8 +405,14 @@ def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensio
                      dims[1],
                      1]
   grid = CellGrid(voldims, cell_dimensions)
-  cellGet = TranslatedSectionGet(filepaths, matrices, img_dimensions, cell_dimensions, cropInterval)
-  cellImg = LazyCellImg(grid, pixelType(), cellGet)
+  cellGet = TranslatedSectionGet(filepaths, loadImg, matrices, img_dimensions, cell_dimensions,
+                                 cropInterval, copy_threads=copy_threads, preload=preload)
+  return LazyCellImg(grid, pixelType(), cellGet)
+
+
+def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensions, cropInterval):
+  matrices = align(filepaths, csvDir, params, paramsTileConfiguration)
+  cellImg = makeImg(filepaths, loadUnsighedShort, img_dimensions, cropInterval, 1, max(1, numCPUs() -1))
   print cellImg
   comp = showStack(cellImg, title=srcDir.split('/')[-2], proper=False)
   # Add the SourcePanning KeyListener as the first one
@@ -434,6 +425,36 @@ def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensio
     canvas.addKeyListener(kl)
 
 
+def loadAsUnsignedByte(blockRadius, stds, center, stretch, filepath):
+  """ Open image at filepath (e.g. in 16-bit) and apply NormalizeLocalContrast with the given parameters. """
+  syncPrint("Loading image " + filepath)
+  sp = IJ.openImage(filepath).getProcessor()
+  NormalizeLocalContrast().run(sp, blockRadius, blockRadius, stds, center, stretch)
+  return ArrayImgs.unsignedBytes(sp.convertToByte(True).getPixels(), [sp.getWidth(), sp.getHeight()])
+  
+
+def export8bitN5(filepaths,
+                 img_dimensions,
+                 matrices_csv,
+                 name,
+                 exportDir,
+                 interval,
+                 gzip_compression=6,
+                 block_size=[128,128,128]):
+  """
+  Export into an N5 volume, in parallel, in 8-bit.
+
+  name: name to assign to the N5 volume.
+  img3D: the serial sections to export.
+  exportDir: the directory into which to save the N5 volume.
+  interval: for cropping.
+  gzip_compression: defaults to 6 as suggested by Saalfeld.
+  block_size: defaults to 128x128x128 px.
+  """
+  img3D = makeImg(filepaths, partial(loadAsUnsignedByte, 400, 3, True, True), img_dimensions,
+                  interval, 1, max(1, min(numCPUs(), block_size[2])))
+  writeN5(img3D, exportDir, name, block_size, gzip_compression=gzip_compression, n_threads=0)
+
 
 # Show only a cropped middle area
 x0 = 3 * dimensions[0] / 8
@@ -445,5 +466,14 @@ viewAligned(filepaths, csvDir, params, paramsTileConfiguration, dimensions,
             FinalInterval([x0, y0], [x1, y1]))
 
 
+# Write the whole volume in N5 format
+name = srcDir.split('/')[-2]
+exportDir = "/groups/cardona/cardonalab/FIBSEM_L1116_exports/"
+display_range = 4789, 10722
+# Export ROI:
+# x=864 y=264 width=15312 h=17424
+interval = FinalInterval([864, 264], [864 + 15312 -1, 264 + 17424 -1])
 
 
+#exportN5(filepaths, dimensions, loadMatrices("matrices", csvDir),
+#         name, exportDir, display_range, interval, gzip_compression=6, block_size=[128,128,128])
