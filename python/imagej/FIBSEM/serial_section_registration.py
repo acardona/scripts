@@ -409,7 +409,6 @@ def makeImg(filepaths, loadImg, img_dimensions, matrices, cropInterval, copy_thr
                                  cropInterval, copy_threads=copy_threads, preload=preload)
   return LazyCellImg(grid, pixelType(), cellGet), cellGet
 
-
 class OnClosing(ImageListener):
   def __init__(self, imp, cellGet):
     self.imp = imp
@@ -421,7 +420,6 @@ class OnClosing(ImageListener):
     pass
   def imageUpdated(self, imp):
     pass
-
 
 def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensions, cropInterval):
   matrices = align(filepaths, csvDir, params, paramsTileConfiguration)
