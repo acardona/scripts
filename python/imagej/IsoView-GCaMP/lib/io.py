@@ -12,6 +12,11 @@ from net.imglib2.realtransform import RealViews
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2.type.numeric.integer import UnsignedByteType, UnsignedShortType
 from net.imglib2.type.numeric.real import FloatType
+from net.imglib2.util import Intervals
+from net.imglib2.img.cell import CellGrid, Cell
+from net.imglib2.img.basictypeaccess import AccessFlags, ArrayDataAccessFactory
+from net.imglib2.cache.ref import SoftRefLoaderCache
+from net.imglib2.cache.img import CachedCellImg
 from ij.io import FileSaver
 from ij import ImagePlus, IJ
 from synchronize import make_synchronized
@@ -156,6 +161,51 @@ class InRAMLoader(CacheLoader):
     return self.table[path]
   def load(self, path):
     return self.get(path)
+
+
+class SectionCellLoader(CacheLoader):
+  """
+  A CacheLoader that can load Cell instances using ImageJ's I/O library. 
+  Cells only tile in the last dimension, e.g.:
+    * a series of sections (one per file) for a 3D volume;
+    * a series of 3D volumes (one per file) for a 4D volume.
+  """
+  def __init__(self, filepaths, asArrayImg, loadFn=IJ.openImage):
+    """
+    filepaths: list of file paths, one per cell.
+    asArrayImg: a function that converts an ImagePlus into an ArrayImg for the Cell.
+    loadFn: default to IJ.openImage. Must return an object that asArrayImg can convert into an ArrayImg.
+    """
+    self.filepaths = filepaths
+    self.asArrayImg = asArrayImg
+    self.loadFn = loadFn
+  
+  def get(self, index):
+    img = self.asArrayImg(self.loadFn(self.filepaths[index]))
+    dims = Intervals.dimensionsAsLongArray(img)
+    return Cell(list(dims) + [1],
+                [0] * img.numDimensions() + [index],
+                img.update(None))
+
+
+def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType):
+  """ Create a lazy CachedCellImg, backed by a SoftRefLoaderCache,
+      which can be used to e.g. create the equivalent of ij.VirtualStack but with ImgLib2,
+      with the added benefit of a cache based on SoftReference (i.e. no need to manage memory).
+
+      loader: a CacheLoader that returns a single Cell for each index (like the Z index in a VirtualStack).
+      volume_dimensions: a list of int or long numbers, with the last dimension
+                         being the number of Cell instances (i.e. the number of file paths).
+      cell_dimensions: a list of int or long numbers, whose last dimension is 1.
+      pixelType: e.g. UnsignedByteType
+      primitiveType: e.g. BYTE
+
+      Returns a CachedCellImg.
+  """
+  return CachedCellImg(CellGrid(volume_dimensions, cell_dimensions),
+                       pixelType(),
+                       SoftRefLoaderCache().withLoader(loader),
+                       ArrayDataAccessFactory.get(primitiveType, AccessFlags.setOf(AccessFlags.VOLATILE)))
 
 
 def readN5(path, dataset_name, show=None):
