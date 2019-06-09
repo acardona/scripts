@@ -27,7 +27,7 @@ from mpicbg.ij import SIFT
 from mpicbg.ij.plugin import NormalizeLocalContrast
 from java.util import ArrayList
 from java.lang import Double
-from lib.io import readUnsignedShorts, read2DImageROI
+from lib.io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader
 from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCPUs, nativeArray, syncPrint
 from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
@@ -45,6 +45,7 @@ from net.imglib2.util import ImgUtil, Intervals
 from net.imglib2.realtransform import RealViews, AffineTransform2D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2 import FinalInterval
+from net.imglib2.type.PrimitiveType import BYTE
 from java.awt.event import KeyAdapter, KeyEvent
 from jarray import zeros, array
 from functools import partial
@@ -408,6 +409,7 @@ def makeImg(filepaths, loadImg, img_dimensions, matrices, cropInterval, copy_thr
                                  cropInterval, copy_threads=copy_threads, preload=preload)
   return LazyCellImg(grid, pixelType(), cellGet), cellGet
 
+
 class OnClosing(ImageListener):
   def __init__(self, imp, cellGet):
     self.imp = imp
@@ -419,6 +421,7 @@ class OnClosing(ImageListener):
     pass
   def imageUpdated(self, imp):
     pass
+
 
 def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensions, cropInterval):
   matrices = align(filepaths, csvDir, params, paramsTileConfiguration)
@@ -435,14 +438,6 @@ def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensio
     canvas.addKeyListener(kl)
   ImagePlus.addImageListener(OnClosing(comp, cellGet))
 
-
-def loadAsUnsignedByte(blockRadius, stds, center, stretch, filepath):
-  """ Open image at filepath (e.g. in 16-bit) and apply NormalizeLocalContrast with the given parameters. """
-  syncPrint("Loading image " + filepath)
-  sp = IJ.openImage(filepath).getProcessor()
-  NormalizeLocalContrast().run(sp, blockRadius, blockRadius, stds, center, stretch)
-  return ArrayImgs.unsignedBytes(sp.convertToByte(True).getPixels(), [sp.getWidth(), sp.getHeight()])
-  
 
 def export8bitN5(filepaths,
                  img_dimensions,
@@ -462,10 +457,29 @@ def export8bitN5(filepaths,
   gzip_compression: defaults to 6 as suggested by Saalfeld.
   block_size: defaults to 128x128x128 px.
   """
-  cellImg, cellGet = makeImg(filepaths, partial(loadAsUnsignedByte, 400, 3, True, True), img_dimensions,
-                             matrices, interval, 1, max(1, min(numCPUs(), block_size[2])))
-  writeN5(cellImg, exportDir, name, block_size, gzip_compression=gzip_compression, n_threads=0)
-  cellGet.exe.shutdown()
+
+  dims = Intervals.dimensionsAsLongArray(interval)
+  voldims = [dims[0],
+             dims[1],
+             len(filepaths)]
+  cell_dimensions = [dims[0],
+                     dims[1],
+                     1]
+
+  def asNormalizedUnsignedByteArrayImg(blockRadius, stds, center, stretch, imp):
+    sp = imp.getProcessor() # ShortProcessor
+    NormalizeLocalContrast().run(sp, blockRadius, blockRadius, stds, center, stretch)
+    return ArrayImgs.unsignedBytes(sp.convertToByte(True).getPixels(), [sp.getWidth(), sp.getHeight()])
+
+  loader = SectionCellLoader(filepaths, asArrayImg=partial(asNormalizedUnsignedByteArrayImg, 400, 3, True, True))
+
+  # TODO: how to preload 128 at a time? Or at least as many as numCPUs()?
+  # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,
+  # and preload sections ahead for the whole blockSize[2] dimension.
+
+  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE)
+  
+  writeN5(cachedCellImg, exportDir, name, block_size, gzip_compression=gzip_compression, n_threads=0)
 
 
 # Show only a cropped middle area
