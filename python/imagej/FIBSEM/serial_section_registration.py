@@ -317,6 +317,13 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.exe = newFixedThreadPool(-1) # BEWARE native memory leak if not closed
     self.preload = preload
 
+  def preloadCells(self):
+    # Submit jobs to concurrently preload cells ahead into the cache, if not there already
+    if self.preload is not None and 0 == index % self.preload:
+      # e.g. if index=0 and preload=5, will load [1,2,3,4]
+      for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
+        self.exe.submit(Task(self.cache, i))
+
   def translate(self, dx, dy):
     a = zeros(2, 'l')
     self.interval.min(a)
@@ -330,7 +337,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.cache.clear()
 
   def get(self, index):
-    return self.cache(index)
+    return self.cache(index) # ENORMOUS Thread contention in accessing every pixel
 
   def makeCell(self, index):
     img = self.loadImg(self.filepaths[index])
@@ -343,11 +350,8 @@ class TranslatedSectionGet(LazyCellImg.Get):
     ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),
                  aimg,
                  self.copy_threads)
-    # Submit jobs to concurrently preload cells ahead into the cache, if not there already
-    if self.preload is not None and 0 == index % self.preload:
-      # e.g. if index=0 and preload=5, will load [1,2,3,4]
-      for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
-        self.exe.submit(Task(self.cache, i))
+    #
+    self.preloadCells()
     #
     return Cell(self.cell_dimensions,
                [0, 0, index],
