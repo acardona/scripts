@@ -472,6 +472,11 @@ def export8bitN5(filepaths,
 
   def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, stds, center, stretch, matrices, index, imp):
     sp = imp.getProcessor() # ShortProcessor
+    sp.setRoi(interval.min(0),
+              interval.min(1),
+              interval.max(0) - interval.min(0) + 1,
+              interval.max(1) - interval.min(1) + 1)
+    sp = sp.crop()
     if invert:
       sp.invert()
     NormalizeLocalContrast().run(sp, blockRadius, blockRadius, stds, center, stretch)
@@ -483,10 +488,10 @@ def export8bitN5(filepaths,
     affine.set(matrices[index])
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
     imgA = RealViews.transform(imgI, affine)
-    imgT = Views.zeroMin(Views.interval(imgA, interval))
+    imgT = Views.zeroMin(Views.interval(imgA, img))
     imgMinMax = convert(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType)
-    aimg = ArrayImgs.unsignedBytes(self.interval)
-    ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), aimg, copy_threads)
+    aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
+    ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg, copy_threads)
     return aimg
     
 
@@ -570,6 +575,7 @@ exportDir = "/groups/cardona/cardonalab/FIBSEM_L1116_exports/n5/"
 interval = FinalInterval([864, 264], [864 + 15312 -1, 264 + 17424 -1])
 
 
+# Don't use compression: less than 5% gain, at considerable processing cost.
 export8bitN5(filepaths, dimensions, loadMatrices("matrices", csvDir),
-             name, exportDir, interval, gzip_compression=6, block_size=[256,256,32], # ~2 MB per block
+             name, exportDir, interval, gzip_compression=0, block_size=[256,256,32], # ~2 MB per block
              n5_threads=0)
