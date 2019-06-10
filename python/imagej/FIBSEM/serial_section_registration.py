@@ -475,9 +475,43 @@ def export8bitN5(filepaths,
   # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,
   # and preload sections ahead for the whole blockSize[2] dimension.
 
-  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE)
+
+  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE, returnCache=True)
+
+  def preload(cachedCellImg, loader):
+    """
+    Find which is the last cell index in the cache, identify to which block
+    (given the blockSize[2] AKA Z dimension) that index belongs to,
+    and concurrently load all cells (sections) that the Z dimension of the blockSize will need.
+    If they are already loaded, these operations are insignificant.
+    """
+    # The SoftRefLoaderCache.map is a ConcurrentHashMap with Long keys, aka numbers
+    cache = cachedCellImg.getCache()
+    f1 = cache.getClass().getDeclaredField("cache") # LoaderCacheAsCacheAdapter.cache
+    f1.setAccessible(True)
+    softCache = f1.get(cache)
+    f2 = softCache.getClass().getDeclaredField("map") # SoftRefLoaderCache.map
+    f2.setAccessible(True)
+    keys = sorted(f2.get(softCache).getKeys())
+    if 0 == len(keys):
+      return
+    first = keys[-1] - (keys[-1] % blockSize[2])
+    syncPrint("Preloading %i-%i" % (first, first + blockSize[2] -1))
+    exe = newFixedThreadPool(n_threads=-1, name="preloader")
+    try:
+      for index in xrange(first, first + blockSize[2]):
+        exe.submit(Task, softCache.get, index, loader)
+    except:
+      syncPrint(sys.exc_info())
+    finally:
+      exe.shutdown()
+
+  preloader = Executors.newSingleThreadScheduledExecutor()
+  preloader.scheduleWithFixedDelay(partial(preload, cachedCellImg, loader), 0, 60, TimeUnit.SECONDS)
   
   writeN5(cachedCellImg, exportDir, name, block_size, gzip_compression=gzip_compression, n_threads=0)
+  preloader.shutdown()
+
 
 
 # Show only a cropped middle area
