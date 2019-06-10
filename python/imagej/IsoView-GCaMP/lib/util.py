@@ -3,7 +3,7 @@ from synchronize import make_synchronized
 from java.util.concurrent import Callable, Future, Executors, ThreadFactory, TimeUnit
 from java.util.concurrent.atomic import AtomicInteger
 from java.lang.reflect.Array import newInstance as newArray
-from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character, System
+from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character, System, Runnable
 from net.imglib2.realtransform import AffineTransform3D
 from net.imglib2.view import Views
 from java.util import LinkedHashMap, Collections, LinkedList, HashMap
@@ -51,7 +51,7 @@ class Getter(Future):
     return True
 
 
-class Task(Callable):
+class Task(Callable, Runnable):
   """ A wrapper for executing functions in concurrent threads. """
   def __init__(self, fn, *args, **kwargs):
     self.fn = fn
@@ -62,7 +62,8 @@ class Task(Callable):
     if t.isInterrupted() or not t.isAlive():
         return None
     return self.fn(*self.args, **self.kwargs)
-
+  def run(self):
+    self.call()
 
 def ndarray(classtype, dimensions):
     """ E.g. for a two-dimensional native double array, use:
