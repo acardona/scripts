@@ -14,7 +14,8 @@ from ij import ImagePlus, CompositeImage
 from java.util import TreeMap
 
 
-baseDir = "/home/albert/shares/cardonalab/Albert/2017-05-10_1018/"
+#baseDir = "/home/albert/shares/cardonalab/Albert/2017-05-10_1018/"
+baseDir = "/groups/zlatic/zlaticlab/Nadine/Raghav/analysis/2017-05-10/GCaMP6s_2_20170510_143413.corrected/"
 # A file whose header has the points as "x::y::z"
 csvFilename = "deconvolved/CM00-CM01_deltaFoF.csv"
 
@@ -85,4 +86,5 @@ def withIcospheres(time_window=None):
     univ.updateStartAndEndTime(0, len(instants) -1)
 
 
-withIcospheres(time_window=(0, 100))
+withIcospheres(time_window=(0, 400))
+#withVirtualStack(time_window=(0, 400))
