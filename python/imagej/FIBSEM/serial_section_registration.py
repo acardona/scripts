@@ -32,6 +32,7 @@ from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCP
 from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
 from lib.ui import showStack, wrap
+from lib.converter import convert
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
@@ -47,6 +48,7 @@ from net.imglib2.realtransform import RealViews, AffineTransform2D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2 import FinalInterval
 from net.imglib2.type.PrimitiveType import BYTE
+from net.imglib2.converter import RealUnsignedByteConverter
 from java.awt.event import KeyAdapter, KeyEvent
 from jarray import zeros, array
 from functools import partial
@@ -446,6 +448,8 @@ def export8bitN5(filepaths,
                  gzip_compression=6,
                  invert=True,
                  NLC_params=[400, 3, True, True], # For NormalizeLocalContrast
+                 copy_threads=2,
+                 n5_threads=0, # 0 means as many as CPU cores
                  block_size=[128,128,128]):
   """
   Export into an N5 volume, in parallel, in 8-bit.
@@ -466,22 +470,30 @@ def export8bitN5(filepaths,
                      dims[1],
                      1]
 
-  def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, stds, center, stretch, imp):
+  def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, stds, center, stretch, matrices, index, imp):
     sp = imp.getProcessor() # ShortProcessor
-    sp.setRoi(interval.min(0),
-              interval.min(1),
-              interval.max(0) - interval.min(0) + 1,
-              interval.max(1) - interval.min(1) + 1)
-    sp = sp.crop()
     if invert:
       sp.invert()
     NormalizeLocalContrast().run(sp, blockRadius, blockRadius, stds, center, stretch)
-    return ArrayImgs.unsignedBytes(sp.convertToByte(True).getPixels(), [sp.getWidth(), sp.getHeight()])
+    sp.findMinAndMax()
+    minimum, maximum = sp.getMin(), sp.getMax()
+    img = ArrayImgs.unsignedShorts(sp.getPixels(), [sp.getWidth(), sp.getHeight()])
+    sp = None
+    affine = AffineTransform2D()
+    affine.set(matrices[index])
+    imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
+    imgA = RealViews.transform(imgI, affine)
+    imgT = Views.zeroMin(Views.interval(imgA, interval))
+    imgMinMax = convert(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType)
+    aimg = ArrayImgs.unsignedBytes(self.interval)
+    ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), aimg, copy_threads)
+    return aimg
+    
 
   blockRadius, stds, center, stretch = NLC_params
 
   loader = SectionCellLoader(filepaths, asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
-                                                           interval, invert, blockRadius, stds, center, stretch))
+                                                           interval, invert, blockRadius, stds, center, stretch, matrices))
 
   # How to preload block_size[2] files at a time? Or at least as many as numCPUs()?
   # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,
@@ -534,7 +546,7 @@ def export8bitN5(filepaths,
 
   try:
     syncPrint("N5 directory: " + exportDir + "\nN5 dataset name: " + name + "\nN5 blockSize: " + str(block_size))
-    writeN5(cachedCellImg, exportDir, name, block_size, gzip_compression_level=gzip_compression, n_threads=0)
+    writeN5(cachedCellImg, exportDir, name, block_size, gzip_compression_level=gzip_compression, n_threads=n5_threads)
   finally:
     preloader.shutdown()
 
@@ -559,4 +571,5 @@ interval = FinalInterval([864, 264], [864 + 15312 -1, 264 + 17424 -1])
 
 
 export8bitN5(filepaths, dimensions, loadMatrices("matrices", csvDir),
-             name, exportDir, interval, gzip_compression=6, block_size=[256,256,32]) # ~2 MB per block
+             name, exportDir, interval, gzip_compression=6, block_size=[256,256,32], # ~2 MB per block
+             n5_threads=0)
