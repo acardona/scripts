@@ -29,7 +29,7 @@ except:
   print "*** KLB library is NOT installed ***"
 try:
   from org.janelia.saalfeldlab.n5.imglib2 import N5Utils
-  from org.janelia.saalfeldlab.n5 import N5FSReader, N5FSWriter, GzipCompression
+  from org.janelia.saalfeldlab.n5 import N5FSReader, N5FSWriter, GzipCompression, RawCompression
 except:
   print "*** n5-imglib2 from github.com/saalfeldlab/n5-imglib2 not installed. ***"
 from com.google.gson import GsonBuilder
@@ -235,7 +235,7 @@ def writeN5(img, path, dataset_name, blockSize, gzip_compression_level=4, n_thre
       n_threads: defaults to as many as CPU cores, for parallel writing. """
   N5Utils.save(img, N5FSWriter(path, GsonBuilder()),
                dataset_name, blockSize,
-               GzipCompression(gzip_compression_level),
+               GzipCompression(gzip_compression_level) if gzip_compression_level > 0 else RawCompression(),
                newFixedThreadPool(n_threads))
 
 
