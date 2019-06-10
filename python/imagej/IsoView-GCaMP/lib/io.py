@@ -173,7 +173,7 @@ class SectionCellLoader(CacheLoader):
   def __init__(self, filepaths, asArrayImg, loadFn=IJ.openImage):
     """
     filepaths: list of file paths, one per cell.
-    asArrayImg: a function that converts an ImagePlus into an ArrayImg for the Cell.
+    asArrayImg: a function that takes the index and an ImagePlus as argumebts and returns an ArrayImg for the Cell.
     loadFn: default to IJ.openImage. Must return an object that asArrayImg can convert into an ArrayImg.
     """
     self.filepaths = filepaths
@@ -181,7 +181,7 @@ class SectionCellLoader(CacheLoader):
     self.loadFn = loadFn
   
   def get(self, index):
-    img = self.asArrayImg(self.loadFn(self.filepaths[index]))
+    img = self.asArrayImg(index, self.loadFn(self.filepaths[index]))
     dims = Intervals.dimensionsAsLongArray(img)
     return Cell(list(dims) + [1],
                 [0] * img.numDimensions() + [index],
