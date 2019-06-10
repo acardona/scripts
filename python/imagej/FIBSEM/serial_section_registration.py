@@ -497,7 +497,7 @@ def export8bitN5(filepaths,
     and concurrently load all cells (sections) that the Z dimension of the blockSize will need.
     If they are already loaded, these operations are insignificant.
     """
-    exe = newFixedThreadPool(n_threads=-1, name="preloader")
+    exe = newFixedThreadPool(n_threads=min(block_size[2], numCPUs()), name="preloader")
     try:
       # The SoftRefLoaderCache.map is a ConcurrentHashMap with Long keys, aka numbers
       cache = cachedCellImg.getCache()
@@ -552,11 +552,11 @@ print "Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y0 + 
 
 # Write the whole volume in N5 format
 name = srcDir.split('/')[-2]
-exportDir = "/groups/cardona/cardonalab/FIBSEM_L1116_exports/"
+exportDir = "/groups/cardona/cardonalab/FIBSEM_L1116_exports/n5/"
 # Export ROI:
 # x=864 y=264 width=15312 h=17424
 interval = FinalInterval([864, 264], [864 + 15312 -1, 264 + 17424 -1])
 
 
 export8bitN5(filepaths, dimensions, loadMatrices("matrices", csvDir),
-             name, exportDir, interval, gzip_compression=6, block_size=[128,128,128])
+             name, exportDir, interval, gzip_compression=6, block_size=[256,256,32]) # ~2 MB per block
