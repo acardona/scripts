@@ -27,7 +27,7 @@ from mpicbg.ij import SIFT
 from mpicbg.ij.plugin import NormalizeLocalContrast
 from java.util import ArrayList
 from java.lang import Double
-from lib.io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader
+from lib.io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5
 from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCPUs, nativeArray, syncPrint
 from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
@@ -41,6 +41,7 @@ from net.imglib2.img.cell import LazyCellImg, Cell, CellGrid
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.img import ImgView
+from net.imglib2.type.numeric.integer import UnsignedByteType
 from net.imglib2.util import ImgUtil, Intervals
 from net.imglib2.realtransform import RealViews, AffineTransform2D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
@@ -49,6 +50,7 @@ from net.imglib2.type.PrimitiveType import BYTE
 from java.awt.event import KeyAdapter, KeyEvent
 from jarray import zeros, array
 from functools import partial
+from java.util.concurrent import Executors, TimeUnit
 
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
 tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
@@ -318,7 +320,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.exe = newFixedThreadPool(-1) # BEWARE native memory leak if not closed
     self.preload = preload
 
-  def preloadCells(self):
+  def preloadCells(self, index):
     # Submit jobs to concurrently preload cells ahead into the cache, if not there already
     if self.preload is not None and 0 == index % self.preload:
       # e.g. if index=0 and preload=5, will load [1,2,3,4]
@@ -341,6 +343,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     return self.cache(index) # ENORMOUS Thread contention in accessing every pixel
 
   def makeCell(self, index):
+    self.preloadCells(index) # preload others in the background
     img = self.loadImg(self.filepaths[index])
     affine = AffineTransform2D()
     affine.set(self.matrices[index])
@@ -351,9 +354,6 @@ class TranslatedSectionGet(LazyCellImg.Get):
     ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),
                  aimg,
                  self.copy_threads)
-    #
-    self.preloadCells()
-    #
     return Cell(self.cell_dimensions,
                [0, 0, index],
                aimg.update(None))
@@ -444,6 +444,8 @@ def export8bitN5(filepaths,
                  exportDir,
                  interval,
                  gzip_compression=6,
+                 invert=True,
+                 NLC_params=[400, 3, True, True], # For NormalizeLocalContrast
                  block_size=[128,128,128]):
   """
   Export into an N5 volume, in parallel, in 8-bit.
@@ -464,53 +466,77 @@ def export8bitN5(filepaths,
                      dims[1],
                      1]
 
-  def asNormalizedUnsignedByteArrayImg(blockRadius, stds, center, stretch, imp):
+  def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, stds, center, stretch, imp):
     sp = imp.getProcessor() # ShortProcessor
+    sp.setRoi(interval.min(0),
+              interval.min(1),
+              interval.max(0) - interval.min(0) + 1,
+              interval.max(1) - interval.min(1) + 1)
+    sp = sp.crop()
+    if invert:
+      sp.invert()
     NormalizeLocalContrast().run(sp, blockRadius, blockRadius, stds, center, stretch)
     return ArrayImgs.unsignedBytes(sp.convertToByte(True).getPixels(), [sp.getWidth(), sp.getHeight()])
 
-  loader = SectionCellLoader(filepaths, asArrayImg=partial(asNormalizedUnsignedByteArrayImg, 400, 3, True, True))
+  blockRadius, stds, center, stretch = NLC_params
 
-  # TODO: how to preload 128 at a time? Or at least as many as numCPUs()?
+  loader = SectionCellLoader(filepaths, asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
+                                                           interval, invert, blockRadius, stds, center, stretch))
+
+  # How to preload block_size[2] files at a time? Or at least as many as numCPUs()?
   # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,
   # and preload sections ahead for the whole blockSize[2] dimension.
 
 
-  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE, returnCache=True)
+  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE)
 
-  def preload(cachedCellImg, loader):
+  def preload(cachedCellImg, loader, block_size):
     """
     Find which is the last cell index in the cache, identify to which block
     (given the blockSize[2] AKA Z dimension) that index belongs to,
     and concurrently load all cells (sections) that the Z dimension of the blockSize will need.
     If they are already loaded, these operations are insignificant.
     """
-    # The SoftRefLoaderCache.map is a ConcurrentHashMap with Long keys, aka numbers
-    cache = cachedCellImg.getCache()
-    f1 = cache.getClass().getDeclaredField("cache") # LoaderCacheAsCacheAdapter.cache
-    f1.setAccessible(True)
-    softCache = f1.get(cache)
-    f2 = softCache.getClass().getDeclaredField("map") # SoftRefLoaderCache.map
-    f2.setAccessible(True)
-    keys = sorted(f2.get(softCache).getKeys())
-    if 0 == len(keys):
-      return
-    first = keys[-1] - (keys[-1] % blockSize[2])
-    syncPrint("Preloading %i-%i" % (first, first + blockSize[2] -1))
-    exe = newFixedThreadPool(n_threads=-1, name="preloader")
+    exe = newFixedThreadPool(n_threads=min(block_size[2], numCPUs()), name="preloader")
     try:
-      for index in xrange(first, first + blockSize[2]):
-        exe.submit(Task, softCache.get, index, loader)
+      # The SoftRefLoaderCache.map is a ConcurrentHashMap with Long keys, aka numbers
+      cache = cachedCellImg.getCache()
+      f1 = cache.getClass().getDeclaredField("cache") # LoaderCacheAsCacheAdapter.cache
+      f1.setAccessible(True)
+      softCache = f1.get(cache)
+      cache = None
+      f2 = softCache.getClass().getDeclaredField("map") # SoftRefLoaderCache.map
+      f2.setAccessible(True)
+      keys = sorted(f2.get(softCache).keySet())
+      if 0 == len(keys):
+        return
+      first = keys[-1] - (keys[-1] % block_size[2])
+      keys = None
+      syncPrint("Preloading %i-%i" % (first, first + block_size[2] -1))
+      futures = []
+      for index in xrange(first, first + block_size[2]):
+        futures.append(exe.submit(Task(softCache.get, index, loader)))
+      softCache = None
+      # Wait for all
+      count = 1
+      while len(futures) > 0:
+        futures.pop(0).get()
+        syncPrint("preloaded index %i" % (first + count))
+        count += 1        
+      syncPrint("Completed preloading %i-%i" % (first, first + block_size[2] -1))
     except:
       syncPrint(sys.exc_info())
     finally:
       exe.shutdown()
 
   preloader = Executors.newSingleThreadScheduledExecutor()
-  preloader.scheduleWithFixedDelay(partial(preload, cachedCellImg, loader), 0, 60, TimeUnit.SECONDS)
-  
-  writeN5(cachedCellImg, exportDir, name, block_size, gzip_compression=gzip_compression, n_threads=0)
-  preloader.shutdown()
+  preloader.scheduleWithFixedDelay(Task(preload, cachedCellImg, loader, block_size), 10, 10, TimeUnit.SECONDS)
+
+  try:
+    syncPrint("N5 directory: " + exportDir + "\nN5 dataset name: " + name + "\nN5 blockSize: " + str(block_size))
+    writeN5(cachedCellImg, exportDir, name, block_size, gzip_compression_level=gzip_compression, n_threads=0)
+  finally:
+    preloader.shutdown()
 
 
 
@@ -520,18 +546,17 @@ y0 = 3 * dimensions[1] / 8
 x1 = x0 + 2 * dimensions[0] / 8 -1
 y1 = y0 + 2 * dimensions[1] / 8 -1
 print "Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y0 + 1)
-viewAligned(filepaths, csvDir, params, paramsTileConfiguration, dimensions,
-            FinalInterval([x0, y0], [x1, y1]))
+#viewAligned(filepaths, csvDir, params, paramsTileConfiguration, dimensions,
+#            FinalInterval([x0, y0], [x1, y1]))
 
 
 # Write the whole volume in N5 format
 name = srcDir.split('/')[-2]
-exportDir = "/groups/cardona/cardonalab/FIBSEM_L1116_exports/"
-display_range = 4789, 10722
+exportDir = "/groups/cardona/cardonalab/FIBSEM_L1116_exports/n5/"
 # Export ROI:
 # x=864 y=264 width=15312 h=17424
 interval = FinalInterval([864, 264], [864 + 15312 -1, 264 + 17424 -1])
 
 
-#exportN5(filepaths, dimensions, loadMatrices("matrices", csvDir),
-#         name, exportDir, display_range, interval, gzip_compression=6, block_size=[128,128,128])
+export8bitN5(filepaths, dimensions, loadMatrices("matrices", csvDir),
+             name, exportDir, interval, gzip_compression=6, block_size=[256,256,32]) # ~2 MB per block
