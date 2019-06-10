@@ -83,7 +83,7 @@ showStack(img4D, title="%i-%i" % (first_timepoint, last_timepoint))
 
 
 # Materialize (write to disk) the registered deconvolved stacks
-targetDirN5 = os.path.join(targetDir, "reg_deconv_N5")
+targetDirN5 = os.path.join(targetDir, "deconvolved/n5/")
 nameN5 = "%s_%i-%i_%ix%ix%ix%i" % (targetDir.split("/")[-2],
                                    first_timepoint, last_timepoint,
                                    img4D.dimension(0),
