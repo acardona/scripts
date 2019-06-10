@@ -201,7 +201,7 @@ class SoftMemoize:
 
   @make_synchronized
   def getOrMakeLock(self, key):
-    lock = self.locks.get(key, None)
+    lock = self.locks.get(key)
     if not lock:
       # Cleanup locks
       for key in self.locks.keys(): # copy of the list of keys
