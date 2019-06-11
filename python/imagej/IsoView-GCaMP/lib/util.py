@@ -79,7 +79,7 @@ class TimeItTask(Callable, Runnable):
       return None
     t0 = System.nanoTime()
     r = self.fn(*self.args, **self.kwargs)
-    return r, (System.nanoTime() - t0) / 1000.0
+    return r, (System.nanoTime() - t0) / 1000000.0
   def run(self):
     r, t = self.call()
     syncPrintQ("TimeItTask: %f ms" % t)
