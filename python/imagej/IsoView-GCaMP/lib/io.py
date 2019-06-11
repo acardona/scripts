@@ -236,7 +236,7 @@ def writeN5(img, path, dataset_name, blockSize, gzip_compression_level=4, n_thre
   N5Utils.save(img, N5FSWriter(path, GsonBuilder()),
                dataset_name, blockSize,
                GzipCompression(gzip_compression_level) if gzip_compression_level > 0 else RawCompression(),
-               newFixedThreadPool(n_threads))
+               newFixedThreadPool(n_threads=n_threads, name="jython-n5writer"))
 
 
 def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
