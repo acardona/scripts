@@ -552,7 +552,7 @@ def export8bitN5(filepaths,
       exe.shutdown()
 
   preloader = Executors.newSingleThreadScheduledExecutor()
-  preloader.scheduleWithFixedDelay(Task(preload, cachedCellImg, loader, block_size), 10, 10, TimeUnit.SECONDS)
+  preloader.scheduleWithFixedDelay(Task(preload, cachedCellImg, loader, block_size), 10, 60, TimeUnit.SECONDS)
 
   try:
     syncPrint("N5 directory: " + exportDir + "\nN5 dataset name: " + name + "\nN5 blockSize: " + str(block_size))
