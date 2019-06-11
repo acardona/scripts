@@ -60,10 +60,30 @@ class Task(Callable, Runnable):
   def call(self):
     t = Thread.currentThread()
     if t.isInterrupted() or not t.isAlive():
-        return None
+      return None
     return self.fn(*self.args, **self.kwargs)
   def run(self):
     self.call()
+
+class TimeItTask(Callable, Runnable):
+  """ A wrapper for executing functions in concurrent threads,
+      where the call method returns a tuple: the result, and the execution time in miliseconds;
+      and the run method prints out the execution time. """
+  def __init__(self, fn, *args, **kwargs):
+    self.fn = fn
+    self.args = args
+    self.kwargs = kwargs
+  def call(self):
+    t = Thread.currentThread()
+    if t.isInterrupted() or not t.isAlive():
+      return None
+    t0 = System.nanoTime()
+    r = self.fn(*self.args, **self.kwargs)
+    return r, (System.nanoTime() - t0) / 1000.0
+  def run(self):
+    r, t = self.call()
+    syncPrintQ("TimeItTask: %f ms" % t)
+    
 
 def ndarray(classtype, dimensions):
     """ E.g. for a two-dimensional native double array, use:
