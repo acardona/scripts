@@ -65,10 +65,10 @@ class Task(Callable, Runnable):
   def run(self):
     self.call()
 
-class TimeItTask(Callable, Runnable):
+class TimeItTask(Callable):
   """ A wrapper for executing functions in concurrent threads,
-      where the call method returns a tuple: the result, and the execution time in miliseconds;
-      and the run method prints out the execution time. """
+      where the call method returns a tuple: the result, and the execution time in miliseconds.
+  """
   def __init__(self, fn, *args, **kwargs):
     self.fn = fn
     self.args = args
@@ -79,10 +79,7 @@ class TimeItTask(Callable, Runnable):
       return None
     t0 = System.nanoTime()
     r = self.fn(*self.args, **self.kwargs)
-    return r, (System.nanoTime() - t0) / 1000.0
-  def run(self):
-    r, t = self.call()
-    syncPrintQ("TimeItTask: %f ms" % t)
+    return r, (System.nanoTime() - t0) / 1000000.0
     
 
 def ndarray(classtype, dimensions):
