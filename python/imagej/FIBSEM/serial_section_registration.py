@@ -24,7 +24,7 @@ from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, Poi
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT
-from mpicbg.ij.plugin import NormalizeLocalContrast
+from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
 from java.lang import Double
 from lib.io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5
@@ -33,6 +33,7 @@ from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
 from lib.ui import showStack, wrap
 from lib.converter import convert
+from lib.pixels import autoAdjust
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
@@ -447,7 +448,7 @@ def export8bitN5(filepaths,
                  interval,
                  gzip_compression=6,
                  invert=True,
-                 NLC_params=[400, 3, True, True], # For NormalizeLocalContrast
+                 CLAHE_params=[400, 256, 3.0],
                  copy_threads=2,
                  n5_threads=0, # 0 means as many as CPU cores
                  block_size=[128,128,128]):
@@ -470,7 +471,7 @@ def export8bitN5(filepaths,
                      dims[1],
                      1]
 
-  def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, stds, center, stretch, matrices, index, imp):
+  def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, n_bins, slope, matrices, index, imp):
     sp = imp.getProcessor() # ShortProcessor
     sp.setRoi(interval.min(0),
               interval.min(1),
@@ -479,9 +480,10 @@ def export8bitN5(filepaths,
     sp = sp.crop()
     if invert:
       sp.invert()
-    NormalizeLocalContrast().run(sp, blockRadius, blockRadius, stds, center, stretch)
-    sp.findMinAndMax()
-    minimum, maximum = sp.getMin(), sp.getMax()
+    CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope) # far less memory requirements than NormalizeLocalContrast, and faster.
+    minimum, maximum = autoAdjust(sp)
+
+   	# Transform and convert image to 8-bit, mapping to display range
     img = ArrayImgs.unsignedShorts(sp.getPixels(), [sp.getWidth(), sp.getHeight()])
     sp = None
     affine = AffineTransform2D()
@@ -495,10 +497,10 @@ def export8bitN5(filepaths,
     return aimg
     
 
-  blockRadius, stds, center, stretch = NLC_params
+  blockRadius, n_bins, slope = CLAHE_params
 
   loader = SectionCellLoader(filepaths, asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
-                                                           interval, invert, blockRadius, stds, center, stretch, matrices))
+                                                           interval, invert, blockRadius, n_bins, slope, matrices))
 
   # How to preload block_size[2] files at a time? Or at least as many as numCPUs()?
   # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,
