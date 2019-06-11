@@ -532,7 +532,7 @@ def export8bitN5(filepaths,
         return
       first = keys[-1] - (keys[-1] % block_size[2])
       keys = None
-      syncPrint("Preloading %i-%i" % (first, first + block_size[2] -1))
+      msg = "Preloading %i-%i" % (first, first + block_size[2] -1)
       futures = []
       for index in xrange(first, first + block_size[2]):
         futures.append(exe.submit(TimeItTask(softCache.get, index, loader)))
@@ -543,9 +543,13 @@ def export8bitN5(filepaths,
         r, t = futures.pop(0).get()
         # t in miliseconds
         if t > 500:
+          if msg:
+            syncPrint(msg)
+            msg = None
           syncPrint("preloaded index %i in %f ms" % (first + count, t))
-        count += 1        
-      syncPrint("Completed preloading %i-%i" % (first, first + block_size[2] -1))
+        count += 1
+      if not msg: # msg was printed
+        syncPrint("Completed preloading %i-%i" % (first, first + block_size[2] -1))
     except:
       syncPrint(sys.exc_info())
     finally:
