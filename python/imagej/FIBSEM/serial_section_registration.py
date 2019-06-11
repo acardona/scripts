@@ -28,7 +28,7 @@ from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
 from java.lang import Double
 from lib.io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5
-from lib.util import SoftMemoize, newFixedThreadPool, Task, ParallelTasks, numCPUs, nativeArray, syncPrint
+from lib.util import SoftMemoize, newFixedThreadPool, Task, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint
 from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
 from lib.ui import showStack, wrap
@@ -535,13 +535,15 @@ def export8bitN5(filepaths,
       syncPrint("Preloading %i-%i" % (first, first + block_size[2] -1))
       futures = []
       for index in xrange(first, first + block_size[2]):
-        futures.append(exe.submit(Task(softCache.get, index, loader)))
+        futures.append(exe.submit(TimeItTask(softCache.get, index, loader)))
       softCache = None
       # Wait for all
       count = 1
       while len(futures) > 0:
-        futures.pop(0).get()
-        syncPrint("preloaded index %i" % (first + count))
+        r, t = futures.pop(0).get()
+        # t in miliseconds
+        if t > 500:
+          syncPrint("preloaded index %i in %f ms" % (first + count, t))
         count += 1        
       syncPrint("Completed preloading %i-%i" % (first, first + block_size[2] -1))
     except:
