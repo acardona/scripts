@@ -186,7 +186,7 @@ def makeTranslationUI(affines, imp, show=True, print_button_text="Print transfor
       matrix = zeros(12, 'd')
       aff.toArray(matrix)
       msg = "# Coarse affine matrix " + str(i) + ": \n" + \
-            "affine" + str(i) + ".set(*[%d, %d, %d, %d,\n %d, %d, %d, %d,\n %d, %d, %d, %d])" % tuple(matrix.tolist())
+            "affine" + str(i) + ".set(*[%f, %f, %f, %f,\n %f, %f, %f, %f,\n %f, %f, %f, %f])" % tuple(matrix.tolist())
       # Print everywhere
       print msg
       IJ.log(msg)
@@ -488,10 +488,10 @@ class NumberTextFieldListener(KeyAdapter):
       # Update the params dictionary
       self.params[self.key] = value
       # Signal success
-      event.getSource().setBackgroundColor(Color.white)
+      event.getSource().setBackground(Color.white)
     except:
       print "Can't parse number from: %s" % text
-      event.getSource().setBackgroundColor(Color(1.0, 82/255.0, 82/255.0))
+      event.getSource().setBackground(Color(1.0, 82/255.0, 82/255.0))
 
 
 def insertFloatFields(panel, gb, gc, params, strings):
@@ -619,7 +619,14 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
         coarse_matrices.append(matrix)
 
       # NOTE: both coarse_matrices and matrices are from the camera X to camera 0. No need to invert them.
+      # NOTE: uses identity calibration because the coarse_matrices already include the calibration scaling to isotropy
       transforms = mergeTransforms([1.0, 1.0, 1.0], coarse_matrices, [minC, maxC], matrices, invert2=False)
+
+      print "calibration:", [1.0, 1.0, 1.0]
+      print "cmTransforms:\n    %s\n    %s\n    %s\n    %s" % tuple(str(m) for m in coarse_matrices)
+      print "ROI", [minC, maxC]
+      print "fineTransformsPostROICrop:\n    %s\n    %s\n    %s\n    %s" % tuple(str(m) for m in matrices)
+      print "invert2:", False
       
       # Show registered images
       registered = [transformedView(img, transform, interval=cropped[0])
@@ -662,7 +669,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
       matrix = zeros(12, 'd')
       affine.toArray(matrix)
       msg = "# Refined post-crop affine matrix " + str(i) + ": \n" + \
-            "affine" + str(i) + ".set(*[%d, %d, %d, %d,\n %d, %d, %d, %d,\n %d, %d, %d, %d])" % tuple(matrix.tolist())
+            "affine" + str(i) + ".set(*[%f, %f, %f, %f,\n %f, %f, %f, %f,\n %f, %f, %f, %f])" % tuple(matrix.tolist())
       # Print everywhere
       print msg
       IJ.log(msg)
@@ -737,12 +744,12 @@ def generateDeconvolutionScriptUI(srcDir,
 # AUTOMATICALLY GENERATED - %s
 
 import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0]))
+sys.path.append("%s")
 from lib.isoview import deconvolveTimePoints
 from mpicbg.models import RigidModel3D, TranslationModel3D
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
-# The folder with the sequence of TM\d+ folders, one per time poi  nt in the 4D series.
+# The folder with the sequence of TM\d+ folders, one per time point in the 4D series.
 # Each folder should contain 4 KLB files, one per camera view of the IsoView microscope.
 srcDir = "%s"
 
@@ -752,14 +759,13 @@ targetDir = "%s"
 # Path to the volume describing the point spread function (PSF)
 kernelPath = "%s"
 
-calibration = [%s] # An array with 3 floats
+calibration = [%s] # An array with 3 floats (identity--all 1.0--because the coarse affines, that is,
+                   # the camera transformations, already include the scaling to isotropy computed using the original calibration.
 
 # The transformations of each timepoint onto the camera at index zero.
 def cameraTransformations(dims0, dims1, dims2, dims3, calibration):
   return {
-    0: [1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0],
+    0: [%s],
     1: [%s],
     2: [%s],
     3: [%s]
@@ -791,7 +797,7 @@ fineTransformsPostROICrop = \
 
 deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                     cameraTransformations, fineTransformsPostROICrop,
-                    params, roi, subrange=range(%i, %i))
+                    params, roi, fine_fwd=True, subrange=range(%i, %i))
   """
 
   od = OpenDialog("Choose kernel file", srcDir)
@@ -841,10 +847,12 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
 
   def generateScript(event):
     script = template % (str(datetime.now()),
+                         filter(lambda path: path.endswith("IsoView-GCaMP"), sys.path)[-1],
                          srcDir,
                          tgtDir,
                          kernel_path,
                          ", ".join(imap(str, calibration)),
+                         asString(preCropAffines[0]),
                          asString(preCropAffines[1]),
                          asString(preCropAffines[2]),
                          asString(preCropAffines[3]),

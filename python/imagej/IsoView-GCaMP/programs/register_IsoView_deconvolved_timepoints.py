@@ -4,11 +4,18 @@ from lib.isoview import registerDeconvolvedTimePoints
 from mpicbg.models import RigidModel3D, TranslationModel3D
 from net.imglib2.img.display.imagej import ImageJFunctions as IL, ImageJVirtualStackUnsignedShort
 from ij import ImagePlus, CompositeImage
+from ij.gui import YesNoCancelDialog
+from lib.util import newFixedThreadPool
+from lib.ui import showStack
+from lib.io import writeN5
 
 # Register deconvolved views across time and show them as a VirtualStack
 
 # A folder to save deconvolved images in, and CSV files describing features, point matches and transformations
 targetDir = "/home/albert/shares/cardonalab/Albert/2017-05-10_1018/"
+
+first_timepoint = 0
+last_timepoint = 399
 
 # Deconvolved images have isotropic calibration
 calibration = [1.0, 1.0, 1.0]
@@ -68,12 +75,35 @@ img4D = registerDeconvolvedTimePoints(targetDir,
                                       modelclass,
                                       exe=None,
                                       verbose=False,
-                                      subrange=range(0, 400))
+                                      subrange=range(first_timepoint, last_timepoint + 1))
 # IL.wrap gets structure wrong: uses channels for slices, and slices for frames
 #IL.wrap(img4D, "0-399").show()
 
-stack = ImageJVirtualStackUnsignedShort.wrap(img4D)
-imp = ImagePlus("0-399", stack)
-imp.setDimensions(1, img4D.dimension(2), img4D.dimension(3))
-comp = CompositeImage(imp, CompositeImage.GRAYSCALE)
-comp.show()
+showStack(img4D, title="%i-%i" % (first_timepoint, last_timepoint))
+
+
+# Materialize (write to disk) the registered deconvolved stacks
+targetDirN5 = os.path.join(targetDir, "deconvolved/n5/")
+nameN5 = "%s_%i-%i_%ix%ix%ix%i" % (targetDir.split("/")[-2],
+                                   first_timepoint, last_timepoint,
+                                   img4D.dimension(0),
+                                   img4D.dimension(1),
+                                   img4D.dimension(2),
+                                   img4D.dimension(3))
+
+writeN5Volume = True
+if not os.path.exists(targetDirN5):
+  os.mkdir(targetDirN5)
+else:
+  writeN5Volume = False
+  yn = YesNoCancelDialog(IJ.getInstance(), "Write N5",
+                         "The N5 folder already exists: continue?")
+  writeN5Volume = yn.yesPressed()
+
+if writeN5Volume:
+  print "N5 volume folder: ", targetDirN5
+  print "N5 volume name: ", nameN5
+  writeN5(img4D,
+          targetDirN5,
+          nameN5,
+          [img4D.dimension(0), img4D.dimension(1), 5, 1])

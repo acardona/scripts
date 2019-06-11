@@ -1,17 +1,39 @@
+from __future__ import print_function
 from synchronize import make_synchronized
-from java.util.concurrent import Callable, Future, Executors, ThreadFactory
+from java.util.concurrent import Callable, Future, Executors, ThreadFactory, TimeUnit
 from java.util.concurrent.atomic import AtomicInteger
 from java.lang.reflect.Array import newInstance as newArray
-from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character, System
+from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character, System, Runnable
 from net.imglib2.realtransform import AffineTransform3D
 from net.imglib2.view import Views
+from java.util import LinkedHashMap, Collections, LinkedList, HashMap
+from java.lang.ref import SoftReference
+from java.util.concurrent.locks import ReentrantLock
+
+
+printService = Executors.newSingleThreadScheduledExecutor()
+msgQueue = Collections.synchronizedList(LinkedList()) # synchronized
+
+def printMsgQueue():
+  while not msgQueue.isEmpty():
+    try:
+      print(msgQueue.pop())
+    except:
+      System.out.println(str(sys.exc_info()))
+
+printService.scheduleWithFixedDelay(printMsgQueue, 500, 500, TimeUnit.MILLISECONDS)
+
+def syncPrintQ(msg):
+  """ Synchronized access to python's built-in print function.
+      Messages are queued and printed every 0.5 seconds by a scheduled executor service.
+  """
+  msgQueue.insert(0, msg)
 
 
 @make_synchronized
 def syncPrint(msg):
   """ Synchronized access to python's built-in print function. """
-  print msg
-
+  print(msg)
 
 class Getter(Future):
   """ A simulated Future that is ready to deliver its result.
@@ -29,7 +51,7 @@ class Getter(Future):
     return True
 
 
-class Task(Callable):
+class Task(Callable, Runnable):
   """ A wrapper for executing functions in concurrent threads. """
   def __init__(self, fn, *args, **kwargs):
     self.fn = fn
@@ -38,9 +60,30 @@ class Task(Callable):
   def call(self):
     t = Thread.currentThread()
     if t.isInterrupted() or not t.isAlive():
-        return None
+      return None
     return self.fn(*self.args, **self.kwargs)
+  def run(self):
+    self.call()
 
+class TimeItTask(Callable, Runnable):
+  """ A wrapper for executing functions in concurrent threads,
+      where the call method returns a tuple: the result, and the execution time in miliseconds;
+      and the run method prints out the execution time. """
+  def __init__(self, fn, *args, **kwargs):
+    self.fn = fn
+    self.args = args
+    self.kwargs = kwargs
+  def call(self):
+    t = Thread.currentThread()
+    if t.isInterrupted() or not t.isAlive():
+      return None
+    t0 = System.nanoTime()
+    r = self.fn(*self.args, **self.kwargs)
+    return r, (System.nanoTime() - t0) / 1000.0
+  def run(self):
+    r, t = self.call()
+    syncPrintQ("TimeItTask: %f ms" % t)
+    
 
 def ndarray(classtype, dimensions):
     """ E.g. for a two-dimensional native double array, use:
@@ -105,7 +148,7 @@ def numCPUs():
 
 class ParallelTasks:
   def __init__(self, name, exe=None):
-    self.exe = exe if exe else newFixedThreadPool()
+    self.exe = exe if exe else newFixedThreadPool(name=name)
     self.futures = []
   def add(self, fn, *args, **kwargs):
     future = self.exe.submit(Task(fn, *args, **kwargs))
@@ -118,8 +161,8 @@ class ParallelTasks:
     Returns a generator with the results.
     """
     for task in tasks:
-      self.futures.add(self.exe.submit(task))
-      if len(futures) > chunk_size:
+      self.futures.append(self.exe.submit(task))
+      if len(self.futures) > chunk_size:
         while len(self.futures) > 0:
           yield self.futures.pop(0).get()
   def awaitAll(self):
@@ -141,7 +184,7 @@ def timeit(n_iterations, fn, *args, **kwargs):
     imp = fn(*args, **kwargs)
     t1 = System.nanoTime()
     times.append(t1 - t0)
-  print "min: %.2f ms, max: %.2f ms, mean: %.2f ms" % (min(times) / 1000000.0, max(times) / 1000000.0, sum(times)/(len(times) * 1000000.0))
+  print("min: %.2f ms, max: %.2f ms, mean: %.2f ms" % (min(times) / 1000000.0, max(times) / 1000000.0, sum(times)/(len(times) * 1000000.0)))
 
 
 def affine3D(matrix):
@@ -153,3 +196,64 @@ def affine3D(matrix):
 def cropView(img, minCoords, maxCoords):
   return Views.zeroMin(Views.interval(img, minCoords, maxCoords))
 
+
+
+class LRUCache(LinkedHashMap):
+  def __init__(self, max_entries, eldestFn=None):
+    # initialCapacity 16 (the default)
+    # loadFactor 0.75 (the default)
+    # accessOrder True (default is False)
+    super(LinkedHashMap, self).__init__(10, 0.75, True)
+    self.max_entries = max_entries
+    self.eldestFn = eldestFn
+  def removeEldestEntry(self, eldest):
+    if self.size() > self.max_entries:
+      if self.eldestFn:
+        self.eldestFn(eldest.getValue())
+      return True
+
+class SoftMemoize:
+  def __init__(self, fn, maxsize=30):
+    self.fn = fn
+    # Synchronize map to ensure correctness in a multi-threaded application:
+    # (I.e. concurrent threads will wait on each other to access the cache)
+    self.m = Collections.synchronizedMap(LRUCache(maxsize, eldestFn=lambda ref: ref.clear()))
+    self.locks = Collections.synchronizedMap(HashMap())
+
+  @make_synchronized
+  def getOrMakeLock(self, key):
+    lock = self.locks.get(key)
+    if not lock:
+      # Cleanup locks
+      for key in self.locks.keys(): # copy of the list of keys
+        if not self.m.containsKey(key):
+          del self.locks[key]
+      """
+      # Proper cleanup, but unnecessary to query queued threads
+      # and it is useful to keep locks for existing keys
+      for key, lock in self.locks.items(): # a copy
+        if not lock.hasQueuedThreads():
+          del self.locks[key]
+      """
+      # Create new lock
+      lock = ReentrantLock()
+      self.locks[key] = lock
+    return lock
+
+  def __call__(self, key):
+    """ Locks on the key, and waits, when needing to execute the memoized function. """
+    # Either not present, or garbage collector discarded it
+    lock = self.getOrMakeLock(key)
+    try:
+      lock.lockInterruptibly()
+      softref = self.m.get(key) # self.m is a synchronized map
+      o = softref.get() if softref else None
+      if o:
+        return o
+      # Invoke the memoized function
+      o = self.fn(key)
+      # Store return value wrapped in a SoftReference
+      self.m.put(key, SoftReference(o))
+      return o
+    finally:
+      lock.unlock()

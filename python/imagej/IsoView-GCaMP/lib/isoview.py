@@ -15,11 +15,11 @@ from itertools import izip, chain, repeat
 from operator import itemgetter
 from util import newFixedThreadPool, Task, syncPrint, affine3D
 from io import readFloats, writeZip, KLBLoader, TransformedLoader, ImageJLoader
-from registration import computeOptimizedTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView
+from registration import computeOptimizedTransforms, saveMatrices, loadMatrices, asBackwardConcatTransforms, viewTransformed, transformedView, mergeTransforms
 from deconvolution import multiviewDeconvolution, prepareImgForDeconvolution, transformPSFKernelToView
 from converter import convert, createConverter
 from collections import defaultdict
-from java.lang import Runtime
+from java.lang import Runtime, Thread
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
@@ -34,6 +34,7 @@ def deconvolveTimePoints(srcDir,
                          roi,
                          subrange=None,
                          camera_groups=((0, 1), (2, 3)),
+                         fine_fwd=False,
                          n_threads=0): # 0 means all
   """
      Main program entry point.
@@ -63,6 +64,8 @@ def deconvolveTimePoints(srcDir,
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
      subrange: defaults to None. Can be a list specifying the indices of time points to deconvolve.
      camera_groups: the camera views to fuse and deconvolve together. Defaults to two: ((0, 1), (2, 3))
+     fine_fwd: whether the fineTransformsPostROICrop were computed all-to-all, which optimizes the pose and produces direct transforms,
+               or, when False, the fineTransformsPostROICrop were computed from 0 to 1, 0 to 2, and 0 to 3, so they are inverted.
      n_threads: number of threads to use. Zero (default) means as many as possible.
   """
   kernel = readFloats(kernel_filepath, [19, 19, 25], header=434)
@@ -73,8 +76,6 @@ def deconvolveTimePoints(srcDir,
 
   # Regular expression pattern describing KLB files to include
   pattern = re.compile("^SPM00_TM\d+_CM(\d+)_CHN0[01]\.klb$")
-
-  exe = newFixedThreadPool(n_threads=n_threads)
 
   # Find all time point folders with pattern TM\d{6} (a TM followed by 6 digits)
   def iterTMs():
@@ -116,31 +117,12 @@ def deconvolveTimePoints(srcDir,
                 for index, filepath in sorted(TMs[0].items(), key=itemgetter(0))]
 
   cmTransforms = cameraTransformations(dimensions[0], dimensions[1], dimensions[2], dimensions[3], calibration)
-  
-  def prepareTransforms():
-    # Scale to isotropy
-    scale3D = AffineTransform3D()
-    scale3D.set(calibration[0], 0.0, 0.0, 0.0,
-                0.0, calibration[1], 0.0, 0.0,
-                0.0, 0.0, calibration[2], 0.0)
-    # Translate to ROI origin of coords
-    roi_translation = affine3D([1, 0, 0, -roi[0][0],
-                                0, 1, 0, -roi[0][1],
-                                0, 0, 1, -roi[0][2]])
-    
-    transforms = []
-    for camera_index in sorted(cmTransforms.keys()):
-      aff = AffineTransform3D()
-      aff.set(*cmTransforms[camera_index])
-      aff.concatenate(scale3D)
-      aff.preConcatenate(roi_translation)
-      aff.preConcatenate(affine3D(fineTransformsPostROICrop[index]).inverse())
-      transforms.append(aff)
-    
-    return transforms
 
   # Transforms apply to all time points equally
-  transforms = prepareTransforms()
+  #   If fine_fwd, the fine transform was forward.
+  #   Otherwise, it was from CM00 to e.g. CM01, so backwards for CM01, needing an inversion.
+  transforms = mergeTransforms(calibration, [cmTransforms[i] for i in sorted(cmTransforms.keys())],
+                               roi, fineTransformsPostROICrop, invert2=not fine_fwd)
   
   # Create target folder for storing deconvolved images
   if not os.path.exists(os.path.join(targetDir, "deconvolved")):
@@ -165,20 +147,23 @@ def deconvolveTimePoints(srcDir,
 
   target_interval = FinalInterval([0, 0, 0],
                                   [maxC - minC for minC, maxC in izip(roi[0], roi[1])])
-  
-  # Submit for registration + deconvolution
-  # The registration uses 2 parallel threads, and deconvolution all possible available threads.
-  # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
-  for i, filepaths in enumerate(TMs):
-    syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
-    deconvolveTimePoint(filepaths, targetDir, klb_loader,
-                        transforms, target_interval,
-                        params, PSF_kernels, exe, output_converter,
-                        camera_groups=camera_groups)
 
-  exe.shutdown() # Not accepting any more tasks but letting currently executing tasks to complete.
-  # Wait until the last task (writing the last file) completes execution.
-  exe.awaitTermination(5, TimeUnit.MINUTES)
+  exe = newFixedThreadPool(n_threads=n_threads)
+  try:
+    # Submit for registration + deconvolution
+    # The registration uses 2 parallel threads, and deconvolution all possible available threads.
+    # Cannot invoke more than one time point at a time because the deconvolution requires a lot of memory.
+    for i, filepaths in enumerate(TMs):
+      if Thread.currentThread().isInterrupted(): break
+      syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
+      deconvolveTimePoint(filepaths, targetDir, klb_loader,
+                          transforms, target_interval,
+                          params, PSF_kernels, exe, output_converter,
+                          camera_groups=camera_groups)
+  finally:
+    exe.shutdown() # Not accepting any more tasks but letting currently executing tasks to complete.
+    # Wait until the last task (writing the last file) completes execution.
+    exe.awaitTermination(5, TimeUnit.MINUTES)
 
 
 def deconvolveTimePoint(filepaths, targetDir, klb_loader,
@@ -242,6 +227,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
   # So do one at a time.
   last_future = None
   for indices in todo:
+    if Thread.currentThread().isInterrupted(): break
     images = [prepared[index] for index in indices]
     syncPrint("Invoked deconvolution for %s %s" % (tm_dirname, " ".join("%i" % i for i in indices)))
     # Deconvolve: merge two views into a single volume

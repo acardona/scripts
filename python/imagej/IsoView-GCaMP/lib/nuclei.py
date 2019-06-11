@@ -9,7 +9,7 @@ from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
 from net.imglib2.view import Views
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.util import ImgUtil, Intervals
-from net.imglib2.algorithm.math.ImgMath import compute, add, sub
+from net.imglib2.algorithm.math.ImgMath import compute, add, sub, maximum
 
 
 def doGPeaks(img, params):
@@ -142,7 +142,7 @@ def maxProjectLastDimension(img, strategy="1by1", chunk_size=0):
     exe = newFixedThreadPool()
     try:
       n_threads = exe.getCorePoolSize()
-      imgTs = [ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img)) for i in xrange(n_threads)]
+      imgTs = [ArrayImgs.unsignedShorts(list(Intervals.dimensionsAsLongArray(img))[:-1]) for i in xrange(n_threads)]
       
       def mergeMax(img1, img2, imgT):
         return compute(maximum(img1, img2)).into(imgT)
@@ -205,12 +205,14 @@ def maxProjectLastDimension(img, strategy="1by1", chunk_size=0):
       return imgA
 
 
-def findNucleiByMaxProjection(img4D, params, img3D_filepath, projection_strategy="1by1", show=True):
+def findNucleiByMaxProjection(img4D, params, img3D_filepath, projection_strategy="1by1", mask=None, show=True):
   """
   img4D: the 4D series to max-project and then detect nuclei in.
   params: for difference of Gaussian to detect somas.
   img3D: optional, provide a ready-made max projection.
   projection_strategy: defaults to "1by1". See maxProjectLastDimension.
+  mask: defaults to None, can be a 3D image (a RandomAccesibleInterval of 3 dimensions) used to
+        filter nuclei detections by whether their coordinates have a non-zero value.
   show: defaults to True, and if so opens a 3D volume showing the nuclei as white spheres.
   """
   if not os.path.exists(img3D_filepath):
@@ -222,6 +224,14 @@ def findNucleiByMaxProjection(img4D, params, img3D_filepath, projection_strategy
     img3D = ImageJLoader().get(img3D_filepath)
   
   peaks = doGPeaks(img3D, params)
+
+  if mask:
+    ra = mask.randomAccess()
+    def isNonZero(peak):
+      ra.setPosition(peak)
+      return 0 != ra.get().get()
+    
+    peaks = filter(isNonZero, peaks)
   
   if show:
     spheresRAI = virtualPointsRAI(peaks, params["somaDiameter"] / 2.0, img3D)

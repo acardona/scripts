@@ -237,7 +237,7 @@ def savePointMatches(img_filename1, img_filename2, pointmatches, directory, para
       w.writerow(keys)
       w.writerow(tuple(params[key] for key in keys))
       # PointMatches header
-      w.writerow(PointMatches.csvHeader())
+      w.writerow(PointMatches.csvHeader(next(iter(pointmatches)))) # support both lists and sets
       # One PointMatch per row
       for pm in pointmatches:
         w.writerow(PointMatches.asRow(pm))
