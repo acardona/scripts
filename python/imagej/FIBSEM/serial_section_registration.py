@@ -471,7 +471,7 @@ def export8bitN5(filepaths,
                      dims[1],
                      1]
 
-  def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, n_bins, slope, matrices, index, imp):
+  def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, n_bins, slope, matrices, copy_threads, index, imp):
     sp = imp.getProcessor() # ShortProcessor
     sp.setRoi(interval.min(0),
               interval.min(1),
@@ -494,13 +494,14 @@ def export8bitN5(filepaths,
     imgMinMax = convert(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType)
     aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
     ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg, copy_threads)
+    img = imgI = imgA = imgT = imgMinMax = None
     return aimg
     
 
   blockRadius, n_bins, slope = CLAHE_params
 
   loader = SectionCellLoader(filepaths, asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
-                                                           interval, invert, blockRadius, n_bins, slope, matrices))
+                                                           interval, invert, blockRadius, n_bins, slope, matrices, copy_threads))
 
   # How to preload block_size[2] files at a time? Or at least as many as numCPUs()?
   # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,
