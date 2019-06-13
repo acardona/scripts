@@ -28,7 +28,7 @@
 (function() {
 
   var ins = CATMAID.NeuronSearch.prototype.getInstances();
-  var skids = ins[0].getSelectedSkeletons().slice(0, 100);
+  var skids = ins[0].getSelectedSkeletons();
   var unsplittable = ins[1].getSelectedSkeletons();
   var splitTag = "mw axon split";
 
@@ -205,6 +205,4 @@
         CATMAID.FileExporter.saveAs(namescsv, "skeleton_id_vs_neuron_name.csv", 'text/csv');
     }
   );
-
-
 })();
