@@ -4,16 +4,20 @@
  *
  * Uses two SkeletonSource:
  * 1. "skids": the neuron skeleton IDs to include in the graph.
- * 2. "unsplittable": the list of neuron skeleton IDs that cannot be split into axon and dendrite.
- *                    These are considered as dendrite-only.
+ * 2. "unsplittable": the list of neuron skeleton IDs that cannot be split into
+      axon and dendrite. These are considered as dendrite-only.
  *
- * ... and a text tag "splitTag", at which point the axon is split into axon (downstream, inclusive)
- * and dendrite (upstream, exclusive).
+ * ... and a text tag "splitTag", at which point the axon is split into
+   axon (downstream, inclusive) and dendrite (upstream, exclusive).
  * There can be more than one "splitTag", for example for neurons with two axons.
  *
  * A total of 6 CSV files are exported:
  * 1. "input_counts.csv" with 3 columns: skeleton_id, axon_inputs, dendrite_inputs.
-      These input counts are the total, so they will be equal or larger than the sum of inputs of the edges in the exported graph, because some inputs may originate in neurons not to include in the graph. The purpose of this CSV file is to enable normalization of inputs by computing the input fractions for each neuron, as the way to estimate edge weights.
+      These input counts are the total, so they will be equal or larger than
+  the sum of inputs of the edges in the exported graph, because some inputs
+  may originate in neurons not to include in the graph. The purpose of this CSV
+  file is to enable normalization of inputs by computing the input fractions
+  for each neuron, as the way to estimate edge weights.
  * 2. "skeleton_id_vs_neuron_name.csv" with 2 columns: skeleton_id, neuron_name.
  * 3. "axon-dendrite.csv": all-to-all matrix of axo-dendritic edges.
  * 4. "axon-axon.csv": all-to-all matrix of axo-axonic edges.
