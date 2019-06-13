@@ -1,3 +1,26 @@
+/**
+ * A CATMAID script to export the connectivity graph with multiple edge colors,
+ * namely axo-dendritic, axo-axonic, dendro-dendritic and dendro-axonic.
+ *
+ * Uses two SkeletonSource:
+ * 1. "skids": the neuron skeleton IDs to include in the graph.
+ * 2. "unsplittable": the list of neuron skeleton IDs that cannot be split into axon and dendrite.
+ *                    These are considered as dendrite-only.
+ *
+ * ... and a text tag "splitTag", at which point the axon is split into axon (downstream, inclusive)
+ * and dendrite (upstream, exclusive).
+ * There can be more than one "splitTag", for example for neurons with two axons.
+ *
+ * A total of 6 CSV files are exported:
+ * 1. "input_counts.csv" with 3 columns: skeleton_id, axon_inputs, dendrite_inputs.
+      These input counts are the total, so they will be equal or larger than the sum of inputs of the edges in the exported graph, because some inputs may originate in neurons not to include in the graph. The purpose of this CSV file is to enable normalization of inputs by computing the input fractions for each neuron, as the way to estimate edge weights.
+ * 2. "skeleton_id_vs_neuron_name.csv" with 2 columns: skeleton_id, neuron_name.
+ * 3. "axon-dendrite.csv": all-to-all matrix of axo-dendritic edges.
+ * 4. "axon-axon.csv": all-to-all matrix of axo-axonic edges.
+ * 5. "dendrite-axon.csv": all-to-all matrix of dendro-axonic edges.
+ * 6. "dendrite-dendrite.csv": all-to-all matrix of dendro-dendritic edges.
+ */
+
 (function() {
 
   var ins = CATMAID.NeuronSearch.prototype.getInstances();
@@ -109,49 +132,31 @@
     function() {
         // Write 5 CSV files
         //var skids = Object.keys(skeletonIDs).map(Number).sort();
+        // Sorted by name
         var skids = Object.keys(skeletonIDs).map(function(skid) { return [skid, getName(skid)]; })
                     .sort(function(a, b) { return a[1] < b[1] ? -1 : 1; })
                     .map(function(a) { return a[0]; });
 
+        var makeCounts = function() {
+          return skids.reduce(function(o, skid) {
+                 o[skid] = {"axon": 0,
+                           "dendrite": 0 }; // skid vs count of synapses
+                 return o;
+          }, {});
+        };
 
-        /*
-        var edges = {"axon-dendrite": {},
-                     "axon-axon": {},
-                     "dendrite-axon": {},
-                     "dendrite-dendrite": {}};
-
-        Object.keys(connectors).forEach(function(connectorID) {
-          var connector = connectors[connectorID];
-          if (!connector.preSkid) return;
-          connector.postSkid.forEach(function(post) {
-            var color = connector.location + "-" + post.location;
-            var edge = edges[color];
-            var key = connector.preSkid + "-" + post.skid;
-            var counts = edge[key];
-            if (counts) edge[key] += 1;
-            else e[key] = 1;
-          });
-        });
-        */
-
-
-        var counts = skids.reduce(function(o, skid) {
-                       o[skid] = {"axon": 0,
-                                  "dendrite": 0 }; // skid vs count of synapses
-                       return o;
-                     }, {});
         var edges = skids.reduce(function(o, skid) {
-            o[skid] = {"axon": $.extend({}, counts),
-                       "dendrite": $.extend({}, counts) };
+            o[skid] = {"axon": makeCounts(),
+                       "dendrite": makeCounts() }
             return o;
         }, {});
         
         Object.keys(connectors).forEach(function(connectorID) {
            var connector = connectors[connectorID];
-           if (!connector.preSkid) return;
+           if (!connector.preSkid) return; // preSkid not part of neurons to include
            var edge = edges[connector.preSkid];
            if (!edge) {
-               // Ignore edge that starts in a neuron that is not annotated as a brain neuron
+               // Ignore edge that starts in a neuron that is not annotated as a neuron to include
                return;
            }
            
@@ -171,14 +176,16 @@
         var csv = "skeleton_id, axon_inputs, dendrite_inputs\n" + rows.join("\n");
         CATMAID.FileExporter.saveAs(csv, "input_counts.csv", 'text/csv');
 
+        // Function to export all 4 colors of edges, one per CSV file
         var exportCSV = function(loc1, loc2) {
           var rows = skids.map(function(skid_pre) {
             var outer = edges[skid_pre][loc1];
             return [skid_pre].concat(skids.map(function(skid_post) {
               return outer[skid_post][loc2];
-            }));
+            })).join(",");
           });
-          var csv = "," + skids.join(",") + "\n" + rows.map(function(row) { return row.join(","); }).join("\n");
+          var csv = "," + skids.join(",") + "\n" // header
+                  + rows.join("\n");
           CATMAID.FileExporter.saveAs(csv, loc1 + "-" + loc2 + ".csv", 'text/csv')
         };
 
@@ -187,9 +194,10 @@
         exportCSV("dendrite", "axon");
         exportCSV("dendrite", "dendrite");
 
-        var namescsv = "skelelon_id, neuron_name\n" + skids.map(function(skid) {
-            return [skid, getName(skid)].join(",");
-        }).join("\n");
+        var namescsv = "skelelon_id, neuron_name\n" // header
+                     + skids.map(function(skid) {
+                                   return [skid, getName(skid)].join(",");
+                                 }).join("\n");
         CATMAID.FileExporter.saveAs(namescsv, "skeleton_id_vs_neuron_name.csv", 'text/csv');
     }
   );
