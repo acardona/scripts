@@ -158,7 +158,7 @@
            var counts = edge[connector.location];
 
            connector.postSkid.forEach(function(post) {
-               if (!edge[post.skid]) return; // ignore neuron outside the set of annotated brain neurons
+               if (!skeletonIDs[post.skid]) return; // ignore neuron outside the set of neurons to include
                counts[post.skid][post.location] += 1;
            });
         });
