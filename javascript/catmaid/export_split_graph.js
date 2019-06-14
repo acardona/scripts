@@ -28,8 +28,8 @@
 (function() {
 
   var ins = CATMAID.NeuronSearch.prototype.getInstances();
-  var skids = ins[0].getSelectedSkeletons();
-  var unsplittable = ins[1].getSelectedSkeletons();
+  var selected_skids = ins[0].getSelectedSkeletons();
+  var unsplittable = ins[1].getSelectedSkeletons().reduce(function(o, skid) { o[skid] = true; return o; }, {});
   var splitTag = "mw axon split";
 
   var getName = CATMAID.NeuronNameService.getInstance().getName;
@@ -37,16 +37,18 @@
 
   // Connectors by presynaptic site location:
   var connectors = {};
+
+  // Selected skeleton IDs to include in the exported matrices
   var skeletonIDs = {};
 
-  var all_inputs = skids.reduce(function(o, skid) {
+  var all_inputs = selected_skids.reduce(function(o, skid) {
                     o[skid] = {"axon": 0,
                                "dendrite": 0};
                     return o;
                    }, {});
 
   fetchSkeletons(
-    skids,
+    selected_skids,
     function(skid) {
       return CATMAID.makeURL(project.id + '/' + skid + '/1/1/compact-skeleton');  
     },
@@ -62,11 +64,11 @@
         // Check soma: only one
         var somas = json[2]["soma"];
         if (!somas) {
-            console.log("Missing SOMA tag '" + splitTag + "' for skid #" + skid + " " + getName(skid));
+            console.log("SKIP: missing SOMA tag '" + splitTag + "' for skid #" + skid + " " + getName(skid));
             return;
         }
         if (somas.length != 1) {
-            console.log("More than one SOMA tag '" + splitTag + "' for skid #" + skid + " " + getName(skid));
+            console.log("SKIP: more than one SOMA tag '" + splitTag + "' for skid #" + skid + " " + getName(skid));
             return;
         }
 
@@ -82,7 +84,7 @@
             arbor.reroot(somas[0]);
         }
 
-        // All nodes downstream of splits[0] included will be the axon.
+        // All nodes downstream of splits will be the axon.
         var dendrite = arbor;
         if (!splits) {
             if (!unsplittable[skid]) {
@@ -206,3 +208,4 @@
     }
   );
 })();
+
