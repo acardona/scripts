@@ -92,7 +92,7 @@
             // Unsplittable neuron: all of it is a dendrite
         } else {
             var cuts = splits.reduce(function(o, node) { o[node] = true; return o; }, {});
-            arbor.pruneAt(cuts);
+            dendrite = arbor.upstreamArbor(cuts); // inclusive of nodes in cuts
         }
 
         var inputs = all_inputs[skid];
