@@ -119,15 +119,16 @@
             }
             
             var location = dendrite.contains(node) ? "dendrite" : "axon";
-            inputs[location] += 1;
 
             if (0 == relation) {
                 // Presynaptic relation
                 connector.preSkid = skid;
                 connector.location = location;
             } else if (1 == relation) {
+							  // Postsynaptic relation, aka an input
                 connector.postSkid.push({location: location,
                                          skid: skid});
+                inputs[location] += 1;
             }
         });
 
