@@ -849,12 +849,12 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                          tgtDir,
                          kernel_path,
                          ", ".join(imap(str, calibration)),
-                         "".join("\n    %i: [%s]," % (i, asString(aff)) for i, aff in enumerate(preCropAffines))
+                         "".join("\n    %i: [%s]," % (i, asString(aff)) for i, aff in enumerate(preCropAffines)),
                          params.get("CM_0_1_n_iterations", 1),
                          "\"CM_2_3_n_iterations\": %i" % params.get("CM_2_3_n_iterations", 1) if 4 == len(preCropAffines) else "",
                          ", ".join(imap(str, ROI[0])),
                          ", ".join(imap(str, ROI[1])),
-                         "".join("\n    [%s]," % asString(postCropAffines[i]) for i in xrange(1, len(postCropAffines)))
+                         "".join("\n    [%s]," % asString(postCropAffines[i]) for i in xrange(1, len(postCropAffines))),
                          params["First time point"],
                          params["Last time point"])
     tab = None
