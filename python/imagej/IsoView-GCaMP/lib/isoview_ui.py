@@ -623,9 +623,9 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
       transforms = mergeTransforms([1.0, 1.0, 1.0], coarse_matrices, [minC, maxC], matrices, invert2=False)
 
       print "calibration:", [1.0, 1.0, 1.0]
-      print "cmTransforms:\n    %s\n    %s\n    %s\n    %s" % tuple(str(m) for m in coarse_matrices)
+      print "cmTransforms:" + "".join("\n   %s" % str(m) for m in coarse_matrices)
       print "ROI", [minC, maxC]
-      print "fineTransformsPostROICrop:\n    %s\n    %s\n    %s\n    %s" % tuple(str(m) for m in matrices)
+      print "fineTransformsPostROICrop:" + "".join("\n    %s" % str(m) for m in matrices)
       print "invert2:", False
       
       # Show registered images
@@ -764,18 +764,14 @@ calibration = [%s] # An array with 3 floats (identity--all 1.0--because the coar
 
 # The transformations of each timepoint onto the camera at index zero.
 def cameraTransformations(dims0, dims1, dims2, dims3, calibration):
-  return {
-    0: [%s],
-    1: [%s],
-    2: [%s],
-    3: [%s]
-  }
+  return {%s
+}
 
 # Deconvolution parameters
 paramsDeconvolution = {
   "blockSizes": None, # None means the image size + kernel size. Otherwise specify like e.g. [[128, 128, 128]] for img in images]
   "CM_0_1_n_iterations": %i,
-  "CM_2_3_n_iterations": %i,
+  %s
 }
 
 # Joint dictionary of parameters
@@ -791,9 +787,8 @@ fineTransformsPostROICrop = \
    [[1, 0, 0, 0,
      0, 1, 0, 0,
      0, 0, 1, 0],
-    [%s],
-    [%s],
-    [%s]]
+    %s
+   ]
 
 deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                     cameraTransformations, fineTransformsPostROICrop,
@@ -831,9 +826,11 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
     panel.add(label)
 
   strings = [["Deconvolution iterations",
-              "CM_0_1_n_iterations", "CM_2_3_n_iterations"],
+              "CM_0_1_n_iterations"],
              ["Range",
               "First time point", "Last time point"]]
+  if 4 == len(preCropAffines):
+    strings[0].append("CM_2_3_n_iterations")
   params = {"CM_0_1_n_iterations": 5,
             "CM_2_3_n_iterations": 7,
             "First time point": 0,
@@ -852,17 +849,12 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                          tgtDir,
                          kernel_path,
                          ", ".join(imap(str, calibration)),
-                         asString(preCropAffines[0]),
-                         asString(preCropAffines[1]),
-                         asString(preCropAffines[2]),
-                         asString(preCropAffines[3]),
-                         params["CM_0_1_n_iterations"],
-                         params["CM_2_3_n_iterations"],
+                         "".join("\n    %i: [%s]," % (i, asString(aff)) for i, aff in enumerate(preCropAffines))
+                         params.get("CM_0_1_n_iterations", 1),
+                         "\"CM_2_3_n_iterations\": %i" % params.get("CM_2_3_n_iterations", 1) if 4 == len(preCropAffines) else "",
                          ", ".join(imap(str, ROI[0])),
                          ", ".join(imap(str, ROI[1])),
-                         asString(postCropAffines[1]),
-                         asString(postCropAffines[2]),
-                         asString(postCropAffines[3]),
+                         "".join("\n    [%s]," % asString(postCropAffines[i]) for i in xrange(1, len(postCropAffines)))
                          params["First time point"],
                          params["Last time point"])
     tab = None
@@ -876,10 +868,12 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
     if not tab:
       try:
         now = datetime.now()
-        with open(os.path.join(System.getProperty("java.io.tmpdir"),
-                               "script-%i-%i-%i_%i:%i.py" % (now.year, now.month, now.day,
-                                                             now.hour, now.minute)), 'w') as f:
+        path = os.path.join(System.getProperty("java.io.tmpdir"),
+                            "script-%i-%i-%i_%i:%i.py" % (now.year, now.month, now.day,
+                                                          now.hour, now.minute))
+        with open(path, 'w') as f:
           f.write(script)
+          print "Wrote script to " + path
       except:
         print sys.exc_info()
         print script
