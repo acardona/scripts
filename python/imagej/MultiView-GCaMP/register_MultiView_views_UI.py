@@ -103,7 +103,7 @@ from net.imglib2.realtransform import RealViews, AffineTransform3D
 import os, sys
 from os.path import basename
 from bdv.util import BdvFunctions, Bdv
-sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0])))
+sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.ui import showAsStack
 from lib.isoview_ui import makeTranslationUI, makeCropUI, makeRegistrationUI
 from functools import partial
@@ -111,13 +111,14 @@ from mpicbg.models import RigidModel3D, TranslationModel3D
 
 # START EDITING HERE
 
-#srcDir = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/"
-srcDir = "/home/albert/Desktop/t2/IsoView/"
-tgtDir = "/home/albert/Desktop/t2/IsoView/" # to store e.g. CSV files
+srcDir = "/groups/keller-s8/SV4/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/SPM00/"
+tgtDir = "/home/albert/Desktop/t2/MultiView/" # to store e.g. CSV files
 
+# Timepoint to use for registering cameras to each other
 timepoint = "TM000010" # tenth
 
-calibration = [1.0, 1.0, 5.0] # UPDATE ME
+# From 0.406125, 0.40625, 2.5, leads to 2.5/0.40625 = 6.153846153846154 to keep X,Y pixels intact
+calibration = [1.0, 1.0, 6.153846153846154] # UPDATE ME
 
 # Parameters for feature-based registration
 csv_dir = tgtDir # Folder to store CSV files
