@@ -223,12 +223,6 @@ images = [imgB0, imgB1]
 imp = showAsStack(images, title="2 views to coarsely register")
 
 
-
-# DEBUG: so that I don't have to adjust the test data set manually every time
-affine1.set(*[-1.000000, 0.000000, 0.000000, 377.000000,
- 0.000000, 1.000000, 0.000000, 50.000000,
- 0.000000, 0.000000, 5.000000, 0.000000])
-
 affines = [affine0, affine1] # they will be used merely for adjusting translations manually
 
 # Now edit by hand the affine of CM01 relative to the CM00 (which is used as reference and doesn't change)
