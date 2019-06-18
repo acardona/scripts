@@ -806,8 +806,9 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                     params, roi, fine_fwd=True, subrange=range(%i, %i))
   """
 
-  od = OpenDialog("Choose kernel file", srcDir)
+  od = OpenDialog("Choose kernel file", srcDir, None)
   kernel_path = od.getPath()
+  print "kernel_path: ", kernel_path
   if not kernel_path:
     JOptionPane.showMessageDialog(None, "Can't proceed without a filepath to the kernel", "Alert", JOptionPane.ERROR_MESSAGE)
     return
