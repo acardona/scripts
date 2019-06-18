@@ -250,6 +250,7 @@ imp = showAsStack(images, title="4 views to coarsely register")
 
 
 # DEBUG: so that I don't have to adjust the test data set manually every time
+"""
 affine1.set(*[-1.000000, 0.000000, 0.000000, 377.000000,
  0.000000, 1.000000, 0.000000, 50.000000,
  0.000000, 0.000000, 5.000000, 0.000000])
@@ -259,6 +260,7 @@ affine2.set(*[0.000000, 0.000000, 5.000000, -11.000000,
 affine3.set(*[0.000000, 0.000000, 5.000000, -11.000000,
  0.000000, 1.000000, 0.000000, 18.000000,
  1.000000, 0.000000, 0.000000, -165.000000])
+"""
 
 affines = [affine0, affine1, affine2, affine3] # they will be used merely for adjusting translations manually
 
