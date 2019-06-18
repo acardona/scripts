@@ -103,7 +103,7 @@ from net.imglib2.realtransform import RealViews, AffineTransform3D
 import os, sys
 from os.path import basename
 from bdv.util import BdvFunctions, Bdv
-sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
+sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP")
 from lib.ui import showAsStack
 from lib.isoview_ui import makeTranslationUI, makeCropUI, makeRegistrationUI
 from functools import partial
