@@ -781,8 +781,7 @@ def cameraTransformations(dims0, dims1, dims2, dims3, calibration):
 # Deconvolution parameters
 paramsDeconvolution = {
   "blockSizes": None, # None means the image size + kernel size. Otherwise specify like e.g. [[128, 128, 128]] for img in images]
-  "CM_0_1_n_iterations": %i,
-  %s
+  "CM_0_1_n_iterations": %i,%s
 }
 
 # Joint dictionary of parameters
@@ -797,8 +796,7 @@ roi = ([%s], # array of 3 integers, top-left coordinates
 fineTransformsPostROICrop = \
    [[1, 0, 0, 0,
      0, 1, 0, 0,
-     0, 0, 1, 0],
-    %s
+     0, 0, 1, 0],%s
    ]
 
 deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
