@@ -51,7 +51,7 @@ class Getter(Future):
     return True
 
 
-class Task(Callable, Runnable):
+class Task(Callable):
   """ A wrapper for executing functions in concurrent threads. """
   def __init__(self, fn, *args, **kwargs):
     self.fn = fn
@@ -62,8 +62,18 @@ class Task(Callable, Runnable):
     if t.isInterrupted() or not t.isAlive():
       return None
     return self.fn(*self.args, **self.kwargs)
+
+class RunTask(Runnable):
+  """ A wrapper for executing functions in concurrent threads. """
+  def __init__(self, fn, *args, **kwargs):
+    self.fn = fn
+    self.args = args
+    self.kwargs = kwargs
   def run(self):
-    self.call()
+    t = Thread.currentThread()
+    if t.isInterrupted() or not t.isAlive():
+      return
+    self.fn(*self.args, **self.kwargs)
 
 class TimeItTask(Callable):
   """ A wrapper for executing functions in concurrent threads,
