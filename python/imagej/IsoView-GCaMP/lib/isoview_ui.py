@@ -480,33 +480,40 @@ def makeCropUI(imp, images, tgtDir, panel=None, cropContinuationFn=None):
 
 
 class NumberTextFieldListener(KeyAdapter):
-  def __init__(self, key, params, parse=float):
+  def __init__(self, key, params):
     self.key = key
     self.params = params
-    self.parse = parse
-  def keyPressed(self, event):
-    text = event.getSource().getText()
+    self.parse = type(params[key]) # int or float, whose type is, surprisingly, also the function int or float for casting
+
+  def keyReleased(self, event):
+    src = event.getSource()
+    text = src.getText()
     try:
       # Attempt to parse number, will throw an error when not possible
-      value = self.parse(text)
+      value = self.parse(float(text))
       # Update the params dictionary
       self.params[self.key] = value
+      # Update the text, in case it was cast to int
+      if int == self.parse:
+        event.getSource().setText(str(value))
       # Signal success
       event.getSource().setBackground(Color.white)
     except:
       print "Can't parse number from: %s" % text
       event.getSource().setBackground(Color(1.0, 82/255.0, 82/255.0))
+    
 
 
-def insertFloatFields(panel, gb, gc, params, strings):
+def insertNumericFields(panel, gb, gc, params, strings):
   """
   strings: an array of arrays, which each array having at least 2 strings,
            with the first string being the title of the section,
            and subsequent strings being the label of the parameter
            as well as the key in the params dictionary to retrieve the value
            to show as default in the textfield.
-  When a value is typed in and it is a valid float number, the entry in params is updated.
+  When a value is typed in and it is a valid number, the entry in params is updated.
   When invalid, the text field background is turned red.
+  If the default numeric value in params[key] is an int, it will be reinserted as an int
   """
   for block in strings:
     title = JLabel(block[0])
@@ -527,7 +534,7 @@ def insertFloatFields(panel, gb, gc, params, strings):
       gc.gridx = 1
       gc.anchor = GBC.WEST
       tf = JTextField(str(params[param]), 10)
-      tf.addKeyListener(NumberTextFieldListener(param, params, parse=float))
+      tf.addKeyListener(NumberTextFieldListener(param, params))
       gb.setConstraints(tf, gc)
       panel.add(tf)
 
@@ -587,7 +594,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
   # Insert all as fields, with values populated from the params dictionary
   # and updating dynamically the params dictionary
   params = dict(params) # copy, will be updated
-  insertFloatFields(panel, gb, gc, params, strings)
+  insertNumericFields(panel, gb, gc, params, strings)
 
   # Identity transforms prior to registration
   affines = [affine3D([1, 0, 0, 0,
@@ -839,7 +846,7 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
             "CM_2_3_n_iterations": 7,
             "First time point": 0,
             "Last time point": -1} # -1 means last
-  insertFloatFields(panel, gb, gc, params, strings)
+  insertNumericFields(panel, gb, gc, params, strings)
 
   def asString(affine):
     matrix = zeros(12, 'd')
