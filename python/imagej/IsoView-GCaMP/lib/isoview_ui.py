@@ -307,6 +307,9 @@ def makeCropUI(imp, images, tgtDir, panel=None, cropContinuationFn=None):
       cropContinuationFn: optional, a function to execute after cropping,
                           which is given as arguments the original images,
                           minC, maxC (both define a ROI), and the cropped images. """
+  # Ensure directories exist, or fail
+  os.makedirs(tgtDir)
+  
   independent = None == panel
   if not panel:
     panel = JPanel()
