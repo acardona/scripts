@@ -28,7 +28,7 @@ from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
 from java.lang import Double
 from lib.io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5
-from lib.util import SoftMemoize, newFixedThreadPool, Task, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint
+from lib.util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint
 from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
 from lib.ui import showStack, wrap
@@ -557,7 +557,7 @@ def export8bitN5(filepaths,
       exe.shutdown()
 
   preloader = Executors.newSingleThreadScheduledExecutor()
-  preloader.scheduleWithFixedDelay(Task(preload, cachedCellImg, loader, block_size, filepaths), 10, 60, TimeUnit.SECONDS)
+  preloader.scheduleWithFixedDelay(RunTask(preload, cachedCellImg, loader, block_size), 10, 60, TimeUnit.SECONDS)
 
   try:
     syncPrint("N5 directory: " + exportDir + "\nN5 dataset name: " + name + "\nN5 blockSize: " + str(block_size))
