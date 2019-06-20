@@ -50,7 +50,7 @@ class RoiMaker(KeyAdapter, MouseWheelListener):
     self.update(- event.getWheelRotation())
 
 
-class RoiFieldListener(RoiListener):
+class TextFieldUpdater(RoiListener):
   def __init__(self, textfields):
     self.textfields = textfields
   
@@ -59,9 +59,10 @@ class RoiFieldListener(RoiListener):
     if imp != IJ.getImage():
       return # ignore if it's not the active image
     roi = imp.getRoi()
-    if roi:
-      bounds = roi.getBounds()
-    if not roi or 0 == roi.getBounds().width + roi.getBounds().height:
+    if not roi or Roi.RECTANGLE != roi.getType():
+      return # none, or not a rectangle ROI
+    bounds = roi.getBounds()
+    if 0 == roi.getBounds().width + roi.getBounds().height:
       bounds = Rectangle(0, 0, imp.getWidth(), imp.getHeight())
     self.textfields[0].setText(str(bounds.x))
     self.textfields[1].setText(str(bounds.y))
@@ -130,7 +131,7 @@ def specifyRoiUI(roi=Roi(0, 0, 0, 0)):
     gc.gridy += 1
 
   # User documentation (uses HTML to define line breaks)
-  doc = JLabel("<html><body><br />Click on a field to active it, then:<br />"
+  doc = JLabel("<html><body><br />Click on a field to activate it, then:<br />"
             + "Type in integer numbers<br />"
             + "or use arrow keys to increase by 1<br />"
             + "or use the scroll wheel on a field.</body></html>")
@@ -140,7 +141,7 @@ def specifyRoiUI(roi=Roi(0, 0, 0, 0)):
   panel.add(doc)
   
   # Listen to changes in the ROI of imp
-  roilistener = RoiFieldListener(textfields)
+  roilistener = TextFieldUpdater(textfields)
   Roi.addRoiListener(roilistener)
 
   # Show window
