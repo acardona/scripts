@@ -26,7 +26,7 @@ from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
 def deconvolveTimePoints(srcDir,
                          targetDir,
-                         kernel_filepath,
+                         kernel_filepaths,
                          calibration,
                          cameraTransformations,
                          fineTransformsPostROICrop,
@@ -34,6 +34,8 @@ def deconvolveTimePoints(srcDir,
                          roi,
                          subrange=None,
                          camera_groups=((0, 1), (2, 3)),
+                         kernel_dimensions=[19, 19, 25],
+                         kernel_header=434,
                          fine_fwd=False,
                          n_threads=0): # 0 means all
   """
@@ -53,9 +55,10 @@ def deconvolveTimePoints(srcDir,
      srcDir: file path to a directory with TM\d+ subdirectories, one per time point.
      targetDir: file path to a directory for storing deconvolved images
                 and CSV files with features, point matches and transformation matrices.
-     kernel_filepath: file path to the 3D image of the point spread function (PSF),
-                      which can be computed from fluorescent beads with the BigStitcher functions
-                      and which must have odd dimensions.
+     kernel_filepaths: string (a single file path for all views) or list of strings (one per file path and view)
+                       to the 3D image of the point spread function (PSF),
+                       which can be computed from fluorescent beads with the BigStitcher functions
+                       and which must have odd dimensions.
      calibration: the array of [x, y, z] dimensions.
      cameraTransformations: a function that returns a map of camera index vs the 12-digit 3D affine matrices describing
                             the transform to register the camera view onto the camera at index 0.
@@ -64,11 +67,28 @@ def deconvolveTimePoints(srcDir,
      roi: the min and max coordinates for cropping the coarsely registered volumes prior to registration and deconvolution.
      subrange: defaults to None. Can be a list specifying the indices of time points to deconvolve.
      camera_groups: the camera views to fuse and deconvolve together. Defaults to two: ((0, 1), (2, 3))
+     kernel_dimensions: defaults to [19, 19, 25]. A list of 3 odd integers defining the dimensions of the kernel stack.
+     kernel_header: defaults to 434. The header size of the kernel file, for direct binary parsing.
+                    When None, open the kernel file with IJ.openImage.
      fine_fwd: whether the fineTransformsPostROICrop were computed all-to-all, which optimizes the pose and produces direct transforms,
                or, when False, the fineTransformsPostROICrop were computed from 0 to 1, 0 to 2, and 0 to 3, so they are inverted.
      n_threads: number of threads to use. Zero (default) means as many as possible.
   """
-  kernel = readFloats(kernel_filepath, [19, 19, 25], header=434)
+  if str == type(kernel_filepaths): # handle legacy invocations
+    kernel_filepaths = [kernel_filepaths]
+
+  def readKernel(path):
+    if kernel_header is None:
+      imp = IJ.openImage(path)
+      return ArrayImgs.floats(imp.getProcessor().getPixels(),
+                              [imp.getWidth(), imp.getHeight(), imp.getNSlices()])
+    return readFloats(path, kernel_dimensions, kernel_header)
+
+  kernels = map(readKernel, kernel_filepath)
+  if 1 == len(kernels):
+    # Reuse the same kernel for all views
+    kernels = [kernels[0]] * (2 * len(camera_groups)) 
+  
   klb_loader = KLBLoader()
 
   def getCalibration(img_filename):
@@ -79,7 +99,7 @@ def deconvolveTimePoints(srcDir,
 
   # Find all time point folders with pattern TM\d{6} (a TM followed by 6 digits)
   def iterTMs():
-    """ Return a generator over dicts of 4 KLB file paths for each time point. """
+    """ Return a generator over dicts of KLB file paths for each time point. """
     for dirname in sorted(os.listdir(srcDir)):
       if not dirname.startswith("TM00"):
         continue
@@ -99,9 +119,11 @@ def deconvolveTimePoints(srcDir,
     TMs = list(iterTMs())
   
   # Validate folders
+  n_expected_files = 2 * len(camera_groups)
   for filepaths in TMs:
-    if 4 != len(filepaths):
-      print "Folder %s has problems: found %i KLB files in it instead of 4." % (tm_dir, len(filepaths))
+    # There can be more, but not less
+    if len(filepaths) < n_expected_files:
+      print "Folder %s has problems: found %i KLB files in it instead of %i." % (tm_dir, len(filepaths), n_expected_files)
       print "Address the issues and rerun."
       return
 
@@ -133,14 +155,19 @@ def deconvolveTimePoints(srcDir,
 
   # For the PSF kernel, transforms without the scaling up to isotropy
   # No need to account for the translation: the transformPSFKernelToView keeps the center point centered.
-  PSF_kernels = [transformPSFKernelToView(kernel, affine3D(cmTransforms[i])) for i in xrange(4)]
+  PSF_kernels = [transformPSFKernelToView(kernels[i], affine3D(cmTransforms[i])) for i in xrange(len(cmTransforms)]
   PSF_kernels = [transformPSFKernelToView(k, affine3D(matrix).inverse()) for k, matrix in izip(PSF_kernels, matrices)]
   # TODO: if kernels are not ArrayImg, they should be made be.
   print "PSF_kernel[0]:", PSF_kernels[0], type(PSF_kernels[0])
 
   # DEBUG: write the kernelA
-  for index in [0, 1, 2, 3]:
-    writeZip(PSF_kernels[index], "/tmp/kernel" + str(index) + ".zip", title="kernel" + str(index)).flush()
+  for index in xrange(len(PSF_kernels)):
+    path = "/tmp/kernel" + str(index) + ".zip"
+    try:
+      writeZip(PSF_kernels[index], , title="kernel" + str(index)).flush()
+    except:
+      print "Error saving kernels to", path
+      print sys.exc_info()
 
   # A converter from FloatType to UnsignedShortType
   output_converter = createConverter(FloatType, UnsignedShortType)
