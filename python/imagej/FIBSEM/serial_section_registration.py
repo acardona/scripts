@@ -14,7 +14,7 @@
 # 1. Extract blockmatching features for every section.
 # 2. Register each section to its adjacent, 2nd adjacent, 3rd adjacent ...
 # 3. Jointly optimize the pose of every section.
-# 4. Export volume for CATMAID.
+# 4. Export volume for CATMAID as N5.
 
 import os, sys, traceback
 sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")
