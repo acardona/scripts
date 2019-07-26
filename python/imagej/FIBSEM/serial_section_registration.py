@@ -583,5 +583,5 @@ interval = FinalInterval([864, 264], [864 + 15312 -1, 264 + 17424 -1])
 
 # Don't use compression: less than 5% gain, at considerable processing cost.
 export8bitN5(filepaths, dimensions, loadMatrices("matrices", csvDir),
-             name, exportDir, interval, gzip_compression=0, block_size=[256,256,32], # ~2 MB per block
-             n5_threads=0)
+             name, exportDir, interval, gzip_compression=0, block_size=[256, 256, 64], # ~4 MB per block
+             copy_threads=1, n5_threads=0)
