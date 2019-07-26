@@ -307,6 +307,10 @@ def makeCropUI(imp, images, tgtDir, panel=None, cropContinuationFn=None):
       cropContinuationFn: optional, a function to execute after cropping,
                           which is given as arguments the original images,
                           minC, maxC (both define a ROI), and the cropped images. """
+  # Ensure directories exist, or fail because of permissions
+  if not os.path.exists(tgtDir):
+    os.makedirs(tgtDir)
+  
   independent = None == panel
   if not panel:
     panel = JPanel()
@@ -476,33 +480,40 @@ def makeCropUI(imp, images, tgtDir, panel=None, cropContinuationFn=None):
 
 
 class NumberTextFieldListener(KeyAdapter):
-  def __init__(self, key, params, parse=float):
+  def __init__(self, key, params):
     self.key = key
     self.params = params
-    self.parse = parse
-  def keyPressed(self, event):
-    text = event.getSource().getText()
+    self.parse = type(params[key]) # int or float, whose type is, surprisingly, also the function int or float for casting
+
+  def keyReleased(self, event):
+    src = event.getSource()
+    text = src.getText()
     try:
       # Attempt to parse number, will throw an error when not possible
-      value = self.parse(text)
+      value = self.parse(float(text))
       # Update the params dictionary
       self.params[self.key] = value
+      # Update the text, in case it was cast to int
+      if int == self.parse:
+        event.getSource().setText(str(value))
       # Signal success
       event.getSource().setBackground(Color.white)
     except:
       print "Can't parse number from: %s" % text
       event.getSource().setBackground(Color(1.0, 82/255.0, 82/255.0))
+    
 
 
-def insertFloatFields(panel, gb, gc, params, strings):
+def insertNumericFields(panel, gb, gc, params, strings):
   """
   strings: an array of arrays, which each array having at least 2 strings,
            with the first string being the title of the section,
            and subsequent strings being the label of the parameter
            as well as the key in the params dictionary to retrieve the value
            to show as default in the textfield.
-  When a value is typed in and it is a valid float number, the entry in params is updated.
+  When a value is typed in and it is a valid number, the entry in params is updated.
   When invalid, the text field background is turned red.
+  If the default numeric value in params[key] is an int, it will be reinserted as an int
   """
   for block in strings:
     title = JLabel(block[0])
@@ -523,7 +534,7 @@ def insertFloatFields(panel, gb, gc, params, strings):
       gc.gridx = 1
       gc.anchor = GBC.WEST
       tf = JTextField(str(params[param]), 10)
-      tf.addKeyListener(NumberTextFieldListener(param, params, parse=float))
+      tf.addKeyListener(NumberTextFieldListener(param, params))
       gb.setConstraints(tf, gc)
       panel.add(tf)
 
@@ -583,7 +594,7 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
   # Insert all as fields, with values populated from the params dictionary
   # and updating dynamically the params dictionary
   params = dict(params) # copy, will be updated
-  insertFloatFields(panel, gb, gc, params, strings)
+  insertNumericFields(panel, gb, gc, params, strings)
 
   # Identity transforms prior to registration
   affines = [affine3D([1, 0, 0, 0,
@@ -623,9 +634,9 @@ def makeRegistrationUI(original_images, original_calibration, coarse_affines, pa
       transforms = mergeTransforms([1.0, 1.0, 1.0], coarse_matrices, [minC, maxC], matrices, invert2=False)
 
       print "calibration:", [1.0, 1.0, 1.0]
-      print "cmTransforms:\n    %s\n    %s\n    %s\n    %s" % tuple(str(m) for m in coarse_matrices)
+      print "cmTransforms:" + "".join("\n   %s" % str(m) for m in coarse_matrices)
       print "ROI", [minC, maxC]
-      print "fineTransformsPostROICrop:\n    %s\n    %s\n    %s\n    %s" % tuple(str(m) for m in matrices)
+      print "fineTransformsPostROICrop:" + "".join("\n    %s" % str(m) for m in matrices)
       print "invert2:", False
       
       # Show registered images
@@ -764,18 +775,13 @@ calibration = [%s] # An array with 3 floats (identity--all 1.0--because the coar
 
 # The transformations of each timepoint onto the camera at index zero.
 def cameraTransformations(dims0, dims1, dims2, dims3, calibration):
-  return {
-    0: [%s],
-    1: [%s],
-    2: [%s],
-    3: [%s]
-  }
+  return {%s
+}
 
 # Deconvolution parameters
 paramsDeconvolution = {
   "blockSizes": None, # None means the image size + kernel size. Otherwise specify like e.g. [[128, 128, 128]] for img in images]
-  "CM_0_1_n_iterations": %i,
-  "CM_2_3_n_iterations": %i,
+  "CM_0_1_n_iterations": %i,%s
 }
 
 # Joint dictionary of parameters
@@ -790,18 +796,17 @@ roi = ([%s], # array of 3 integers, top-left coordinates
 fineTransformsPostROICrop = \
    [[1, 0, 0, 0,
      0, 1, 0, 0,
-     0, 0, 1, 0],
-    [%s],
-    [%s],
-    [%s]]
+     0, 0, 1, 0],%s
+   ]
 
 deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                     cameraTransformations, fineTransformsPostROICrop,
                     params, roi, fine_fwd=True, subrange=range(%i, %i))
   """
 
-  od = OpenDialog("Choose kernel file", srcDir)
+  od = OpenDialog("Choose kernel file", srcDir, None)
   kernel_path = od.getPath()
+  print "kernel_path: ", kernel_path
   if not kernel_path:
     JOptionPane.showMessageDialog(None, "Can't proceed without a filepath to the kernel", "Alert", JOptionPane.ERROR_MESSAGE)
     return
@@ -831,14 +836,16 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
     panel.add(label)
 
   strings = [["Deconvolution iterations",
-              "CM_0_1_n_iterations", "CM_2_3_n_iterations"],
+              "CM_0_1_n_iterations"],
              ["Range",
               "First time point", "Last time point"]]
+  if 4 == len(preCropAffines):
+    strings[0].append("CM_2_3_n_iterations")
   params = {"CM_0_1_n_iterations": 5,
             "CM_2_3_n_iterations": 7,
             "First time point": 0,
             "Last time point": -1} # -1 means last
-  insertFloatFields(panel, gb, gc, params, strings)
+  insertNumericFields(panel, gb, gc, params, strings)
 
   def asString(affine):
     matrix = zeros(12, 'd')
@@ -852,17 +859,12 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                          tgtDir,
                          kernel_path,
                          ", ".join(imap(str, calibration)),
-                         asString(preCropAffines[0]),
-                         asString(preCropAffines[1]),
-                         asString(preCropAffines[2]),
-                         asString(preCropAffines[3]),
-                         params["CM_0_1_n_iterations"],
-                         params["CM_2_3_n_iterations"],
+                         "".join("\n    %i: [%s]," % (i, asString(aff)) for i, aff in enumerate(preCropAffines)),
+                         params.get("CM_0_1_n_iterations", 1),
+                         "\"CM_2_3_n_iterations\": %i" % params.get("CM_2_3_n_iterations", 1) if 4 == len(preCropAffines) else "",
                          ", ".join(imap(str, ROI[0])),
                          ", ".join(imap(str, ROI[1])),
-                         asString(postCropAffines[1]),
-                         asString(postCropAffines[2]),
-                         asString(postCropAffines[3]),
+                         "".join("\n    [%s]," % asString(postCropAffines[i]) for i in xrange(1, len(postCropAffines))),
                          params["First time point"],
                          params["Last time point"])
     tab = None
@@ -876,10 +878,12 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
     if not tab:
       try:
         now = datetime.now()
-        with open(os.path.join(System.getProperty("java.io.tmpdir"),
-                               "script-%i-%i-%i_%i:%i.py" % (now.year, now.month, now.day,
-                                                             now.hour, now.minute)), 'w') as f:
+        path = os.path.join(System.getProperty("java.io.tmpdir"),
+                            "script-%i-%i-%i_%i:%i.py" % (now.year, now.month, now.day,
+                                                          now.hour, now.minute))
+        with open(path, 'w') as f:
           f.write(script)
+          print "Wrote script to " + path
       except:
         print sys.exc_info()
         print script

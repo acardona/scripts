@@ -28,7 +28,7 @@ from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
 from java.lang import Double
 from lib.io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5
-from lib.util import SoftMemoize, newFixedThreadPool, Task, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint
+from lib.util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint
 from lib.features import savePointMatches, loadPointMatches
 from lib.registration import loadMatrices, saveMatrices
 from lib.ui import showStack, wrap
@@ -533,7 +533,7 @@ def export8bitN5(filepaths,
       first = keys[-1] - (keys[-1] % block_size[2])
       last = max(len(filepaths), first + block_size[2] -1))
       keys = None
-      syncPrint("Preloading %i-%i" % (first, first + block_size[2] -1))
+      msg = "Preloading %i-%i" % (first, first + block_size[2] -1)
       futures = []
       for index in xrange(first, first + block_size[2]):
         futures.append(exe.submit(TimeItTask(softCache.get, index, loader)))
@@ -544,16 +544,20 @@ def export8bitN5(filepaths,
         r, t = futures.pop(0).get()
         # t in miliseconds
         if t > 500:
+          if msg:
+            syncPrint(msg)
+            msg = None
           syncPrint("preloaded index %i in %f ms" % (first + count, t))
-        count += 1        
-      syncPrint("Completed preloading %i-%i" % (first, first + block_size[2] -1))
+        count += 1
+      if not msg: # msg was printed
+        syncPrint("Completed preloading %i-%i" % (first, first + block_size[2] -1))
     except:
       syncPrint(sys.exc_info())
     finally:
       exe.shutdown()
 
   preloader = Executors.newSingleThreadScheduledExecutor()
-  preloader.scheduleWithFixedDelay(Task(preload, cachedCellImg, loader, block_size, filepaths), 10, 60, TimeUnit.SECONDS)
+  preloader.scheduleWithFixedDelay(RunTask(preload, cachedCellImg, loader, block_size), 10, 60, TimeUnit.SECONDS)
 
   try:
     syncPrint("N5 directory: " + exportDir + "\nN5 dataset name: " + name + "\nN5 blockSize: " + str(block_size))

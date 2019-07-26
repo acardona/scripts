@@ -16,9 +16,9 @@
 # ... and then push the 'Run' button in this Fiji Script Editor window.
 #
 # A graphical user interface (GUI) will open, showing:
-# - A 4D stack with the 4 3D stacks, one per view, of the first time point.
+# - A 4D stack with the 2 3D stacks, one per view, of the first time point.
 #   In ImageJ parlance, each 3D stack is a time frame, or frame. We are
-#   using here the 4th dimension not as time but as the 4 cameras.
+#   using here the 4th dimension not as time but as the 2 cameras.
 #   Note that each view has already been rotated so as to be in the same
 #   orientation as the view of the first camera (named CM00 in the IsoView files).
 # 
@@ -33,12 +33,12 @@
 # good initial setting.
 #
 # Browse around the first frame (the first 3D view, which is already the visible one)
-# until finding a remarkable feature that you are confident you will see in other views.
+# until finding a remarkable feature that you are confident you will see in the other views.
 # Draw an ROI over it, with the rectangle tool available (selected by default) in the
 # Fiji/ImageJ main window. This ROI serves as a reference point.
 #
 # Now use the bottom slider in the 4D window to view the second frame (the second camera
-# view, which would be named CM01 in IsoView parlance). The ROI is still visible,
+# view, which would be named CM01 in MultiView parlance). The ROI is still visible,
 # as it is independent of the frame. Write down, or remember, which slice (Z coordinate)
 # you are in.
 # 
@@ -52,10 +52,8 @@
 # Then scroll back, using the bottom slider, to the first frame (CM00), and then
 # forward again to the second frame (CM01), and check that they look reasonbly
 # in register.
-# 
-# Now repeat for frames 3 (CM02) and 4 (CM03).
 #
-# When all 4 frames (all 4 camera views) are reasonably in register, draw a large ROI
+# When all 2 frames (all 2 camera views) are reasonably in register, draw a large ROI
 # enclosing the parts of the image that you want to work with from now on.
 # Then using the first slider in the 4D image window, scroll to the first Z where
 # any data can be seen, and write that in the "min coords" Z field under "ROI controls".
@@ -105,7 +103,7 @@ from net.imglib2.realtransform import RealViews, AffineTransform3D
 import os, sys
 from os.path import basename
 from bdv.util import BdvFunctions, Bdv
-sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0])))
+sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP")
 from lib.ui import showAsStack
 from lib.isoview_ui import makeTranslationUI, makeCropUI, makeRegistrationUI
 from functools import partial
@@ -113,15 +111,18 @@ from mpicbg.models import RigidModel3D, TranslationModel3D
 
 # START EDITING HERE
 
-#srcDir = "/home/albert/shares/zlaticlab/Nadine/Raghav/2017-05-10/GCaMP6s_1_20170510_115003.corrected/SPM00/"
-srcDir = "/home/albert/Desktop/t2/IsoView/"
-tgtDir = "/home/albert/Desktop/t2/IsoView/" # to store e.g. CSV files
+srcDir = "/groups/keller-s8/SV4/CW_17-08-26/L6-561nm-ROIMonitoring_20170826_183354.corrected/SPM00/"
+tgtDir = "/home/albert/Desktop/t2/MultiView/" # to store e.g. CSV files
 
-calibration = [1.0, 1.0, 5.0]
+# Timepoint to use for registering cameras to each other
+timepoint = "TM000010" # tenth
+
+# From 0.406125, 0.40625, 2.5, leads to 2.5/0.40625 = 6.153846153846154 to keep X,Y pixels intact
+calibration = [1.0, 1.0, 6.153846153846154] # UPDATE ME
 
 # Parameters for feature-based registration
 csv_dir = tgtDir # Folder to store CSV files
-modelclass = RigidModel3D # or use TranslationModel3D
+modelclass = TranslationModel3D # or use RigidModel3D
 
 # Parameters for DoG difference of Gaussian to detect soma positions
 somaDiameter = 8 * calibration[0]
@@ -172,19 +173,16 @@ paramsTileConfiguration = {
 
 klb = KLB.newInstance()
 
-# paths for same timepoint, 4 different cameras
-paths = []
-timepointDir = srcDir + "TM000000/"
-for camera_index, channel_index in zip(xrange(4), [1, 1, 0, 0]):
-  paths.append(timepointDir + "SPM00_TM000000_CM0" + str(camera_index) + "_CHN0" + str(channel_index) + ".klb")
+# paths for same timepoint, 2 different cameras
+timepointDir = srcDir + timepoint + "/"
+paths = [timepointDir + "SPM00_" + timepoint + "_CM00_CHN00.klb",
+         timepointDir + "SPM00_" + timepoint + "_CM01_CHN00.klb"]
 
 for path in paths:
   print basename(path)
 
 img0 = klb.readFull(paths[0])
 img1 = klb.readFull(paths[1])
-img2 = klb.readFull(paths[2])
-img3 = klb.readFull(paths[3])
 
 
 # Make all isotropic (virtually, as a view)
@@ -220,51 +218,14 @@ imgT = RealViews.transform(imgI, affine1)
 imgB1 = Views.interval(imgT, [0, 0, 0], maxCoords(img1))
 
 
-# Transform camera CM02 to CM00: 90 degrees on Y axis, plus a translation in Z
-affine2 = AffineTransform3D()
-affine2.set( 0.0, 0.0, 1.0, 0.0,
-             0.0, 1.0, 0.0, 0.0,
-             -1.0, 0.0, 0.0, img2.dimension(2) * calibration[2])
-affine2.concatenate(scale3D)
-imgE = Views.extendZero(img2)
-imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
-imgT = RealViews.transform(imgI, affine2)
-imgB2 = Views.interval(imgT, [0, 0, 0], maxCoords(img2))
+original_images = [img0, img1]
+images = [imgB0, imgB1]
+imp = showAsStack(images, title="2 views to coarsely register")
 
 
-# Transform camera CM03 to CM00: -90 degrees on Y axis (no need for translation)
-affine3 = AffineTransform3D()
-affine3.set( 0.0, 0.0, 1.0, 0.0,
-             0.0, 1.0, 0.0, 0.0,
-             1.0, 0.0, 0.0, 0.0)
-affine3.concatenate(scale3D)
-imgE = Views.extendZero(img3)
-imgI = Views.interpolate(imgE, NLinearInterpolatorFactory())
-imgT = RealViews.transform(imgI, affine3)
-imgB3 = Views.interval(imgT, [0, 0, 0], maxCoords(img3))
+affines = [affine0, affine1] # they will be used merely for adjusting translations manually
 
-original_images = [img0, img1, img2, img3]
-images = [imgB0, imgB1, imgB2, imgB3]
-imp = showAsStack(images, title="4 views to coarsely register")
-
-
-
-# DEBUG: so that I don't have to adjust the test data set manually every time
-"""
-affine1.set(*[-1.000000, 0.000000, 0.000000, 377.000000,
- 0.000000, 1.000000, 0.000000, 50.000000,
- 0.000000, 0.000000, 5.000000, 0.000000])
-affine2.set(*[0.000000, 0.000000, 5.000000, -11.000000,
- 0.000000, 1.000000, 0.000000, 22.000000,
- -1.000000, 0.000000, 0.000000, 464.000000])
-affine3.set(*[0.000000, 0.000000, 5.000000, -11.000000,
- 0.000000, 1.000000, 0.000000, 18.000000,
- 1.000000, 0.000000, 0.000000, -165.000000])
-"""
-
-affines = [affine0, affine1, affine2, affine3] # they will be used merely for adjusting translations manually
-
-# Now edit by hand the affines of CM01, CM02 and CM03 relative to the CM00 (which is used as reference and doesn't change)
+# Now edit by hand the affine of CM01 relative to the CM00 (which is used as reference and doesn't change)
 frame, panel, buttons_panel = makeTranslationUI(affines, imp, print_button_text="Print coarse transforms")
 frame.setTitle("Translate & crop")
 
