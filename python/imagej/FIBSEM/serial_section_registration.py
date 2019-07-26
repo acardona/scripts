@@ -510,7 +510,7 @@ def export8bitN5(filepaths,
 
   cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE)
 
-  def preload(cachedCellImg, loader, block_size):
+  def preload(cachedCellImg, loader, block_size, filepaths):
     """
     Find which is the last cell index in the cache, identify to which block
     (given the blockSize[2] AKA Z dimension) that index belongs to,
@@ -531,6 +531,7 @@ def export8bitN5(filepaths,
       if 0 == len(keys):
         return
       first = keys[-1] - (keys[-1] % block_size[2])
+      last = max(len(filepaths), first + block_size[2] -1))
       keys = None
       syncPrint("Preloading %i-%i" % (first, first + block_size[2] -1))
       futures = []
@@ -552,7 +553,7 @@ def export8bitN5(filepaths,
       exe.shutdown()
 
   preloader = Executors.newSingleThreadScheduledExecutor()
-  preloader.scheduleWithFixedDelay(Task(preload, cachedCellImg, loader, block_size), 10, 60, TimeUnit.SECONDS)
+  preloader.scheduleWithFixedDelay(Task(preload, cachedCellImg, loader, block_size, filepaths), 10, 60, TimeUnit.SECONDS)
 
   try:
     syncPrint("N5 directory: " + exportDir + "\nN5 dataset name: " + name + "\nN5 blockSize: " + str(block_size))
