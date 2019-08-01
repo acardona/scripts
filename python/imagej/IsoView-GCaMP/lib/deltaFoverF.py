@@ -17,7 +17,7 @@ def measureFluorescence(tgtDir, series_name, img4D, params, mask=None, showDetec
                a .zip file with the max intensity projection used for detecting nuclei,
                and for the .csv file containing the fluorescence measurements.
   img4D: the ImgLib2 data (ideally e.g. an N5 volume for fast access).
-  params: the dictionary of parameters for deteting nuclei with difference of Gaussian.
+  params: the dictionary of parameters for detecting nuclei with difference of Gaussian.
           See nuclei.py:findNucleiByMaxProjection for the parameter keys.
   mask: optional, defaults to None. If it exists, it is a 3D volume with zero for space to ignore
         nuclei detections, and non-zero otherwise.
