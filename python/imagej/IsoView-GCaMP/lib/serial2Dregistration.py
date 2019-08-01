@@ -1,6 +1,6 @@
 # Albert Cardona 2019-05-31
 #
-# A series of scripts to register FIBSEM serial sections.
+# A series of functions to register and visualize FIBSEM serial sections.
 # ASSUMES there is only one single image per section.
 # ASSUMES all images have the same dimensions and pixel type.
 # 
@@ -9,15 +9,13 @@
 # and also matches sections beyond the direct adjacent for best stability
 # as demonstrated for elastic registration in Saalfeld et al. 2012 Nat Methods.
 # 
-# The program also offers functions to export for CATMAID.
+# The program also offers functions to export as N5 for Paintera, CATMAID, and others.
 #
 # 1. Extract blockmatching features for every section.
 # 2. Register each section to its adjacent, 2nd adjacent, 3rd adjacent ...
 # 3. Jointly optimize the pose of every section.
-# 4. Export volume for CATMAID as N5.
 
 import os, sys, traceback
-sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")
 from os.path import basename
 from mpicbg.ij.blockmatching import BlockMatching
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration
@@ -27,13 +25,6 @@ from mpicbg.ij import SIFT
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
 from java.lang import Double
-from lib.io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5
-from lib.util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint
-from lib.features import savePointMatches, loadPointMatches
-from lib.registration import loadMatrices, saveMatrices
-from lib.ui import showStack, wrap
-from lib.converter import convert
-from lib.pixels import autoAdjust
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
@@ -54,60 +45,15 @@ from java.awt.event import KeyAdapter, KeyEvent
 from jarray import zeros, array
 from functools import partial
 from java.util.concurrent import Executors, TimeUnit
+# From lib
+from io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5
+from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint
+from features import savePointMatches, loadPointMatches
+from registration import loadMatrices, saveMatrices
+from ui import showStack, wrap
+from converter import convert
+from pixels import autoAdjust
 
-srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
-tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
-
-filepaths = [os.path.join(srcDir, filepath)
-             for filepath in sorted(os.listdir(srcDir))
-             if filepath.endswith("InLens_raw.tif")]
-
-# Image properties: ASSUMES all images have the same properties
-dimensions = [16875, 18125]
-interval = None #[[4096, 4096],
-                # [12288 -1, 12288 -1]] # to open only that, or None
-pixelType = UnsignedShortType
-proxyType = ShortAccessProxy
-header = 0
-
-# Parameters for blockmatching
-params = {
- 'scale': 0.1, # 10%
- 'meshResolution': 10, # 10 x 10 points = 100 point matches maximum
- 'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
- 'rod': 0.9, # max second best r / best r
- 'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 100, # a low value: we expect little translation
- 'blockRadius': 200 # small, yet enough
-}
-
-# Parameters for computing the transformation models
-paramsTileConfiguration = {
-  "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
-  "maxAllowedError": 0, # Saalfeld recommends 0
-  "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 2, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
-  "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
-}
-
-# Parameters for SIFT features, in case blockmatching fails due to large translation
-paramsSIFT = FloatArray2DSIFT.Param()
-paramsSIFT.fdSize = 8 # default is 4
-paramsSIFT.fdBins = 8 # default is 8
-paramsSIFT.maxOctaveSize = int(max(1024, dimensions[0] * params["scale"]))
-paramsSIFT.steps = 3
-paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
-paramsSIFT.initialSigma = 1.6 # default 1.6
-
-
-# Ensure target directories exist
-if not os.path.exists(tgtDir):
-  os.mkdir(tgtDir)
-
-csvDir = os.path.join(tgtDir, "csvs")
-
-if not os.path.exists(csvDir):
-  os.mkdir(csvDir)
 
 def loadImp(filepath):
   # Images are TIFF with bit pack compression: can't byte-read array
@@ -118,7 +64,7 @@ def loadUnsignedShort(filepath):
     imp = loadImp(filepath)
     return ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
 
-def loadFloatProcessor(filepath, scale=True):
+def loadFloatProcessor(filepath, params, scale=True):
   try:
     fp = loadImp(filepath).getProcessor().convertToFloatProcessor()
     # Preprocess images: Gaussian-blur to scale down, then normalize contrast
@@ -129,11 +75,8 @@ def loadFloatProcessor(filepath, scale=True):
   except:
     syncPrint(sys.exc_info())
 
-loadImpMem = SoftMemoize(loadImp, maxsize=128)
-loadFPMem = SoftMemoize(loadFloatProcessor, maxsize=64)
 
-
-def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=loadFPMem):
+def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load):
   """
   filepath1: the file path to an image of a section.
   filepath2: the file path to an image of another section.
@@ -154,29 +97,37 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
     # Load files in parallel
     futures = [exeload.submit(Task(load, filepath1)),
                exeload.submit(Task(load, filepath2))]
+
+    fp1 = futures[0].get() # FloatProcessor, already Gaussian-blurred, contrast-corrected and scaled!
+    fp2 = futures[1].get() # FloatProcessor, idem
   
     # Define points from the mesh
     sourcePoints = ArrayList()
-    mesh = TransformMesh(params["meshResolution"], dimensions[0], dimensions[1])
-    PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
     # List to fill
     sourceMatches = ArrayList() # of PointMatch from filepath1 to filepath2
 
-    syncPrint("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
+    # Don't use blockmatching if the dimensions are different
+    use_blockmatching = fp1.getWidth() == fp2.getWidth() and fp1.getHeight() == fp2.getHeight()
 
-    BlockMatching.matchByMaximalPMCCFromPreScaledImages(
-              futures[0].get(), # FloatProcessor
-              futures[1].get(), # FloatProcessor
-              params["scale"], # float
-              params["blockRadius"], # X
-              params["blockRadius"], # Y
-              params["searchRadius"], # X
-              params["searchRadius"], # Y
-              params["minR"], # float
-              params["rod"], # float
-              params["maxCurvature"], # float
-              sourcePoints,
-              sourceMatches)
+    if use_blockmatching:
+      # Fill the sourcePoints
+      mesh = TransformMesh(params["meshResolution"], fp1.width, fp1.height)
+      PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
+      syncPrint("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
+      # Run
+      BlockMatching.matchByMaximalPMCCFromPreScaledImages(
+                fp1,
+                fp2,
+                params["scale"], # float
+                params["blockRadius"], # X
+                params["blockRadius"], # Y
+                params["searchRadius"], # X
+                params["searchRadius"], # Y
+                params["minR"], # float
+                params["rod"], # float
+                params["maxCurvature"], # float
+                sourcePoints,
+                sourceMatches)
 
     # At least some should match to accept the translation
     if len(sourceMatches) < max(20, len(sourcePoints) / 5) / 2:
@@ -186,13 +137,43 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
       # Try SIFT features, which are location independent
       #
       # Images are now scaled: load originals
-      futures = [exeload.submit(Task(loadFloatProcessor, filepath1, scale=False)),
-                 exeload.submit(Task(loadFloatProcessor, filepath2, scale=False))]
-      ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
+      futures = [exeload.submit(Task(loadFloatProcessor, filepath1, params, scale=False)),
+                 exeload.submit(Task(loadFloatProcessor, filepath2, params, scale=False))]
+
+      fp1 = futures[0].get() # FloatProcessor, original
+      fp2 = futures[1].get() # FloatProcessor, original
+
+      # Images can be of different size: scale them the same way
+      area1 = fp1.width * fp1.height
+      area2 = fp2.width * fp2.height
+      
+      if area1 == area2:
+        paramsSIFT1 = params["paramsSIFT"].clone()
+        paramsSIFT1.maxOctaveSize = int(max(1024, fp1.width * params["scale"]))
+        paramsSIFT1.minOctaveSize = int(paramsSIFT1.maxOctaveSize / pow(2, paramsSIFT1.steps))
+        paramsSIFT2 = paramsSIFT1
+      else:
+        bigger, smaller = (fp1, fp2) if area1 > area2 else (fp2, fp1)
+        target_width_bigger = int(max(1024, bigger.width * params["scale"]))
+        if 1024 == target_width_bigger:
+          target_width_smaller = int(1024 * float(smaller.width) / bigger.width)
+        else:
+          target_width_smaller = smaller.width * params["scale"]
+        #
+        paramsSIFT1 = params["paramsSIFT"].clone()
+        paramsSIFT1.maxOctaveSize = target_width_bigger
+        paramsSIFT1.minOctaveSize = int(paramsSIFT1.maxOctaveSize / pow(2, paramsSIFT1.steps))
+        paramsSIFT2 = params["paramsSIFT"].clone()
+        paramsSIFT2.maxOctaveSize = target_width_smaller
+        paramsSIFT2.minOctaveSize = int(paramsSIFT2.maxOctaveSize / pow(2, paramsSIFT2.steps))
+      
+      ijSIFT1 = SIFT(FloatArray2DSIFT(paramsSIFT1))
       features1 = ArrayList() # of Point instances
-      ijSIFT.extractFeatures(futures[0].get(), features1)
+      ijSIFT1.extractFeatures(fp1, features1)
+
+      ijSIFT2 = SIFT(FloatArray2DSIFT(paramsSIFT2))
       features2 = ArrayList() # of Point instances
-      ijSIFT.extractFeatures(futures[1].get(), features2)
+      ijSIFT2.extractFeatures(fp2, features2)
       # Vector of PointMatch instances
       sourceMatches = FloatArray2DSIFT.createMatches(features1,
                                                      features2,
@@ -215,10 +196,11 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load=load
 
 
 def pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload):
+  loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, scale=True), maxsize=64)
   for i in xrange(len(filepaths) - n_adjacent):
     for inc in xrange(1, n_adjacent + 1):
       #syncPrint("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
-      yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, csvDir, exeload)
+      yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, csvDir, exeload, loadFPMem)
 
 
 def ensurePointMatches(filepaths, csvDir, params, n_adjacent):
@@ -265,7 +247,7 @@ def makeLinkedTiles(filepaths, csvDir, params, n_adjacent):
     for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       i, j, pointmatches = task.call()
       tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
-    syncPrint("Finished loading all pointmatches.")
+    syncPrint("Finsihed loading all pointmatches.")
     return tiles
   finally:
     #w.destroy()
@@ -564,29 +546,3 @@ def export8bitN5(filepaths,
     writeN5(cachedCellImg, exportDir, name, block_size, gzip_compression_level=gzip_compression, n_threads=n5_threads)
   finally:
     preloader.shutdown()
-
-
-
-# Show only a cropped middle area
-x0 = 3 * dimensions[0] / 8
-y0 = 3 * dimensions[1] / 8
-x1 = x0 + 2 * dimensions[0] / 8 -1
-y1 = y0 + 2 * dimensions[1] / 8 -1
-print "Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y0 + 1)
-viewAligned(filepaths, csvDir, params, paramsTileConfiguration, dimensions,
-            FinalInterval([x0, y0], [x1, y1]))
-
-
-# Write the whole volume in N5 format
-name = srcDir.split('/')[-2]
-exportDir = "/groups/cardona/cardonalab/FIBSEM_L1116_exports/n5/"
-# Export ROI:
-# x=864 y=264 width=15312 h=17424
-interval = FinalInterval([864, 264], [864 + 15312 -1, 264 + 17424 -1])
-
-
-# Don't use compression: less than 5% gain, at considerable processing cost.
-# Expects matrices.csv file to exist already
-#export8bitN5(filepaths, dimensions, loadMatrices("matrices", csvDir),
-#             name, exportDir, interval, gzip_compression=0, block_size=[256, 256, 64], # ~4 MB per block
-#             copy_threads=1, n5_threads=0)
