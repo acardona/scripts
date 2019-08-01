@@ -27,7 +27,7 @@ def measureFluorescence(tgtDir, series_name, img4D, params, mask=None, showDetec
     # Generate projection over time (the img3D) and extract peaks with difference of Gaussian using the params
     # (Will check if file for projection over time exists and just load it)
     img3D_filepath = os.path.join(tgtDir, "%s_4D-to-3D_max_projection.zip" % series_name)
-    img3D, peaks, spheresRAI, impSpheres = findNucleiByMaxProjection(img4D, params, img3D_filepath, show=showDetections)
+    img3D, peaks, spheresRAI, impSpheres = findNucleiByMaxProjection(img4D, params, img3D_filepath, mask=mask, show=showDetections)
     comp = showAsComposite([wrap(img3D), impSpheres])
     # Measure intensity over time, for every peak
     # by averaging the signal within a radius of each peak.
