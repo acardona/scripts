@@ -6,6 +6,7 @@ from lib.synthetic import virtualPointsRAI
 from lib.ui import showStack, wrap, showAsComposite
 from lib.deltaFoverF import computeDeltaFOverF
 from net.imglib2.view import Views
+from ij import IJ
 
 baseDir = "/home/albert/shares/cardonalab/Albert/2017-05-10_1018/"
 srcDir = baseDir + "deconvolved/"
@@ -16,7 +17,7 @@ dataset_name = "2017-5-10_1018_0-399_X203_Y155_Z65"
 img4D = readN5(n5dir, dataset_name)
 
 # A mask: only nuclei whose x,y,z coordinate has a non-zero value in the mask will be considered
-mask = None
+mask = None # Views.dropSingletonDimensions(wrap(IJ.openImage("/path/to/mask.tif")))
 
 # Split CM00+CM01 (odd) from CM02+CM03 (even) into two series
 series = ["CM00-CM01", "CM02-CM03"]
