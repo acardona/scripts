@@ -66,7 +66,7 @@ def setTheme(chart):
   chart.getTitle().setPaint(Color.gray)
 
 
-def renderHistogram(values, n_bins, min_max=None, title="Histogram", show=True, setThemeFn=setTheme):
+def renderHistogram(values, n_bins, min_max=None, title="Histogram", color=Color.red, show=True, setThemeFn=setTheme):
   """ values: a list or array of numeric values.
       n_bins: the number of bins to use.
       min_max: defaults to None, a tuple with the minimum and maximum value.
@@ -85,6 +85,9 @@ def renderHistogram(values, n_bins, min_max=None, title="Histogram", show=True, 
     hd.addSeries(title, values, n_bins)
   chart = ChartFactory.createHistogram(title, "", "", hd, PlotOrientation.VERTICAL,
                                        False, False, False)
+  # Adjust series color
+  chart.getXYPlot().getRendererForDataset(hd).setSeriesPaint(0, color)
+  #
   if setThemeFn:
     setThemeFn(chart)
   frame = None
