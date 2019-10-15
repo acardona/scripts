@@ -44,7 +44,7 @@ def fitModel(img1_filename, img2_filename, img_loader, getCalibration, csv_dir, 
       basename(img1_filename), basename(img2_filename)))
     a = nativeArray('d', [3, 4])
     model.toMatrix(a) # Can't use model.toArray: different order of elements
-    matrix = a[0] + a[1] + a[2] # Concat: flatten to 1-dimensional array:
+    matrix = a[0] + a[1] + a[2] # Concat: flatten to 1-dimensional array
   else:
     syncPrint("Model not found for:\n    %s\n    %s" % (img1_filename, img2_filename))
     # Return identity
