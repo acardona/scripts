@@ -4,6 +4,7 @@ import sys
 sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.plot import renderHistogram, chartAsImagePlus, saveChartAsSVG
 from ij import IJ
+from java.awt import Color
 
 def intoBins(values, n_bins, minimum=None, maximum=None):
   """ Sort out the sequence of numeric values into bins, creating a histogram.
@@ -22,7 +23,7 @@ def intoBins(values, n_bins, minimum=None, maximum=None):
 # Test
 n_bins = 100
 values = [random() * n_bins for i in xrange(10000)]
-chart, frame = renderHistogram(values, n_bins, title="random", show=True)
+chart, frame = renderHistogram(values, n_bins, title="random", color=Color.blue, show=True)
 
 chartAsImagePlus(chart, frame).show()
 saveChartAsSVG(chart, "/tmp/chart.svg", frame=frame)
