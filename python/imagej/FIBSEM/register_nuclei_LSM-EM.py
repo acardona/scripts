@@ -15,8 +15,7 @@ from mpicbg.models import RigidModel3D
 # FIBSEM: level 4, 192x192x192 nm/px
 # GCaMP: deconvolved, 406x406x406 nm/px
 
-scale = 192.0 / 406.0
-# NOTE Z axis of FIBSEM is much too compressed (not really 12 nm thick sections, but much thicker)
+# scale = 192.0 / 406.0
 
 FIBSEM_nuclei_path = "/home/albert/lab/projects/20191014_Champion_FIBSEM_nuclei_detection/CLIJ_mask_destination_nucleis2-1-lbl-sizeOpening-morpho.csv"
 GCaMP_nuclei_path  = "/home/albert/lab/projects/20191014_Champion_FIBSEM_nuclei_detection/CM00-CM01_fluorescence.csv"
