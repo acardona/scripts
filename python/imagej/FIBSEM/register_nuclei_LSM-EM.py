@@ -102,9 +102,9 @@ search2 = makeRadiusSearch(points2)
 features1 = extractFeatures(points1, search1, search_radius, min_angle, max_per_peak)
 features2 = extractFeatures(points2, search2, search_radius, min_angle, max_per_peak)
 
-pm = PointMatches.fromNearbyFeatures(search_radius,
-                                     features1, features2,
-                                     angle_epsilon, len_epsilon_sq)
+# Could use "fromNearbyFeatures" if both data sets were roughly aligned already.
+pm = PointMatches.fromFeatures(features1, features2,
+                               angle_epsilon, len_epsilon_sq)
 
 maxEpsilon = somaDiameter # max allowed alignment error in calibrated units (a distance)
 minInlierRatio = 0.0000001 # ratio inliers/candidates
