@@ -8,6 +8,7 @@
 import re
 
 manuscript_file = 'FB-manuscript.tex'
+methods_file = 'materials-and-methods.tex'
 references_file = 'references.bib'
 
 pattern1 = re.compile('\$\^{(\d[\s\d,-]*)}\$')
@@ -103,6 +104,15 @@ with open(manuscript_file, 'r') as source:
         if not ended:
           line = re.sub(pattern3, asBibtex, line)
         target.write(line)
+
+# Same, for the methods file
+if methods_file:
+  with open(methods_file, 'r') as source:
+    with open(methods_file[:-4] + '.bib.tex', 'w') as target:
+      pattern3 = re.compile('\$\^{\d[\s\d,-]*}\$')
+      # Whole file, not a subset
+      for line in source:
+        target.write(re.sub(pattern3, asBibtex, line))
 
 
 # Check bibliography for missing references
