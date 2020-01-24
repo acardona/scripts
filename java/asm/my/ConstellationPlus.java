@@ -44,13 +44,13 @@ public final class ConstellationPlus
     // Check for different number of neighbors
     if (this.lengths.length != other.lengths.length) return false;
     // Compare angles
-    if (1 == (comparison_type & COMPARE_ANGLES)) {
+    if ((comparison_type & COMPARE_ANGLES) != 0) {
       for (int i=0; i<this.angles.length; ++i) {
         if (Math.abs(this.angles[i] - other.angles[i]) > angle_epsilon) return false;
       }
     }
     // Compare distances to other points: each should be under the permitted error
-    if (1 == (comparison_type & COMPARE_LENGTHS)) {
+    if ((comparison_type & COMPARE_LENGTHS) != 0) {
       for (int i=0; i<this.lengths.length; ++i) {
         if (Math.abs(this.lengths[i] - other.lengths[i]) > len_epsilon_sq) return false;
       }
