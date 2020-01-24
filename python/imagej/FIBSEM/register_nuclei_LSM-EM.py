@@ -106,7 +106,7 @@ features2 = extractFeatures(points2, search2, search_radius, min_angle, max_per_
 pm = PointMatches.fromFeatures(features1, features2,
                                angle_epsilon, len_epsilon_sq)
 
-maxEpsilon = somaDiameter # max allowed alignment error in calibrated units (a distance)
+maxEpsilon = 0.5 * somaDiameter # max allowed alignment error in calibrated units (a distance)
 minInlierRatio = 0.0000001 # ratio inliers/candidates
 minNumInliers = 16 # minimum number of good matches to accept the result
 n_iterations = 1000 # for estimating the model
