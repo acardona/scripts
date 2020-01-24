@@ -37,13 +37,13 @@ paramsDoG = {
 paramsFeatures = {
   # Parameters for features
   "radius": somaDiameter * 2, # for searching nearby peaks
-  "min_neighbors": 4,
+  "min_neighbors": 3,
   "max_neighbors": 4, # will create features with 3, 4, and 5 peaks (center + 2, 3 or 4 neighbors)
-  "max_per_peak": 100, # maximum number of constellations to create per peak
+  "max_per_peak": 1000, # maximum number of constellations to create per peak
 
   # Parameters for comparing constellations to find point matches
-  "angle_epsilon": 0.01, # in radians. 0.05 is 2.8 degrees, 0.02 is 1.1 degrees
-  "len_epsilon_sq": pow(somaDiameter*0.1, 2), # in calibrated units, squared
+  "angle_epsilon": 0.02, # in radians. 0.05 is 2.8 degrees, 0.02 is 1.1 degrees
+  "len_epsilon_sq": pow(somaDiameter*0.4, 2), # in calibrated units, squared
   "pointmatches_nearby": True, # if True, searches for possible matches only within radius
   "pointmatches_search_radius": somaDiameter #
 }
@@ -92,8 +92,8 @@ features2 = ConstellationPlus.extractFeatures(peaks2,
 
 print "img2: Found %i features" % len(features2)
 
-#pm = PointMatchesPlus.fromNearbyFeatures(params['pointmatches_search_radius'],
-pm = PointMatchesPlus.fromFeatures(
+pm = PointMatchesPlus.fromNearbyFeatures(params['pointmatches_search_radius'],
+#pm = PointMatchesPlus.fromFeatures(
                                          features1,
                                          features2,
                                          params['angle_epsilon'],
