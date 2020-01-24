@@ -156,6 +156,9 @@ public final class PointMatchesPlus
               new RadiusNeighborSearchOnKDTree<ConstellationPlus>(kdtree2);
             for (final ConstellationPlus c1: features1.subList(offset, Math.min(offset + inc, features1.size()))) {
               search2.search(RealPoint.wrap(c1.position.getW()), radius, false); // unsorted
+              // If the two collections of points are the same collection, then
+              // the first neighbor would be the point itself and would have to be skipped.
+              // But that's not the case here, so start at index 0:
               for (int i=0, n=search2.numNeighbors(); i<n; ++i) {
                 final ConstellationPlus c2 = search2.getSampler(i).get();
                 if (c1.matches(c2, angle_epsilon, len_epsilon_sq, comparison_type)) {
