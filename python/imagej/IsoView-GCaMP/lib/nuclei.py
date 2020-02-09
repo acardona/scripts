@@ -241,3 +241,20 @@ def findNucleiByMaxProjection(img4D, params, img3D_filepath, projection_strategy
     return img3D, peaks
 
 
+def boundsOf(nuclei):
+  x0, y0, z0 = nuclei[0]
+  x1, y1, z1 = nuclei[0]
+  for x, y, z in nuclei:
+    if x < x0: x0 = x
+    if y < y0: y0 = y
+    if z < z0: z0 = z
+    if x > x1: x1 = x
+    if y > y1: y1 = y
+    if z > z1: z1 = z
+  return [x0, y0, z0], \
+         [x1, y1, z1]
+
+def dimensionsOf(bounds):
+  return bounds[1][0] - bounds[0][0], \
+         bounds[1][1] - bounds[0][1], \
+         bounds[1][2] - bounds[0][2]
