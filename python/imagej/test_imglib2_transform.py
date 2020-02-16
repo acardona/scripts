@@ -1,22 +1,40 @@
-from ij import IJ
+from ij import IJ, ImagePlus
+from net.imglib2 import RandomAccessibleInterval
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.realtransform import RealViews, AffineTransform2D
 from net.imglib2.view import Views
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from math import sin, cos, radians, sqrt
 from java.awt.geom import AffineTransform
-from jarray import zeros
 
-imp = IJ.getImage() # the leaf sample image
+imp = IJ.getImage() # e.g. the leaf sample image
 
 
-def viewTransformed(imp, transformation, title=None, interval=None, show=True):
-  img = IL.wrap(imp) # ImagePlus to ImgLib2 RandomAccessibleInterval & IterableInterval, aka Img
+def viewTransformed(image, transformation, title=None, interval=None, show=True):
+  if isinstance(image, ImagePlus):
+    img = IL.wrap(image) # ImagePlus to ImgLib2 RandomAccessibleInterva & IterableInterval aka Img
+  elif isinstance(image, RandomAccessibleInterval):
+    img = image
+  else:
+    return None
+  # Make the image be defined anywhere by infinitely padding with zeros.
   imgInfinite = Views.extendZero(img)
+  # Make the image be defined at arbitrarily precise subpixel coordinates
+  # by using n-dimensional linear interpolation
   imgInterpolated = Views.interpolate(imgInfinite, NLinearInterpolatorFactory())
+  # Make the image be seen as a transformed view of the source image
   imgTransformed = RealViews.transform(imgInterpolated, transformation)
-  interval = interval if interval else img # every Img is also an Interval because it is bounded
+  # Define an interval within which we want the transformed image to be defined
+  # (such as that of the source img itself; an img in ImgLib2 also happens to be an Interval
+  # and can therefore be used as an interval, which is convenient here because we
+  # expect the original field of view--the interval--to be where image data can still be found)
+  interval = interval if interval else img # every Img is also an Interval because each Img is bounded
+  # Make the image finite by defining it as the content within the interval
   imgBounded = Views.interval(imgTransformed, interval) # same as original
+  # Optionally show the transformed, bounded image in an ImageJ VirtualStack
+  # (Note that anytime one of the VirtualStack's ImageProcessor will have to
+  # update its pixel data, it will incur in executing the transformation again;
+  # no pixel data is cached or copied anywhere other than for display purposes)
   if show:
     title = title if title else imp.getTitle()
     imp = IL.wrap(imgBounded, title) # as an ImagePlus
@@ -78,13 +96,17 @@ viewTransformed(imp, mirrorY,
                 title=imp.getTitle() + " mirrorY")
 
 
-# Flip both horizontally and vertically
+# Flip simultaneously horizontally and vertically
 mirrorXY = AffineTransform2D()
 mirrorXY.set(-1.0, 0.0, imp.getWidth(),
              0.0, -1.0, imp.getHeight())
 
 viewTransformed(imp, mirrorXY,
                 title=imp.getTitle() + " mirrorXY")
+
+
+
+# We can think of rotations as simultaneously shearing in the X and Y axes
 
 
 # 90 degree rotation to the right
@@ -137,10 +159,14 @@ viewTransformed(imp, rotate45,
 # we call each value of the matrix, one by one, to fill our matrix.
 
 aff = AffineTransform() # initialized as the identity transform
-aff.rotate(radians(45), imp.getWidth() / 2.0, imp.getHeight() / 2.0)
+cx = imp.getWidth() / 2.0
+cy = imp.getHeight() / 2.0
+aff.rotate(radians(45), cx, cy)
 rotate45easy = AffineTransform2D()
 rotate45easy.set(aff.getScaleX(), aff.getShearX(), aff.getTranslateX(),
                  aff.getShearY(), aff.getScaleY(), aff.getTranslateY())
+
+print rotate45easy
 
 viewTransformed(imp, rotate45easy,
                 title=imp.getTitle() + " rotate45easy")
@@ -180,3 +206,4 @@ combined.preConcatenate(translateBack)
 
 viewTransformed(imp, combined,
                 title=imp.getTitle() + " combined")
+
