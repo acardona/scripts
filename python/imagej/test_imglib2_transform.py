@@ -52,7 +52,7 @@ def viewTransformed(image, transformation, title=None, interval=None, show=True)
 # and the second row is the Y axis
 
 # The application of this transformation matrix to the coordinates
-# of each pixel will do nothing: coordinates state the same.
+# of each pixel will do nothing: coordinates stay the same.
 # The first two columns control scaling, rotation and shear,
 # and the third column controls the translation.
 #
@@ -60,11 +60,41 @@ def viewTransformed(image, transformation, title=None, interval=None, show=True)
 # In this case, there are two variables: the X and Y coordinates.
 # Each cell in the matrix is really:
 #
-# [cos(angle), sin(angle), translation,
-#  -sin(angle), cos(angle), translation]
+# [[cos(angle), sin(angle), translation],
+#  [-sin(angle), cos(angle), translation]]
 #
 # When the angle is 0, the two cos(angle) are 1.0,
-# and the two sin(angle) are 0.0.
+# and the two sin(angle) are 0.0. Which is the identity affine transform.
+# 
+# Where does this matrix representation come from?
+# Turns out, the linear mapping (the transformation) is merely the upper left part:
+# 
+# [[cos(angle, sin(angle)],
+#  [-sin(angle, cos(angle)]]
+#
+# To include the translation along with the linear map into the same matrix
+# would allow for a single matrix multiplication to take place, reducing
+# computational costs and simplifyig the representation. This is what
+# the affine transform accomplishes, by virtue of being an augmented matrix
+# (see wikipedia at https://en.wikipedia.org/wiki/Affine_transformation#Augmented_matrix ).
+# 
+# And so the full matrix would look like this:
+#
+# [[ cos(angle), sin(angle), translation],
+#  [-sin(angle), cos(angle), translation],
+#  [          0,         0]            1]]
+#
+# The extra row is all zeroes with a one at the end;
+# the extra column is the translation term, plus a 1 at the end.
+# 
+# This augmented matrix can now be multipled by other similarly augmented matrices;
+# in other words, multiple affine transforms can be concatenated and therefore
+# compacted into a single affine transform. This presents the enormous
+# advantage of then letting us apply a single transform to the image,
+# reducing not only the number of operations per pixel (and therefore gaining
+# in speed performance) but also reducing the noise, by avoiding the repeated
+# transformation (with its floating-point error from interpolations) of the image.
+#
 #
 # Handling angles by using sin and cos, though, is fidgety and error-prone.
 # Instead, let's develop an intuitive understanding first,
