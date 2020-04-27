@@ -8,8 +8,6 @@ canvas = imp.getWindow().getCanvas()
 def spyEvent(self, event):
   print event
 
-print dir(list)
-
 def findEventInterfaces(*classes): # one or more
   # Gather all interfaces that extend EventListener
   classes = list(classes) # turn a tuple argument into a list

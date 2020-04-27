@@ -183,7 +183,7 @@ viewTransformed(imp, rotate45,
 # quite trivially, with the method rotate that takes an origin of rotation
 # as argument.
 # BEWARE that positive angles rotate to the right (rather than to the left)
-# in the AFfineTransform, so we use radians(45) instead of radians(-45).
+# in the AffineTransform, so we use radians(45) instead of radians(-45).
 # And BEWARE that AffineTransform.getMatrix fills a double[] array in
 # an order that you wouldn't expect (see the javadoc), so instead
 # we call each value of the matrix, one by one, to fill our matrix.
