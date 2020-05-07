@@ -5,7 +5,7 @@
 #
 # To generate such a list from a directory,
 # run this in the command line to find all files:
-# $ find . -type f -printf %p\n" > ~/Desktop/list.txt
+# $ find . -type f -printf "%p\n" > ~/Desktop/list.txt
 #
 # Albert Cardona 2018-05-15
 
