@@ -234,7 +234,7 @@ try:
   for i in xrange(num_slices):
     bytes = zeros(slice_n_bytes, 'b') # an empty byte[] array
     ra.read(bytes)
-    bb = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+    bb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
     if convertMethod: # if not 8-bit
       pixels = zeros(width * height, pixel_type) # an empty short[] or float[] array
       getattr(bb, convertMethod).get(pixels) # e.g. bb.asShortBuffer().get(pixels)
@@ -276,7 +276,7 @@ try:
   for i in xrange(num_slices):
     bytes = zeros(slice_n_bytes, 'b') # an empty byte[] array
     ra.read(bytes)
-    bb = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+    bb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
     if convertMethod: # if not 8-bit
       pixels = zeros(width * height, pixel_type) # an empty short[] or float[] array
       getattr(bb, convertMethod).get(pixels) # e.g. bb.asShortBuffer().get(pixels)
