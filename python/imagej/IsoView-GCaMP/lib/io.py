@@ -2,7 +2,10 @@ from java.io import RandomAccessFile
 from net.imglib2.img.array import ArrayImgs
 from jarray import zeros
 from java.nio import ByteBuffer, ByteOrder
-import operator
+from java.math import BigInteger
+from java.util import Arrays
+from java.lang import System
+import operator, sys
 from net.imglib2 import RandomAccessibleInterval, IterableInterval
 from net.imglib2.view import Views
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
@@ -17,7 +20,7 @@ from net.imglib2.img.cell import CellGrid, Cell
 from net.imglib2.img.basictypeaccess import AccessFlags, ArrayDataAccessFactory
 from net.imglib2.cache.ref import SoftRefLoaderCache
 from net.imglib2.cache.img import CachedCellImg
-from ij.io import FileSaver
+from ij.io import FileSaver, ImageReader, FileInfo
 from ij import ImagePlus, IJ
 from synchronize import make_synchronized
 from util import syncPrint, newFixedThreadPool
@@ -292,3 +295,281 @@ def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, head
       return ArrayImgs.floats(floats, roiDims)
   finally:
     ra.close()
+
+
+def parseNextIntBigEndian(ra, count):
+  # ra: a RandomAccessFile at the correct place to read the next sequence of bytes
+  bytes = zeros(count + 1, 'b')
+  ra.read(bytes, 1, count) # a leading zero to avoid parsing as negative numbers
+  return BigInteger(bytes).longValue() # long to avoid bit overflows
+
+def parseNextIntLittleEndian(ra, count):
+  # ra: a RandomAccessFile at the correct place to read the next sequence of bytes
+  bytes = zeros(count + 1, 'b')
+  ra.read(bytes, 0, count) # ending zero will be the leading zero when reversed
+  return BigInteger(reversed(bytes)).longValue() # long to avoid bit overflows
+
+
+def parseIFD(ra, parseNextInt):
+  """ An IFD (image file directory) is the metadata for one image (e.g. one slice)
+      contained within a TIFF stack.
+      
+      ra: RandomAccessFile.
+      parseNextInt: function that takes an ra and the count of bytes to parse.
+      
+      returns a dictionary with some keys from the IFD (width, height, samples_per_pixel and offset)
+              and the offset of the IFD of the next image plane."""
+  # Assumes ra is at the correct offset to start reading the IFD
+  # First the NumDirEntries as 2 bytes
+  # Then the TagList as zero or more 12-byte entries
+  # Finally the NextIFDOffset: 4 bytes, the offset to the next IFD (i.e. metadata to the next image)
+  # Each tag has:
+  # - TagId (2 bytes): many, e.g.:
+  #       256: image width
+  #       257: image height (aka image length)
+  #       258: bits per sample (bit depth)
+  #       259: compression (short), can be e.g.
+  #                    1: uncompressed
+  #                32773: PackBits compression
+  #                    5: LZW compression
+  #                    6: JPEG compression
+  #       273: strip offsets (offset to start of image data, as array of offset values, one per strip,
+  #                           which indicate the position of the first byte of each strip within the TIFF file)
+  #       279: strip byte count (number of bytes per strip, when uncompressed is width*height)
+  #       277: samples per pixel (number of channels)
+  #       278: rows per strip (akin to image height)
+  # - DataType (2 bytes): 1 byte (8-bit unsigned int),
+  #                       2 ascii (8-bit NULL-terminated string),
+  #                       3 short (16-bit unsigned int),
+  #                       4 long (32-bit unsigned int)
+  #                       5 rational (two 32-bit unsigned integers)
+  #                       6 sbyte (8-bit signed int)
+  #                       7 undefine (8-bit byte)
+  #                       8 sshort (16-bit signed int)
+  #                       9 slong (32-bit signed int)
+  #                      10 srational (two 32-bit signed int)
+  #                      11 float (4-byte float)
+  #                      12 double (8-byte float)
+  nBytesPerType = {1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8}
+  # - DataCount (4 bytes): number of items in the tag data (e.g. if 8, and Datatype is 4, means 8 x 32-bit consecutive numbers)
+  # - DataOffset (4 bytes): offset to the data items. If four bytes or less in size, the data may be found in this
+  #                         field as left-justified, i.e. if it uses less than 4 bytes, it's in the first bytes.
+  #                         If the tag data is greater than four bytes in size, then this field contains an offset
+  #                         to the position of the data in the TIFF file.
+  nTags = parseNextInt(ra, 2) # NumDirEntries
+  #print "nTags", nTags
+  # A minimum set of tags to read for simple, uncompressed images
+  tagNames = {256: "width",
+              257: "height", # aka image length
+              258: "bitDepth",
+              259: "compression",
+              273: "StripOffsets", # always a list  # was: offset
+              277: "samples_per_pixel",
+              278: "RowsPerStrip", # always a list
+              279: "StripByteCounts"} # always a list  # was: n_bytes
+  # Set of tags that are always lists, even when they contain a single value
+  countable = set(["StripOffsets", "RowsPerStrip", "StripByteCounts"])
+  tags = {}
+  for i in xrange(nTags):
+    tagId = parseNextInt(ra, 2)
+    #print "tagId", tagId
+    name = tagNames.get(tagId, None)
+    if name:
+      dataType = parseNextInt(ra, 2)
+      dataCount = parseNextInt(ra, 4)
+      n = nBytesPerType[dataType]
+      #print "name: %s, n: %i dataType: %i dataCount %i" % (name, n, dataType, dataCount)
+      if n > 4 or dataCount > 1:
+        # jump ahead and come back
+        pos = ra.getFilePointer()
+        offset = parseNextInt(ra, 4)
+        ra.seek(offset)
+        dataOffset = [parseNextInt(ra, n) for _ in xrange(dataCount)]
+        if 1 == dataCount and name not in countable:
+          dataOffset = dataOffset[0]
+        ra.seek(pos + 4) # restore position to continue reading tags
+      else:
+        # data embedded in dataOffset
+        dataOffset = parseNextInt(ra, n) # should have the actual data, left-justified
+        if name in countable:
+          dataOffset = [dataOffset]
+        ra.skipBytes(4 - n) # if any left to skip up to 12 total for the tag entry, may skip none        
+      tags[name] = dataOffset
+      #print "tag: %s, dataType: %i, dataCount: %i" % (name, dataType, dataCount), "dataOffset:", dataOffset
+    else:
+      ra.skipBytes(10) # 2 were for the tagId, 12 total for each tag entry
+  nextIFDoffset = parseNextInt(ra, 4)
+  return tags, nextIFDoffset
+
+
+def parse_TIFF_IFDs(filepath):
+  """ Returns a generator of dictionaries of tags for each IFD in the TIFF file,
+      as defined by the 'parseIFD' function above. """
+  ra = RandomAccessFile(filepath, 'r')
+  try:
+    # TIFF file format can have metadata at the end after the images, so the above approach can fail
+    # TIFF file header is 8-bytes long:
+    # (See: http://paulbourke.net/dataformats/tiff/tiff_summary.pdf )
+    #
+    # Bytes 1 and 2: identifier. Either the value 4949h (II) or 4D4Dh (MM),
+    #                            meaning little-ending and big-endian, respectively.
+    # All data encountered past the first two bytes in the file obey
+    # the byte-ordering scheme indicated by the identifier field.
+    b1, b2 = ra.read(), ra.read() # as two java int, each one byte sized
+    bigEndian = chr(b1) == 'M'
+    parseNextInt = parseNextIntBigEndian if bigEndian else parseNextIntLittleEndian
+    # Bytes 3 and 4: Version: Always 42
+    ra.skipBytes(2)
+    # Bytes 5,6,7,8: IFDOffset: offset to first image file directory (IFD), the metadata entry for the first image.
+    nextIFDoffset = parseNextInt(ra, 4) # offset to first IFD
+    while nextIFDoffset != 0:
+      ra.seek(nextIFDoffset)
+      tags, nextIFDoffset = parseIFD(ra, parseNextInt)
+      tags["bigEndian"] = bigEndian
+      yield tags
+  finally:
+    ra.close()
+
+
+def unpackBits(ra, tags, use_imagereader=False):
+  # Decompress a packBits-compressed image, write into bytes array starting at indexU.
+  # ra: a RandomAccessFile with the pointer at the right place to start reading.
+  # PackBits actually packages bytes: a byte-wise RLE most efficient at encoding runs of bytes
+  # 3 types of data packets:
+  # 1. two-byte encoded run packet:
+  #     - first byte is the number of bytes in the run.
+  #       Ranges from -127 to -1, meaning +1: from 2 to 128 (-count + 1)
+  #     - second byte value of each byte in the run.
+  # 2. literal run packet: stores 1 to 128 bytes literally without compression.
+  #     - first byte is the number of bytes in the run.
+  #       Ranges from 0 to 127, indicating 1 to 128 values (count + 1)
+  #     - then the sequence of literal bytes
+  # 3. no-op packet: never used, value -128.
+  # See documentation: http://paulbourke.net/dataformats/tiff/tiff_summary.pdf
+  # (note documentation PDF has its details flipped when it comes to the ranges for literal runs and packed runs)
+  # See also: ij.io.ImageReader.packBitsUncompress (a public method without side effects)
+  
+  if use_imagereader:
+    bytes_packedbits = zeros(sum(tags["StripByteCounts"]), 'b')
+    indexP = 0
+    for strip_offset, strip_length in zip(tags["StripOffsets"], tags["StripByteCounts"]):
+      ra.seek(strip_offset)
+      ra.read(bytes_packedbits, indexP, strip_length)
+      indexP += strip_length
+    return ImageReader(FileInfo()).packBitsUncompress(bytes_packedbits, tags["width"] * tags["height"])
+  
+  try:
+    bytes = zeros(tags["width"] * tags["height"], 'b')
+    indexU = 0 # index over unpacked bytes
+    for strip_offset, strip_length in zip(tags["StripOffsets"], tags["StripByteCounts"]):
+      ra.seek(strip_offset)
+      indexP = 0
+      while indexP < strip_length and indexU < len(bytes):
+        count = ra.readByte()
+        if count >= 0:
+          # Literal run
+          ra.read(bytes, indexU, count + 1)
+          indexP += count + 2 # one extra for the count byte
+          indexU += count + 1
+        else:
+          # Packed run
+          Arrays.fill(bytes, indexU, indexU - count + 1, ra.readByte())
+          indexP += 2
+          indexU += -count + 1
+  except:
+    print sys.exc_info()
+  finally:
+    return bytes
+
+
+def unpackBits2(bytes_packedbits, tags, use_imagereader=False):
+  # Decompress a packBits-compressed image, returns an array of n_bytes.
+  # ra: a RandomAccessFile with the pointer at the right place to start reading.
+  # PackBits actually packages bytes: a byte-wise RLE most efficient at encoding runs of bytes
+  # 3 types of data packets:
+  # 1. two-byte encoded run packet:
+  #     - first byte is the number of bytes in the run.
+  #       Ranges from -127 to -1, meaning +1: from 2 to 128 (-count + 1)
+  #     - second byte value of each byte in the run.
+  # 2. literal run packet: stores 1 to 128 bytes literally without compression.
+  #     - first byte is the number of bytes in the run.
+  #       Ranges from 0 to 127, indicating 1 to 128 values (count + 1)
+  #     - then the sequence of literal bytes
+  # 3. no-op packet: never used, value -128.
+  # See documentation: http://paulbourke.net/dataformats/tiff/tiff_summary.pdf
+  # (note documentation PDF has its details flipped when it comes to the ranges for literal runs and packed runs)
+  # See also: ij.io.ImageReader.packBitsUncompress (a public method without side effects)
+
+  n_bytes = tags["width"] * tags["height"]
+
+  if use_imagereader:
+    return ImageReader(FileInfo()).packBitsUncompress(bytes_packedbits, n_bytes)
+    
+  bytes = zeros(n_bytes, 'b')
+  try:
+    indexP = 0 # packed
+    indexU = 0 # unpacked
+    while indexU < n_bytes:
+      count = bytes_packedbits[indexP]
+      if count >= 0:
+        # Literal run
+        System.arraycopy(bytes_packedbits, indexP + 1, bytes, indexU, count + 1)
+        indexP += count + 2 # one extra for the 'count' byte
+        indexU += count + 1
+      else:
+        # Packed run
+        Arrays.fill(bytes, indexU, indexU - count + 1, bytes_packedbits[indexP + 1])
+        indexP += 2
+        indexU += -count + 1
+  except:
+    print sys.exc_info()
+  finally:
+    return bytes
+
+
+def read_TIFF_plane(ra, tags):
+  """ ra: RandomAccessFile
+      tags: dicctionary of TIFF tags for the IFD of the plane to parse. """
+  # Values of the "compressed" tag field (when present):
+  #     1: "uncompressed",
+  # 32773: "packbits",
+  #     5: "LZW",
+  #     6: "JPEG",
+  width, height = tags["width"], tags["height"]
+  bitDepth = tags["bitDepth"]
+  n_bytes = width * height * (bitDepth / 8)
+  compression = tags.get("compression", 1)
+  bytes = None
+
+  if 32773 == compression:
+    bytes = unpackBits(ra, tags, use_imagereader=True) 
+  elif 5 == compression:
+    print "Unsupported compression: LZW"
+    bytes = zeros(n_bytes, 'b')
+  elif 6 == compression:
+    print "Unsupported compression: JPEG"
+    bytes = zeros(n_bytes, 'b')
+  elif 1 == compression:
+    bytes = zeros(n_bytes, 'b')
+    index = 0
+    for strip_offset, strip_length in zip(tags["StripOffsets"], tags["StripByteCounts"]):
+      ra.seek(strip_offset)
+      ra.read(bytes, index, strip_length)
+  else:
+    raise Exception("Can't deal with compression type " + str(compression))
+
+  # If read as bytes, parse to the appropriate primitive type
+  if 8 == bitDepth:
+    return bytes
+  bb = ByteBuffer.wrap(bytes)
+  if not tag["bigEndian"]:
+    bb = bb.order(ByteOrder.BIG_ENDIAN)
+  if 16 == bitDepth:
+    pixels = zeros(width * height, 'h')
+    bb.asShortBuffer().get(pixels)
+    return pixels
+  if 32 == bitDepth:
+    pixels = zeros(width * height, 'f')
+    bb.asFloatBuffer().get(pixels)
+    return pixels
+
