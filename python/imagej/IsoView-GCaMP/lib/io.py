@@ -431,6 +431,16 @@ def parse_TIFF_IFDs(filepath):
     ra.close()
 
 
+def getIFDImageBytes(ra, tags):
+  """ Read byte[] from a TIFF file IFD, which may or may not be compressed. """
+  bytes = zeros(sum(tags["StripByteCounts"]), 'b')
+  indexP = 0
+  for strip_offset, strip_length in zip(tags["StripOffsets"], tags["StripByteCounts"]):
+    ra.seek(strip_offset)
+    ra.read(bytes, indexP, strip_length)
+    indexP += strip_length
+  return bytes
+
 def unpackBits(ra, tags, use_imagereader=False):
   # Decompress a packBits-compressed image, write into bytes array starting at indexU.
   # ra: a RandomAccessFile with the pointer at the right place to start reading.
@@ -450,13 +460,8 @@ def unpackBits(ra, tags, use_imagereader=False):
   # See also: ij.io.ImageReader.packBitsUncompress (a public method without side effects)
   
   if use_imagereader:
-    bytes_packedbits = zeros(sum(tags["StripByteCounts"]), 'b')
-    indexP = 0
-    for strip_offset, strip_length in zip(tags["StripOffsets"], tags["StripByteCounts"]):
-      ra.seek(strip_offset)
-      ra.read(bytes_packedbits, indexP, strip_length)
-      indexP += strip_length
-    return ImageReader(FileInfo()).packBitsUncompress(bytes_packedbits, tags["width"] * tags["height"])
+    return ImageReader(FileInfo()).packBitsUncompress(getIFDImageBytes(ra, tags),
+                                                      tags["width"] * tags["height"])
   
   try:
     bytes = zeros(tags["width"] * tags["height"], 'b')
@@ -529,7 +534,12 @@ def unpackBits2(bytes_packedbits, tags, use_imagereader=False):
 
 def read_TIFF_plane(ra, tags):
   """ ra: RandomAccessFile
-      tags: dicctionary of TIFF tags for the IFD of the plane to parse. """
+      tags: dicctionary of TIFF tags for the IFD of the plane to parse.
+
+      For compressed image planes, takes advantage of the ij.io.ImageReader class
+      which contains methods that ought to be static (no side effects) and therefore
+      demand a dummy constructor just to invoke them.
+  """
   # Values of the "compressed" tag field (when present):
   #     1: "uncompressed",
   # 32773: "packbits",
@@ -544,17 +554,20 @@ def read_TIFF_plane(ra, tags):
   if 32773 == compression:
     bytes = unpackBits(ra, tags, use_imagereader=True) 
   elif 5 == compression:
-    print "Unsupported compression: LZW"
-    bytes = zeros(n_bytes, 'b')
-  elif 6 == compression:
-    print "Unsupported compression: JPEG"
-    bytes = zeros(n_bytes, 'b')
+    bytes = ImageReader(FileInfo()).lzwUncompress(getIFDImageBytes(ra, tags),
+                                                  tags["width"] * tags["height"])
+  elif 32946 == compression or 8 == compression:
+    bytes = ImageReader(FileInfo()).zipUncompress(getIFDImageBytes(ra, tags),
+                                                  tags["width"] * tags["height"])
   elif 1 == compression:
     bytes = zeros(n_bytes, 'b')
     index = 0
     for strip_offset, strip_length in zip(tags["StripOffsets"], tags["StripByteCounts"]):
       ra.seek(strip_offset)
       ra.read(bytes, index, strip_length)
+  elif 6 == compression:
+    print "Unsupported compression: JPEG"
+    raise Exception("Can't handle JPEG compression of TIFF image planes")
   else:
     raise Exception("Can't deal with compression type " + str(compression))
 
