@@ -1,10 +1,10 @@
 from java.io import RandomAccessFile
 from net.imglib2.img.array import ArrayImgs
-from jarray import zeros
+from jarray import zeros, array
 from java.nio import ByteBuffer, ByteOrder
 from java.math import BigInteger
 from java.util import Arrays
-from java.lang import System
+from java.lang import System, Long
 import operator, sys
 from net.imglib2 import RandomAccessibleInterval, IterableInterval
 from net.imglib2.view import Views
@@ -40,6 +40,7 @@ except:
   print "*** n5-imglib2 from github.com/saalfeldlab/n5-imglib2 not installed. ***"
 from com.google.gson import GsonBuilder
 from math import ceil
+from itertools import imap
 
 
 def readFloats(path, dimensions, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
@@ -348,7 +349,7 @@ def parseIFD(ra, parseNextInt):
   #                       4 long (32-bit unsigned int)
   #                       5 rational (two 32-bit unsigned integers)
   #                       6 sbyte (8-bit signed int)
-  #                       7 undefine (8-bit byte)
+  #                       7 undefined (8-bit byte)
   #                       8 sshort (16-bit signed int)
   #                       9 slong (32-bit signed int)
   #                      10 srational (two 32-bit signed int)
@@ -596,6 +597,8 @@ def read_TIFF_plane(ra, tags, handler=None):
     # Support for 1-bit, 2-bit, 3-bit, ... 12-bit, etc. images
     pixels = zeros(int(ceil(width * height * bitDepth / 64.0)), 'l')
     bb.asLongBuffer().get(pixels)
+    # Reverse bits from left to right to right to left for ImgLib2 LongArray
+    pixels = array(imap(Long.reverse, pixels), 'l')
     return pixels
 
 
