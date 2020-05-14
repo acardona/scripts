@@ -60,13 +60,14 @@ try:
   plane_array = plane_img.update(None).getCurrentStorageArray() # a long[]
   bb = ByteBuffer.allocate(len(plane_array) * 8) # each long primitive has 8 bytes
   # Each IFD and image data
-  tags = {256: (9, 4, img.dimension(0)), # signed int (32-bit), 4 bytes, width
-          257: (9, 4, img.dimension(1)), # signed int (32-bit), 4 bytes, height
-          258: (1, 1, bitDepth), # signed byte, 1 byte, bitDepth
-          259: (1, 1, 1), # signed byte, 1 byte, compression: 1 means uncompressed: it's true, in a way
-          277: (1, 1, 1), # signed byte, 1 byte, SamplesPerPixel: 1 channel
-          278: (1, 1, 1), # signed byte, 1 byte, RowsPerStrip
-          279: (9, 4, bb.capacity())} # signed int (32-bit), StripByteCounts
+  # Use either short (3) or int (4) for the DataType, so that ImageJ's ij.io.TiffDecoder can read it
+  tags = {256: (4, 4, img.dimension(0)), # signed int (32-bit), 4 bytes, width
+          257: (4, 4, img.dimension(1)), # signed int (32-bit), 4 bytes, height
+          258: (4, 4, bitDepth), # signed byte, 1 byte, bitDepth (BitsPerSample)
+          259: (4, 4, 1), # signed byte, 1 byte, compression: 1 means uncompressed: it's true, in a way
+          277: (4, 4, 1), # signed byte, 1 byte, SamplesPerPixel: 1 channel
+          278: (4, 4, 1), # signed byte, 1 byte, RowsPerStrip
+          279: (4, 4, bb.capacity())} # signed int (32-bit), StripByteCounts
   # Pending to append: variable tag ID 273: ?, # StripOffsets, taking 12 bytes like each of the other tags,
                                                # limiting offset value to within 4 bytes maximum (32-bit unsigned value).
   def asBytes(ID, entry):
