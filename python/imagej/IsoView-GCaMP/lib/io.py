@@ -13,8 +13,11 @@ from net.imglib2.img import ImgView
 from net.imglib2.cache import CacheLoader
 from net.imglib2.realtransform import RealViews
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
-from net.imglib2.type.numeric.integer import UnsignedByteType, UnsignedShortType
+from net.imglib2.img.basictypeaccess.array import ByteArray, ShortArray, FloatArray, LongArray
+from net.imglib2.type.numeric.integer import UnsignedByteType, UnsignedShortType, LongType
 from net.imglib2.type.numeric.real import FloatType
+from net.imglib2.type.logic import BitType
+from net.imglib2.type import PrimitiveType
 from net.imglib2.util import Intervals
 from net.imglib2.img.cell import CellGrid, Cell
 from net.imglib2.img.basictypeaccess import AccessFlags, ArrayDataAccessFactory
@@ -36,6 +39,7 @@ try:
 except:
   print "*** n5-imglib2 from github.com/saalfeldlab/n5-imglib2 not installed. ***"
 from com.google.gson import GsonBuilder
+from math import ceil
 
 
 def readFloats(path, dimensions, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
@@ -412,7 +416,7 @@ def parse_TIFF_IFDs(filepath):
     # (See: http://paulbourke.net/dataformats/tiff/tiff_summary.pdf )
     #
     # Bytes 1 and 2: identifier. Either the value 4949h (II) or 4D4Dh (MM),
-    #                            meaning little-ending and big-endian, respectively.
+    #                            meaning little-endian and big-endian, respectively.
     # All data encountered past the first two bytes in the file obey
     # the byte-ordering scheme indicated by the identifier field.
     b1, b2 = ra.read(), ra.read() # as two java int, each one byte sized
@@ -532,14 +536,17 @@ def unpackBits2(bytes_packedbits, tags, use_imagereader=False):
     return bytes
 
 
-def read_TIFF_plane(ra, tags):
+def read_TIFF_plane(ra, tags, handler=None):
   """ ra: RandomAccessFile
       tags: dicctionary of TIFF tags for the IFD of the plane to parse.
+      handler: defaults to Nobe; a function that reads the image data and returns an array.
 
       For compressed image planes, takes advantage of the ij.io.ImageReader class
       which contains methods that ought to be static (no side effects) and therefore
       demand a dummy constructor just to invoke them.
   """
+  if handler:
+    return handler(ra, tags)
   # Values of the "compressed" tag field (when present):
   #     1: "uncompressed",
   # 32773: "packbits",
@@ -547,7 +554,7 @@ def read_TIFF_plane(ra, tags):
   #     6: "JPEG",
   width, height = tags["width"], tags["height"]
   bitDepth = tags["bitDepth"]
-  n_bytes = width * height * (bitDepth / 8)
+  n_bytes = int(ceil(width * height * (float(bitDepth) / 8))) # supports bitDepth < 8
   compression = tags.get("compression", 1)
   bytes = None
 
@@ -575,7 +582,7 @@ def read_TIFF_plane(ra, tags):
   if 8 == bitDepth:
     return bytes
   bb = ByteBuffer.wrap(bytes)
-  if not tag["bigEndian"]:
+  if not tags["bigEndian"]:
     bb = bb.order(ByteOrder.BIG_ENDIAN)
   if 16 == bitDepth:
     pixels = zeros(width * height, 'h')
@@ -585,4 +592,43 @@ def read_TIFF_plane(ra, tags):
     pixels = zeros(width * height, 'f')
     bb.asFloatBuffer().get(pixels)
     return pixels
+  if bitDepth < 8:
+    # Support for 1-bit, 2-bit, 3-bit, ... 12-bit, etc. images
+    pixels = zeros(int(ceil(width * height * bitDepth / 64.0)), 'l')
+    bb.asLongBuffer().get(pixels)
+    return pixels
+
+
+class TIFFSlices(CacheLoader):
+  """ Unless additional types are provided to the constructor,
+      supports only UnsignedByteType, UnsignedShortType, FloatType and LongType. """
+  types = { 8: (ByteArray, PrimitiveType.BYTE, UnsignedByteType),
+           16: (ShortArray, PrimitiveType.SHORT, UnsignedShortType),
+           32: (FloatArray, PrimitiveType.FLOAT, FloatType),
+           64: (LongArray, PrimitiveType.LONG, LongType),
+            1: (LongArray, PrimitiveType.LONG, BitType)}
+  
+  def __init__(self, filepath, types=None):
+    self.filepath = filepath
+    self.IFDs = list(parse_TIFF_IFDs(filepath)) # the tags of each IFD
+    # Assumes all TIFF slices have the same dimensions and type
+    print self.IFDs[0]
+    self.cell_dimensions = [self.IFDs[0]["width"], self.IFDs[0]["height"], 1]
+    self.types = types if types else TIFFSlices.types
+  
+  def get(self, index):
+    IFD = self.IFDs[index]
+    ra = RandomAccessFile(self.filepath, 'r')
+    try:
+      cell_position = [0, 0, index]
+      pixels = read_TIFF_plane(ra, IFD) # a native array
+      access = self.types[IFD["bitDepth"]][0] # e.g. ByteArray, FloatArray ...
+      return Cell(self.cell_dimensions, cell_position, access(pixels))
+    finally:
+      ra.close()
+  
+  def asLazyCachedCellImg(self):
+    access, primitiveType, pixelType = self.types[self.IFDs[0]["bitDepth"]]
+    return lazyCachedCellImg(self, self.cell_dimensions[:-1] + [len(self.IFDs)],
+                             self.cell_dimensions, pixelType, primitiveType)
 
