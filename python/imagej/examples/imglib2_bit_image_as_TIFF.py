@@ -12,6 +12,7 @@ from itertools import chain
 from net.imglib2.util import Intervals, ImgUtil
 from java.io import RandomAccessFile
 from java.nio import ByteBuffer
+from java.lang import Long
 from net.imglib2.roi.geom import GeomMasks
 from net.imglib2.roi import Masks, Regions
 from collections import deque
@@ -100,8 +101,11 @@ try:
     # The long[] array doesn't necessarily end sharply at image plane boundaries
     # Therefore must copy plane into another, 2D ArrayImg of bit type
     ImgUtil.copy(ImgView.wrap(Views.hyperSlice(img, 2, z), None), plane_img)
+    # Each long stores 64 bits but from right to left, and we need left to right
+    # (the 8 bytes of the 64-bit long are already left to right in little endian)
+    longbits = array(imap(Long.reverse, plane_array), 'l')
     bb.rewind() # bring mark to zero
-    bb.asLongBuffer().put(plane_array) # a LongBuffer view of the ByteBuffer, writes to the ByteBuffer
+    bb.asLongBuffer().put(longbits) # a LongBuffer view of the ByteBuffer, writes to the ByteBuffer
     ra.write(bb.array())
 finally:
   ra.close()
