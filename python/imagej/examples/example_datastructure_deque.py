@@ -67,18 +67,20 @@ class DequeStack(VirtualStack):
   def getSize(self):
     return len(self.sliceIndices)
 
+  def reset(self):
+    self.sliceIndices = deque(xrange(1, self.stack.size() + 1))
+
   def shiftSlicesBy(self, n):
+    """ Demonstrate deque rotate. """
     # Rotate the deque either by +1 or -1, and update the image
     self.sliceIndices.rotate(n)
 
   def mirrorSlicesAt(self, slice_index): # slice_index is 1-based
+    """ Demonstrate deque extendleft (appending a sequence at the beginning, inverted. """
     # Remove slices from 0 to slice_index (exclusive), i.e. crop to from slice_index to the end
     self.sliceIndices = deque(islice(self.sliceIndices, slice_index -1, None))
     # Append at the begining, reversed, all slices after slice n (which is now at index 0 of the deque)
     self.sliceIndices.extendleft(list(islice(self.sliceIndices, 1, None))) # copy into list
-
-  def reset(self):
-    self.sliceIndices = deque(xrange(1, self.stack.size() + 1))
 
   def windowAroundSlice(self, slice_index, width): # slice_index is 1-based
     if 0 == width % 2: # if width is an even number
