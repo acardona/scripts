@@ -16,7 +16,11 @@ from java.lang import Long
 from net.imglib2.roi.geom import GeomMasks
 from net.imglib2.roi import Masks, Regions
 from collections import deque
-from itertools import imap
+from itertools import imap, izip
+from ij import ImagePlus
+from ij.io import TiffDecoder
+from ij.plugin import FileInfoVirtualStack
+from net.imglib2.util.Util import getTypeFromInterval
 
 
 # A binary image whose pixel values can only take as value either zero or one
@@ -111,7 +115,29 @@ finally:
   ra.close()
 
 
-# Now read the file back as a stack
+# Now read the file back as a stack using lib.io.TIFFSlices
 slices = TIFFSlices(filepath, types={1: TIFFSlices.types[64][:2] + (BitType,)})
-img = slices.asLazyCachedCellImg()
+img2 = slices.asLazyCachedCellImg()
 IL.wrap(img, "bit img").show()
+
+# Now read the file back using ImageJ's library (ij.io.TiffDecoder and FileInfoVirtualStack
+# which uses ij.io.ImageReader to decode each slice's FileInfo data)
+fistack = FileInfoVirtualStack(TiffDecoder(*os.path.split(filepath)).getTiffInfo())
+imp = ImagePlus("bit img IJ", fistack)
+imp.show()
+
+# Now compare both images pixel-wise, and also to the original
+img3 = Views.dropSingletonDimensions(IL.wrap(imp)) # remove bogus channel dimension
+tmp = ArrayImgs.bits(Intervals.dimensionsAsLongArray(img))
+
+
+def comparePixelWise(img1, img2):
+  t1 = getTypeFromInterval(img1)
+  t2 = getTypeFromInterval(img2)
+  return 0 == sum(imap(cmp, imap(getattr(t1.getClass(), "getInteger"), img1.cursor()),
+                            imap(getattr(t2.getClass(), "getInteger"), img2.cursor())))
+
+print comparePixelWise(img, img2) # True
+print comparePixelWise(img, img3) # False: still issues with the boundaries that don't end at byte boundaries?
+print comparePixelWise(img2, img3) # False? Image Calculator subtract gives an empty image with min=0 max=0
+
