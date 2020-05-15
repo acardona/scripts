@@ -1,21 +1,20 @@
 # Example deque
 from collections import deque
 from ij import IJ, ImagePlus, VirtualStack
-from java.awt.event import KeyAdapter
-from java.awt.event.KeyEvent import VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN, VK_M, VK_R, VK_W
+from java.awt.event import KeyAdapter, KeyEvent as KEY
 from itertools import islice
 
-class Shifter(KeyAdapter):
-  # Shared across all Shifter instances
-  moves = {VK_LEFT: -1,
-           VK_UP:   -1,
-           VK_RIGHT: 1,
-           VK_DOWN:  1}
+class KeyboardListener(KeyAdapter):
+  # Shared across all instances
+  moves = {KEY.VK_LEFT: -1,
+           KEY.VK_UP:   -1,
+           KEY.VK_RIGHT: 1,
+           KEY.VK_DOWN:  1}
 
   # Constructor
-  def __init__(self, imp, cstack):
+  def __init__(self, imp, dstack):
     self.imp = imp
-    self.cstack = cstack
+    self.dstack = dstack
     win = imp.getWindow()
     # Remove and store existing key listeners
     self.listeners = {c: c.getKeyListeners() for c in [win, win.getCanvas()]}
@@ -27,26 +26,25 @@ class Shifter(KeyAdapter):
   # On key pressed
   def keyPressed(self, event):
     key = event.getKeyCode()
-    n = Shifter.moves.get(key, 0)
+    n = KeyboardListener.moves.get(key, 0)
     if 0 != n:
-      self.cstack.shiftSlicesBy(n)
+      self.dstack.shiftSlicesBy(n)
       event.consume()
-    elif VK_R == key:
-      self.cstack.reset()
+    elif KEY.VK_R == key:
+      self.dstack.reset()
       event.consume()
-    elif VK_M == key:
-      print 'M'
-      self.cstack.mirrorSlicesAt(self.imp.getCurrentSlice())
+    elif KEY.VK_M == key:
+      self.dstack.mirrorSlicesAt(self.imp.getCurrentSlice())
       event.consume()
-    elif VK_W == key:
+    elif KEY.VK_W == key:
       if not event.isControlDown(): # otherwise, left control+W close the window
-        width = IJ.getNumber("Window width:", min(7, self.cstack.size()))
+        width = IJ.getNumber("Window width:", min(7, self.dstack.size()))
         if not (IJ.CANCELED == width):
-          self.cstack.windowAroundSlice(self.imp.getCurrentSlice(), width)
+          self.dstack.windowAroundSlice(self.imp.getCurrentSlice(), width)
         event.consume()
     if event.isConsumed():
       # Refresh
-      self.imp.setStack(self.cstack)
+      self.imp.setStack(self.dstack)
     else:
       # Run pre-existing key listeners
       for l in self.listeners.get(event.getSource(), []):
@@ -54,7 +52,7 @@ class Shifter(KeyAdapter):
           l.keyPressed(event)
 
 
-class CyclicStack(VirtualStack):
+class DequeStack(VirtualStack):
   # Constructor
   def __init__(self, stack):
     # Invoke the super constructor, that is, the VirtualStack constructor
@@ -78,7 +76,6 @@ class CyclicStack(VirtualStack):
     self.sliceIndices = deque(islice(self.sliceIndices, slice_index -1, None))
     # Append at the begining, reversed, all slices after slice n (which is now at index 0 of the deque)
     self.sliceIndices.extendleft(list(islice(self.sliceIndices, 1, None))) # copy into list
-    print self.sliceIndices
 
   def reset(self):
     self.sliceIndices = deque(xrange(1, self.stack.size() + 1))
@@ -90,13 +87,13 @@ class CyclicStack(VirtualStack):
     half = int(width / 2)
     first = max(slice_index - half, 0)
     last  = min(slice_index + half, len(self.sliceIndices))
-    print first, last
     self.sliceIndices = deque(islice(self.sliceIndices, first, last + 1))
 
 
 imp = IJ.getImage() # a stack
-cstack = CyclicStack(imp.getStack())
-cyclic = ImagePlus("cyclic " + imp.getTitle(), cstack)
-cyclic.show()
-# After showing it, update key listeners
-Shifter(cyclic, cstack)
+dstack = DequeStack(imp.getStack())
+dimp = ImagePlus("deque " + imp.getTitle(), dstack)
+dimp.show()
+
+# After it shows in an ImageWindow with an ImageCanvas, setup key listeners
+KeyboardListener(dimp, dstack)
