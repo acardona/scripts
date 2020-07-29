@@ -25,7 +25,7 @@ brightness = ArrayImgFactory(FloatType()).create(img)
 
 # Compute the brightness: pick the maximum intensity pixel of every channel
 # and then normalize it by dividing by the number of channels
-compute(div(max([red, green, blue]), 255.0)).into(brightness)
+compute(div(maximum([red, green, blue]), 255.0)).into(brightness)
 
 # Show the brightness image
 impB = IL.wrap(brightness, imp.getTitle() + " brightness")
@@ -33,8 +33,8 @@ impB.show()
 
 # Compute now the image color saturation
 saturation = ArrayImgFactory(FloatType()).create(img)
-compute( let("red", red,
-             "green", green,
+compute( let("red", red, # store as directly readable variables (no dictionary lookups)
+             "green", green,    # so that only 3 cursors are needed instead of 6
              "blue", blue,
              "max", maximum([var("red"), var("green"), var("blue")]),
              "min", minimum([var("red"), var("green"), var("blue")]),
