@@ -37,10 +37,11 @@ def as2DKernel(imgE, weights):
   side = int(pow(len(weights), 0.5)) # sqrt
   if pow(side, 2) != len(weights):
     raise Error("kernel must be a square.")
+  half = (side -1) / 2
   # Generate ImgMath ops
   # Note that multiplications by weights of value 1 or 0 will be erased automatically
   # so that the hierarchy of operations will be the same as in the manual approach above.
-  return add([mul(weight, offset(imgE, [index % side, index / side]))
+  return add([mul(weight, offset(imgE, [index % side - half, index / side - half]))
               for index, weight in enumerate(weights) if 0 != weight])
 
 left_edges2 = as2DKernel(imgE, [-1, 0, 1,
