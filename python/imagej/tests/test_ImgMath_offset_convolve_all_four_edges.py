@@ -2,7 +2,7 @@ from net.imglib2.algorithm.math.ImgMath import compute, add, offset, mul, minimu
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.view import Views
-from ij import IJ
+from ij import IJ, ImagePlus
 
 img = IL.wrap(IJ.getImage()) # E.g. blobs sample image
 imgE = Views.extendBorder(img)
@@ -40,9 +40,17 @@ def combine(op, title, *ops):
   imp = IL.wrap(edges_img, title)
   imp.getProcessor().resetMinAndMax()
   imp.show()
+  return imp
 
-combine(maximum, "max edges", opTop, opBottom, opLeft, opRight)
-combine(minimum, "min edges", opTop, opBottom, opLeft, opRight)
+imp_max = combine(maximum, "max edges", opTop, opBottom, opLeft, opRight)
+imp_min = combine(minimum, "min edges", opTop, opBottom, opLeft, opRight)
+
+# Create a mask for blobs that don't contact the edges of the image
+imp_mask = ImagePlus("blobs mask", imp_max.getProcessor())
+IJ.run(imp_mask, "Convert to Mask", "") # result has inverted LUT
+IJ.run(imp_mask, "Fill Holes", "")
+IJ.run(imp_mask, "Invert LUT", "") # revert to non-inverted LUT
+imp_mask.show()
 
 """
 edges1 = minimum(opTop, opBottom, opLeft, opRight)
