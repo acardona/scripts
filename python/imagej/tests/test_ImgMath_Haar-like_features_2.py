@@ -73,7 +73,6 @@ blockSTL = block(imgE, shift(cornersS, -bs, -bs)) # top left
 blockSTR = block(imgE, shift(cornersS,   0, -bs)) # top right
 blockSBL = block(imgE, shift(cornersS, -bs,   0)) # bottom left
 blockSBR = block(imgE, cornersS)                  # bottom right
-
 op11 = sub(add(blockSTL, blockSBR), blockSTR, blockSBL)
 op12 = sub(add(blockSTR, blockSBL), blockSTL, blockSBR)
 

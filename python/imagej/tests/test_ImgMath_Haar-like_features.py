@@ -38,5 +38,37 @@ blockHB = block(imgE, cornersHB)
 op3 = sub(blockHT, blockHB)
 op4 = sub(blockHB, blockHT)
 
-for i, op in enumerate([op1, op2, op3, op4]):
-  IL.wrap(op.view(FloatType()), "op%i" % i).show()
+# Two bright-black-bright vertical features 4x8 - 4x8 - 4x8
+corners3VL = [[x - 2, y] for x, y in cornersVL]
+corners3VC = [[x + 2, y] for x, y in cornersVL]
+corners3VR = [[x + 2, y] for x, y in cornersVR]
+print corners3VL
+print corners3VC
+print corners3VR
+block3VL = block(imgE, corners3VC)
+block3VC = block(imgE, corners3VL)
+block3VR = block(imgE, corners3VR)
+op5 = sub(block3VC, block3VL, block3VR) # center minus sides
+op6 = sub(add(block3VL, block3VR), block3VC) # sides minus center
+
+# Two bright-black-bright horizontal features 4x8 / 4x8 / 4x8
+corners3HT = [[x, y - 2] for x, y in cornersHT]
+corners3HC = [[x, y + 2] for x, y in cornersHT]
+corners3HB = [[x, y + 2] for x, y in cornersHB]
+print corners3HT
+print corners3HC
+print corners3HB
+block3HT = block(imgE, corners3HT)
+block3HC = block(imgE, corners3HC)
+block3HB = block(imgE, corners3HB)
+op7 = sub(block3HC, block3HT, block3HB) # center minus top and bottom
+op8 = sub(add(block3HT, block3HB), block3HC) # top and bottom minus center
+
+for name, op in ((name, eval(name)) for name in vars() if re.match(r"^op\d+$", name)):
+  # For development:
+  if WindowManager.getImage(name):
+    continue # don't open
+  #
+  opimp = IL.wrap(op.view(FloatType()), name)
+  opimp.getProcessor().resetMinAndMax()
+  opimp.show()
