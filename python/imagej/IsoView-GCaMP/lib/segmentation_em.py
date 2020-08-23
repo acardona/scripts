@@ -1,4 +1,4 @@
-from net.imglib2.algorithm.math.ImgMath import compute, block, sub, add, maximum, offset
+from net.imglib2.algorithm.math.ImgMath import compute, block, sub, add, maximum, offset, IF, THEN, ELSE, AND, GT, LT, div, let, power
 from net.imglib2.algorithm.integral import IntegralImg
 from net.imglib2.type.numeric.integer import UnsignedLongType
 from net.imglib2.type.numeric.real import FloatType
@@ -19,7 +19,6 @@ from weka.classifiers.functions import SMO
 from hr.irb.fastRandomForest import FastRandomForest
 from util import numCPUs
 import sys
-
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
 
@@ -49,37 +48,67 @@ def filterBank(img, bs=4, bl=8, sumType=UnsignedLongType(), converter=Util.gener
   # Two adjacent vertical rectangles 4x8 - 4x8 centered on the pixel
   blockVL = block(imgE, shift(cornersV, -bs, -bl/2))
   blockVR = block(imgE, shift(cornersV,   0, -bl/2))
-  op1 = sub(blockVL, blockVR)
-  op2 = sub(blockVR, blockVL)
+  op1 = let("VL", blockVL,
+            "VR", blockVR,
+            IF(GT("VL", "VR"),
+               THEN(div("VR", "VL")),
+               ELSE(div("VL", "VR"))))
+  #op1 = sub(blockVL, blockVR)
+  
+  #op2 = sub(blockVR, blockVL)
 
   # Two adjacent horizontal rectangles 8x4 - 8x4 centered on the pixel
   blockHT = block(imgE, shift(cornersH, -bs, -bl/2))
   blockHB = block(imgE, shift(cornersH, -bs,     0))
-  op3 = sub(blockHT, blockHB)
-  op4 = sub(blockHB, blockHT)
+  op3 = let("HT", blockHT,
+            "HB", blockHB,
+            IF(GT("HT", "HB"),
+               THEN(div("HB", "HT")),  # div works better than sub
+               ELSE(div("HT", "HB"))))
+  #op3 = sub(blockHT, blockHB)
+  #op4 = sub(blockHB, blockHT)
 
   # Two bright-black-bright vertical features 4x8 - 4x8 - 4x8
   block3VL = block(imgE, shift(cornersV, -bs -bs/2, -bl/2))
   block3VC = block(imgE, shift(cornersV,     -bs/2, -bl/2))
   block3VR = block(imgE, shift(cornersV,      bs/2, -bl/2))
-  op5 = sub(block3VC, block3VL, block3VR) # center minus sides
-  op6 = sub(add(block3VL, block3VR), block3VC) # sides minus center
+  op5 = let("3VL", block3VL,
+            "3VC", block3VC,
+            "3VR", block3VR,
+            IF(AND(GT("3VL", "3VC"),
+                   GT("3VR", "3VC")),
+               THEN(sub(add("3VL", "3VR"), "3VC")), # like Viola and Jones 2001
+               ELSE(div(add("3VL", "3VC", "3VR"), 3)))) # average block value
+  # Purely like Viola and Jones 2001: work poorly for EM membranes
+  #op5 = sub(block3VC, block3VL, block3VR) # center minus sides
+  #op6 = sub(add(block3VL, block3VR), block3VC) # sides minus center
 
   # Two bright-black-bright horizontal features 8x4 / 8x4 / 8x4
   block3HT = block(imgE, shift(cornersH, -bl/2, -bs -bs/2))
   block3HC = block(imgE, shift(cornersH, -bl/2,     -bs/2))
   block3HB = block(imgE, shift(cornersH, -bl/2,      bs/2))
-  op7 = sub(block3HC, block3HT, block3HB) # center minus top and bottom
-  op8 = sub(add(block3HT, block3HB), block3HC) # top and bottom minus center
+  op7 = let("3HT", block3HT,
+            "3HC", block3HC,
+            "3HB", block3HB,
+            IF(AND(GT("3HT", "3HC"),
+                   GT("3HB", "3HC")),
+               THEN(sub(add("3HT", "3HB"), "3HC")), # like Viola and Jones 2001
+               ELSE(div(add("3HT", "3HC", "3HB"), 3)))) # average block value
+  # Purely like Viola and Jones 2001: work poorly for EM membranes
+  #op7 = sub(block3HC, block3HT, block3HB) # center minus top and bottom
+  #op8 = sub(add(block3HT, block3HB), block3HC) # top and bottom minus center
 
   # Combination of vertical and horizontal edge detection
-  op9 = maximum(op1, op3)
-  op10 = maximum(op6, op8)
+  #op9 = maximum(op1, op3)
+  #op10 = maximum(op6, op8)
+  #op10 = maximum(op5, op7)
 
+
+  """
   # corners of a square block where 0,0 is at the top left
   cornersS = [[0,  0], [bs,  0],
               [0, bs], [bs, bs]]
-
+  
   # 2x2 squares for oblique edge detection
   blockSTL = block(imgE, shift(cornersS, -bs, -bs)) # top left
   blockSTR = block(imgE, shift(cornersS,   0, -bs)) # top right
@@ -87,9 +116,11 @@ def filterBank(img, bs=4, bl=8, sumType=UnsignedLongType(), converter=Util.gener
   blockSBR = block(imgE, cornersS)                  # bottom right
   op11 = sub(add(blockSTL, blockSBR), blockSTR, blockSBL)
   op12 = sub(add(blockSTR, blockSBL), blockSTL, blockSBR)
+  """
 
   # Combination of vertical, horizontal and oblique edge detection
-  op13 = maximum(op1, op3, op6, op8, op11, op12)
+  #op13 = maximum(op1, op3, op6, op8, op11, op12)
+  #op13 = maximum(op1, op3, op5, op7, op11, op12) # combinations are terrible for RandomForest
 
   # Edge detectors: sum of 3 adjacent pixels (not dividing by the other 6
   # to avoid penalizing Y membrane configurations)
@@ -100,10 +131,51 @@ def filterBank(img, bs=4, bl=8, sumType=UnsignedLongType(), converter=Util.gener
                  add(offset(op13, [-1,  0]), op13, offset(op13, [ 1, 0])))
   """
 
+  opMean, opVariance = filterBankBlockStatistics(img, integralImgE=imgE, sumType=sumType, converter=converter)
+
   # Return an ordered list of all ops
   #return [op1, op2, op3, op4, op5, op6, op7, op8, op9, op10, op11, op12, op13, op14]
-  return [op1, op2, op3, op4, op5, op6, op7, op8, op9, op10, op11, op12, op13]
+  return [op1, op3, op5, op7, opMean, opVariance]
 
+
+def filterBankBlockStatistics(img, block_width=5, block_height=5,
+                              integralImgE=None,
+                              sumType=UnsignedLongType(),
+                              converter=Util.genericRealTypeConverter()):
+  # corners of a block centered at the pixel
+  block_width = int(block_width)
+  block_height = int(block_height)
+  w0 = -block_width/2  # e.g. -2 when block_width == 4 and also when block_width == 5
+  h0 = -block_height/2
+  w1 = block_width/2 - block_width % 2 # e.g. 2 when block_width == 5 but 1 when block_width == 4
+  h1 = block_height/2 - block_height % 2
+  
+  corners = [[w0, h0], [w1, h0],
+             [w0, h1], [w1, h1]]
+
+  # Create the integral image, stored as 64-bit
+  if not integralImgE:
+    alg = IntegralImg(img, sumType, converter)
+    alg.process()
+    integralImgE = Views.extendBorder(alg.getResult())
+  
+  # Create the integral image of squares, stored as 64-bit
+  sqimg = compute(power(img, 2)).view(sumType)
+  algSq = IntegralImg(sqimg, sumType, converter)
+  algSq.process()
+  integralImgSqE = Views.extendBorder(algSq.getResult())
+
+  # block mean: creates holes in blurred membranes
+  opMean = div(block(integralImgSqE, corners), block_width * block_height)
+  
+  # block variance: sum of squares minus square of sum
+  opVariance = sub(block(integralImgSqE, corners), power(block(integralImgE, corners), 2))
+  opVarianceNonZero = let("var", opVariance,
+                          IF(LT("var", 0),
+                             THEN(0),
+                             ELSE("var")))
+
+  return [opMean, opVarianceNonZero]
 
 
 def rotatedView(img, angle, enlarge=True):
@@ -182,15 +254,30 @@ def filterBankOrthogonalEdges(img,
   block3VL = block(imgE, shift(cornersV, -bs -bs/2, -bl/2))
   block3VC = block(imgE, shift(cornersV,     -bs/2, -bl/2))
   block3VR = block(imgE, shift(cornersV,      bs/2, -bl/2))
-  op5 = sub(block3VC, block3VL, block3VR) # center minus sides
-  op6 = sub(add(block3VL, block3VR), block3VC) # sides minus center
+  op5 = let("3VL", block3VL,
+            "3VC", block3VC,
+            "3VR", block3VR,
+            IF(AND(GT(var("3VL"), var("3VC")),
+                   GT(var("3VR"), var("3VC"))),
+               THEN(sub(add(var("3VL"), var("3VR")), var("3VC"))), # like Viola and Jones 2001
+               ELSE(div(add(var("3VL"), var("3VC"), var("3VR")), 3)))) # average block value
+  # Purely like Viola and Jones 2001: work poorly for EM membranes
+  #op5 = sub(block3VC, block3VL, block3VR) # center minus sides
+  #op6 = sub(add(block3VL, block3VR), block3VC) # sides minus center
 
   # Two bright-black-bright horizontal features 8x4 / 8x4 / 8x4
   block3HT = block(imgE, shift(cornersH, -bl/2, -bs -bs/2))
   block3HC = block(imgE, shift(cornersH, -bl/2,     -bs/2))
   block3HB = block(imgE, shift(cornersH, -bl/2,      bs/2))
-  op7 = sub(block3HC, block3HT, block3HB) # center minus top and bottom
-  op8 = sub(add(block3HT, block3HB), block3HC) # top and bottom minus center
+  op7 = let("3HT", block3HT,
+            "3HC", block3HC,
+            "3HB", block3HB,
+            IF(AND(GT(var("3HT"), var("3HC")),
+                   GT(var("3HB"), var("3HC"))),
+               THEN(sub(add(var("3HT"), var("3HB")), var("3HC"))),
+               ELSE(div(add(var("3HT"), var("3HC"), var("3HB")), 3)))) # average block value TODO make a single block 
+  #op7 = sub(block3HC, block3HT, block3HB) # center minus top and bottom
+  #op8 = sub(add(block3HT, block3HB), block3HC) # top and bottom minus center
 
   # Two adjacent horizontal rectanges, 12x12 - 4x4
   bll = bl + bl/2
@@ -217,14 +304,13 @@ def filterBankOrthogonalEdges(img,
   blockSmallT = block(imgE, shift(cornersSmall,  -bs/2, -bs))
   op12 = sub(blockSmallT, blockLargeB)
 
-  return [op1, op2, op3, op4, op5, op6, op7, op8, op9, op10, op11, op12]
+  return [op1, op2, op3, op4, op5, op7, op9, op10, op11, op12]
 
 
 def filterBankRotations(img,
                         angles=xrange(0, 46, 9), # sequence, in degrees
                         bs=4,
                         bl=8,
-                        blackEdgesOnly=True,
                         sumType=UnsignedLongType(),
                         outputType=FloatType(),
                         converter=Util.genericRealTypeConverter()):
@@ -236,38 +322,30 @@ def filterBankRotations(img,
       converter: for the IntegralImg, to convert from input to sumType
       outputType: for materializing rotated operations and rotating them back
   """
-  op1234s = []
-  op5678s = []
-  opLSs = []
+  ops_rotations = []
   
   for angle in angles:
     imgRot = img if 0 == angle else rotatedView(img, angle)
-    ops = filterBankOrthogonalEdges(imgRot, bs=bs, bl=bl, sumType=sumType, converter=converter)
-    op1, op2, op3, op4, op5, op6, op7, op8, op9, op10, op11, op12 = ops
-
-    # Pick best edge filter for each pixel
-    op1234 = maximum(op1, op2, op3, op4)
-    op5678 = maximum(op6, op8) if blackEdgesOnly else maximum(op5, op6, op7, op8)
-    opLS = maximum(op9, op10, op11, op12)
+    ops = filterBank(imgRot, bs=bs, bl=bl, sumType=sumType, converter=converter)
 
     # Materialize these two combination ops and rotate them back (rather, a rotated view)
     interval = Intervals.translate(img, [(imgRot.dimension(d) - img.dimension(d)) / 2
                                          for d in xrange(img.numDimensions())])
-    for op, col in zip((op1234, op5678, opLS), (op1234s, op5678s, opLSs)):
+    for op in ops:
       imgOpRot = compute(op).intoArrayImg(outputType)
+      if 0 == angle:
+        ops_rotations.append(imgOpRot)
+        continue
+      # Rotate them back and crop view
       imgOpUnrot = rotatedView(imgOpRot, -angle, enlarge=False)
       imgOp = Views.zeroMin(Views.interval(imgOpUnrot, interval))
-      #if angle == 45:
+      #if angle == 0 or angle == 45:
       #  IL.wrap(imgOpRot, "imgOpRot angle=%i" % angle).show()
       #  IL.wrap(imgOpUnrot, "imgOpUnrot angle=%i" % angle).show()
       #  IL.wrap(imgOp, "imgOp angle=%i" % angle).show()
-      col.append(imgOp)
+      ops_rotations.append(imgOp)
   
-  #return [maximum(op1234s),
-  #        maximum(op5678s),
-  #        maximum(opLSs)]
-  #return op1234s + op5678s + opLSs
-  return op1234s # + opLSs
+  return ops_rotations
 
 
 
