@@ -1,4 +1,5 @@
-from net.imglib2.algorithm.math.ImgMath import compute, block, sub, add, maximum, offset, IF, THEN, ELSE, AND, GT, LT, div, let, power
+from net.imglib2.algorithm.math.ImgMath import compute, block, sub, add, maximum, offset, \
+                                               IF, THEN, ELSE, AND, GT, LT, div, let, power, mul
 from net.imglib2.algorithm.integral import IntegralImg
 from net.imglib2.type.numeric.integer import UnsignedLongType
 from net.imglib2.type.numeric.real import FloatType
@@ -14,7 +15,6 @@ from jarray import array, zeros
 from java.util import ArrayList
 from math import radians, floor, ceil
 from weka.core import SerializationHelper, DenseInstance, Instances, Attribute
-from weka.core import Attribute, Instances, DenseInstance
 from weka.classifiers.functions import SMO
 from hr.irb.fastRandomForest import FastRandomForest
 from util import numCPUs
@@ -131,11 +131,12 @@ def filterBank(img, bs=4, bl=8, sumType=UnsignedLongType(), converter=Util.gener
                  add(offset(op13, [-1,  0]), op13, offset(op13, [ 1, 0])))
   """
 
-  opMean, opVariance = filterBankBlockStatistics(img, integralImgE=imgE, sumType=sumType, converter=converter)
+  #opMean, opVariance = filterBankBlockStatistics(img, integralImgE=imgE, sumType=sumType, converter=converter)
 
   # Return an ordered list of all ops
   #return [op1, op2, op3, op4, op5, op6, op7, op8, op9, op10, op11, op12, op13, op14]
-  return [op1, op3, op5, op7, opMean, opVariance]
+  #return [op1, op3, op5, op7, opMean, opVariance]
+  return [op1, op3, op5, op7]
 
 
 def filterBankBlockStatistics(img, block_width=5, block_height=5,
@@ -351,9 +352,36 @@ def filterBankRotations(img,
 
 
 
-# TODO
-# filterBankEdges: for plain edge detectors like in the blobs example
+def as2DKernel(imgE, weights):
+  """ imgE: a RandomAccessible, such as an extended view of a RandomAccessibleInterval.
+      weights: an odd-length list defining a square convolution kernel
+               centered on the pixel, with columns moving slower than rows.
+			Returns an ImgMath op.
+  """
+  # Check preconditions: validate kernel
+  if 1 != len(weights) % 2:
+    raise Error("list of kernel weights must have an odd length.")
+  side = int(pow(len(weights), 0.5)) # sqrt
+  if pow(side, 2) != len(weights):
+    raise Error("kernel must be a square.")
+  half = side / 2
+  # Generate ImgMath ops
+  # Note that multiplications by weights of value 1 or 0 will be erased automatically
+  # so that the hierarchy of operations will be the same as in the manual approach above.
+  return add([mul(weight, offset(imgE, [index % side - half, index / side - half]))
+              for index, weight in enumerate(weights) if 0 != weight])
 
+
+
+def filterBankEdges(img):
+  """ Return all 4 edge detectors (left, right, top, bottom)
+      as 3x3 convolution kernels. """
+  imgE = Views.extendBorder(img)
+  opTop = as2DKernel(imgE, [-1]*3 + [0]*3 + [1]*3)
+  opBottom = as2DKernel(imgE, [1]*3 + [0]*3 + [-1]*3)
+  opLeft = as2DKernel(imgE, [-1, 0, 1] * 3)
+  opRight = as2DKernel(imgE, [1, 0, -1] * 3)
+  return [opTop, opBottom, opLeft, opRight]
 
 
 
@@ -365,7 +393,6 @@ def createTrainingData(img, samples, class_names, n_samples=0, ops=None):
       n_samples: optional, the number of samples (in case samples is e.g. a generator).
       class_names: a list of class names, as many as different class_index.
       ops: optional, the sequence of ImgMath ops to apply to the img, defaults to filterBank(img)
-      save_to_file: optional, a filename for saving the learnt classifier.
 
       return an instance of WEKA Instances
   """
@@ -434,6 +461,16 @@ def createRandomForestClassifier(img, samples, class_names, n_samples=0, ops=Non
 
 
 def classify(img, classifier, class_names, ops=None, distribution_class_index=-1):
+  """ img: a 2D RandomAccessibleInterval.
+      classifier: a WEKA Classifier instance, like SMO or FastRandomForest, etc. Any.
+                  If it's a string, interprets it as a file path and attempts to deserialize
+                  a previously saved trained classifier.
+      class_names: the list of names of each class to learn.
+      ops: the filter bank of ImgMath ops for the img.
+      distribution_class_index: defaults to -1, meaning return the class index for each pixel.
+                                When larger than -1, it's interpreted as a class index, and
+                                returns instead the floating-point value of each pixel in
+                                the distribution of that particular class index. """
   if type(classifier) == str:
     classifier = SerializationHelper.read(classifier)
 
