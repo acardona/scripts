@@ -17,7 +17,7 @@ pixels3 = array([1, 0, 0, 0, # XOR of 1 and 2
                  0, 0, 1, 0,
                  0, 1, 0, 0,
                  0, 0, 0, 1], 'b')
-pixels4 = array([1, 1, 1, 1, # NOT or 1
+pixels4 = array([1, 1, 1, 1, # NOT of 1
                  1, 0, 1, 1,
                  1, 1, 0, 1,
                  1, 1, 1, 1], 'b')
@@ -35,7 +35,7 @@ img4 = intoImg(pixels4)
 
 def same(img1, img2):
   c1 = img1.cursor()
-  c2 = img1.cursor()
+  c2 = img2.cursor()
   while c1.hasNext():
     if c1.next().get() != c2.next().get():
       return False
