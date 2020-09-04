@@ -147,8 +147,10 @@ def filterBankBlockStatistics(img, block_width=5, block_height=5,
   block_height = int(block_height)
   w0 = -block_width/2  # e.g. -2 when block_width == 4 and also when block_width == 5
   h0 = -block_height/2
-  w1 = block_width/2 - block_width % 2 # e.g. 2 when block_width == 5 but 1 when block_width == 4
-  h1 = block_height/2 - block_height % 2
+  decX = 1 if 0 == block_width  % 2 else 0
+  decY = 1 if 0 == block_height % 2 else 0
+  w1 = block_width/2  - decX # e.g. 2 when block_width == 5 but 1 when block_width == 4
+  h1 = block_height/2 - decY
   
   corners = [[w0, h0], [w1, h0],
              [w0, h1], [w1, h1]]
