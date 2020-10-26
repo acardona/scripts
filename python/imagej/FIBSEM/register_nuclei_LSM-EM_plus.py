@@ -10,7 +10,8 @@ from lib.features_plus_asm import initNativeClasses
 from lib.registration import fit, transformedView
 from lib.util import numCPUs, nativeArray
 from lib.dogpeaks import getDoGPeaks
-from mpicbg.models import RigidModel3D
+from lib.nuclei import boundsOf
+from mpicbg.models import RigidModel3D, AffineModel3D
 
 ConstellationPlus, PointMatchesPlus = initNativeClasses()
 
@@ -41,32 +42,78 @@ with open(FIBSEM_nuclei_path, 'r') as f:
     else:
       FIBSEM_nuclei.append(tuple(float(v) for v in cols[5:8]))
 
-
-def boundsOf(nuclei):
-  x0, y0, z0 = nuclei[0]
-  x1, y1, z1 = nuclei[0]
-  for x, y, z in nuclei:
-    if x < x0: x0 = x
-    if y < y0: y0 = y
-    if z < z0: z0 = z
-    if x > x1: x1 = x
-    if y > y1: y1 = y
-    if z > z1: z1 = z
-  return [x0, y0, z0], \
-         [x1, y1, z1]
-
-
 bounds1 = boundsOf(FIBSEM_nuclei)
-bounds2 = boundsOf(GCaMP_nuclei)
+print "FIBSEM nuclei bounds:", bounds1, "in nanometers"
+
+FIBSEM_calibration = 192.0 # nm/px isotropic
+GCaMP_calibration = 406.0 # nm/px isotropic
+EM_to_LSM = FIBSEM_calibration / GCaMP_calibration # approx 0.5x
+
+# Dimensions of the FIBSEM volume
+dimensions1 = [670, 800, 1036] # from boundsOf(FIBSEM_nuclei)[1] with some padding added
+
+# Dimensions of the fused and deconvolved GCaMP 3D volume
+dimensions2 = [406, 465, 489]
 
 
-def dimensionsOf(bounds):
-  return bounds[1][0] - bounds[0][0], \
-         bounds[1][1] - bounds[0][1], \
-         bounds[1][2] - bounds[0][2]
+# Transform FIBSEM: flip horizontally (X axis)
+flip_matrix = [
+  -1.0, 0.0, 0.0, dimensions1[0],
+  0.0, 1.0, 0.0, 0.0,
+  0.0, 0.0, 1.0, 0.0]
 
-dimensions1 = dimensionsOf(bounds1)
-dimensions2 = dimensionsOf(bounds2)
+# Project from EM coordinate space to LSM coordinate space
+EM_to_LSM_matrix = [
+  EM_to_LSM, 0.0, 0.0, 0.0,
+  0.0, EM_to_LSM, 0.0, 0.0,
+  0.0, 0.0, EM_to_LSM, 0.0]
+
+# Transform FIBSEM coordinates with an approximate rigid 3D matrix
+# estimated manually in the 3D Viewer from a horizontally flipped FIBSEM volume
+# rotated and translated over the GCaMP volume.
+# NOTE this transformation is relative to the center of the volume, so it needs
+# to be corrected by first translating to the center, then transforming, then
+# translating back.
+
+FIBSEM_center = [131.19719, 190.40999, 206.82999] # AFTER flip and EM_to_LSM, so in LSM pixel space
+
+coarse_matrix = [
+  0.3013336, -0.61400056, -0.72952133, 413.56097,
+  0.061801117, -0.75089836, 0.6575198, 210.51689,
+  -0.9515139, -0.24321805, -0.18832497, 386.76764]
+
+
+affineFlip = AffineModel3D()
+affineFlip.set(*flip_matrix)
+affineEMtoLSM = AffineModel3D()
+affineEMtoLSM.set(*EM_to_LSM_matrix)
+affine_translate1 = AffineModel3D()
+affine_translate1.set(1.0, 0.0, 0.0, -FIBSEM_center[0],
+                     0.0, 1.0, 0.0, -FIBSEM_center[1],
+                     0.0, 0.0, 1.0, -FIBSEM_center[2])
+affineCoarse = AffineModel3D()
+affineCoarse.set(*coarse_matrix)
+affine_translate2 = AffineModel3D()
+affine_translate2.set(1.0, 0.0, 0.0, FIBSEM_center[0],
+                     0.0, 1.0, 0.0, FIBSEM_center[1],
+                     0.0, 0.0, 1.0, FIBSEM_center[2])
+
+affine = AffineModel3D()
+affine.set(affineFlip)
+affine.preConcatenate(affineEMtoLSM)
+affine.preConcatenate(affine_translate1)
+affine.preConcatenate(affineCoarse)
+affine.preConcatenate(affine_translate2)
+
+# Ignore calibration (!!)
+# FIBSEM: resolution is 192x192x192 nm/px (level 4)
+# GCaMP: resolution is 406x406x406 nm/px (deconvolved)
+# radius1 = 2000 / 192.0 # 4-micron nucleus
+# radius2 = 2000 / 406.0
+
+# Apply transform to FIBSEM
+FIBSEM_nuclei = [affine.apply(point) for point in FIBSEM_nuclei]
+
 
 print dimensions1
 print dimensions2
@@ -81,14 +128,20 @@ def show(title, nuclei, radius, bounds, scale=1.0):
   imp = showStack(img, title=title)
   return imp, img, points
 
-# FIBSEM: resolution is 192x192x192 nm/px (level 4)
-radius1 = 2000 / 192.0 # 4-micron nucleus
-imp1, img1, points1 = show("FIBSEM", FIBSEM_nuclei, radius1, bounds1, scale=192/406.0)
 
-# GCaMP: resolution is 406x406x406 nm/px (deconvolved)
-radius2 = 2000 / 406.0
-imp2, img2, points2 = show("GCaMP", GCaMP_nuclei, radius2, bounds2)
+radius = 5
 
+
+# use dimensions2: the target of the transformation
+imp1, img1, points1 = show("FIBSEM", FIBSEM_nuclei, radius, [[0, 0, 0], [d -1 for d in dimensions2]], scale=1.0)
+#imp1, img1, points1 = show("FIBSEM", FIBSEM_nuclei, radius2, bounds2, scale=1.0)
+# ABOVE, use same radius2, bounds2 as GCaMP, as they are now coarsely pre-registered
+# and the scale=192/406.0 isn't needed either
+
+imp2, img2, points2 = show("GCaMP", GCaMP_nuclei, radius, [[0, 0, 0], [d -1 for d in dimensions2]], scale=1.0)
+
+
+"""
 
 # Register FIBSEM onto GCaMP (they are already at the same scale)
 somaDiameter = 4000 / 406.0 # 4 microns
@@ -161,3 +214,4 @@ if modelFound:
 else:
   print "Model not found."
 
+"""
