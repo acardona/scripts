@@ -75,8 +75,12 @@ nonmem = (list(int(x) for x in pol.xpoints)[:len_membrane],
 import sys
 sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.segmentation_em import createSMOClassifier, createRandomForestClassifier, classify, \
-                                filterBank, filterBankRotations, filterBankBlockStatistics
+                                filterBank, filterBankRotations, filterBankBlockStatistics, \
+                                createPerceptronClassifier, filterBankOrthogonalEdges, filterBankEdges
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
+from net.imglib2.algorithm.math.ImgMath import offset
+from net.imglib2.view import Views
+from net.imglib2.type.numeric.real import DoubleType
 from itertools import izip
 
 def samples():
@@ -88,11 +92,47 @@ class_names = ["membranes", "mem_oblique", "nonmem"]
 
 img = IL.wrap(imp)
 
-ops = filterBank(img)
+def readPatch(img, width=5):
+  half = width / 2 # e.g. for 5, it's 2
+  imgE = Views.extendBorder(img)
+  ops = [offset(imgE, [x, y]) for x in xrange(-half, half + 1) for y in xrange(-half, half + 1)]
+  return ops
+
+def makeOps(img):
+  #ops = filterBankBlockStatistics(img, block_width=5, block_height=5, sumType=DoubleType()) # best, all alone
+  #ops += filterBankBlockStatistics(img, block_width=7, block_height=7)
+  #ops += filterBankOrthogonalEdges(img) # not better, much slower when combined with prior two above
+  #ops += filterBank(img) # makes it worse
+
+  # Best
+  ops = filterBankRotations(img, angles=[0, 45], filterBankFn=lambda img: filterBankBlockStatistics(img, block_width=3, block_height=7))
+  ops += filterBankBlockStatistics(img, block_width=3, block_height=3)
+  
+  # Very good as well
+  #ops = filterBankRotations(img, angles=[0, 45], filterBankFn=lambda img: filterBank(img, bs=3, bl=7))
+  #ops += filterBankRotations(img, angles=[0, 45], filterBankFn=lambda img: filterBankBlockStatistics(img, block_width=3, block_height=7))
+
+  # Not bad, not great
+  #ops = filterBankRotations(img, angles=[0, 45], filterBankFn=lambda img: filterBank(img, bs=3, bl=7))
+  #ops += filterBankBlockStatistics(img, block_width=3, block_height=3)
+  
+  #ops = filterBankRotations(img, angles=[0, 15, 30, 45], filterBankFn=lambda img: filterBankBlockStatistics(img, block_width=3, block_height=7))
+  #ops += filterBankBlockStatistics(img, block_width=3, block_height=3)
+
+  #ops = readPatch(img, width=9) # takes many orders of magnitude longer to train, but result is quite good
+  #ops = readPatch(img, width=5) # smaller patch produces better membrane segmentation results, and much faster to train
+
+  #ops = filterBankEdges(img) # Doesn't work at all: all pixels as class 2
+  
+  return ops
+
+ops = makeOps(img)
 angles = [0, 30] # range(0, 46, 9)
 #ops = filterBankRotations(img, angles=angles, bs=4, bl=8)
 #ops = filterBankBlockStatistics(img, block_width=5, block_height=5)
 
+
+"""
 # Create a classifier: support vector machine (SVM, an SMO in WEKA)
 # and save it for later
 classifierSMO = createSMOClassifier(img, samples(), class_names, ops=ops,
@@ -105,24 +145,36 @@ classifierRF = createRandomForestClassifier(img, samples(), class_names, ops=ops
 
 
 print classifierRF.toString()
+"""
 
+params = {"learning_rate": 0.5,
+          "hidden_layers": "%i,%i,%i" % (len(ops) * 3, int(len(ops) * 1.5 + 0.5), len(ops) * 3)
+         }
+classifierMP = createPerceptronClassifier(img, samples(), class_names, ops=ops,
+                                          n_samples=len(membrane[0]),
+                                          filepath="/tmp/mp-mem-nonmem",
+                                          params=params)
+print classifierMP.toString()
 
 impEM = WindowManager.getImage("180-220-sub512x512-30.tif") # IJ.getImage() # e.g. 8-bit EM of Drosophila neurons 180-220-sub512x512-30.tif
 #impEM = IJ.openImage("/home/albert/lab/TEM/abd/microvolumes/Seg/180-220-sub/180-220-sub512x512-30.tif")
 imgEM = IL.wrap(impEM)
 
-ops = filterBank(imgEM)
+ops = makeOps(imgEM)
 #ops = filterBankRotations(imgEM, angles=angles)
 #ops = filterBankBlockStatistics(imgEM, block_width=5, block_height=5)
 
+"""
 # Classify pixels as membrane or not
 resultSMO = classify(imgEM, classifierSMO, class_names, ops=ops)
 IL.wrap(resultSMO, "result SMO %s" % str(angles)).show()
 
 resultRF = classify(imgEM, classifierRF, class_names, ops=ops, distribution_class_index=-1)
 IL.wrap(resultRF, "result RF %s" % str(angles)).show()
+"""
 
-
+resultMP = classify(imgEM, classifierMP, class_names, ops=ops, distribution_class_index=-1)
+IL.wrap(resultMP, "result MP %s" % str(angles)).show()
 
 
 
