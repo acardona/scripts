@@ -15,7 +15,7 @@ from jarray import array, zeros
 from java.util import ArrayList
 from math import radians, floor, ceil
 from weka.core import SerializationHelper, DenseInstance, Instances, Attribute
-from weka.classifiers.functions import SMO
+from weka.classifiers.functions import SMO, MultilayerPerceptron
 from hr.irb.fastRandomForest import FastRandomForest
 from util import numCPUs
 import sys
@@ -181,7 +181,7 @@ def filterBankBlockStatistics(img, block_width=5, block_height=5,
   return [opMean, opVarianceNonZero]
 
 
-def rotatedView(img, angle, enlarge=True):
+def rotatedView(img, angle, enlarge=True, extend=Views.extendBorder):
   """ Return a rotated view of the image, around the Z axis,
       with an expanded (or reduced) interval view so that all pixels are exactly included.
 
@@ -193,13 +193,14 @@ def rotatedView(img, angle, enlarge=True):
   toCenter = AffineTransform2D()
   toCenter.translate(-cx, -cy)
   rotation = AffineTransform2D()
-  # Step 1: place origin of rotation at the center of the image  
+  # Step 1: place origin of rotation at the center of the image
   rotation.preConcatenate(toCenter)
-  # Step 2: rotate around the Z axis  
+  # Step 2: rotate around the Z axis
   rotation.rotate(radians(angle))
-  # Step 3: undo translation to the center  
+  # Step 3: undo translation to the center
   rotation.preConcatenate(toCenter.inverse())
-  rotated = RV.transform(Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory()), rotation)
+  rotated = RV.transform(Views.interpolate(extend(img),
+                                           NLinearInterpolatorFactory()), rotation)
   if enlarge:
     # Bounds:
     bounds = repeat((sys.maxint, 0)) # initial upper- and lower-bound values  
@@ -210,11 +211,54 @@ def rotatedView(img, angle, enlarge=True):
       bounds = [(min(vmin, int(floor(v))), max(vmax, int(ceil(v))))
                 for (vmin, vmax), v in zip(bounds, transformed)]
     minC, maxC = map(list, zip(*bounds)) # transpose list of 2 pairs
-                                       # into 2 list of 2 values
+                                         # into 2 lists of 2 values
     imgRot = Views.zeroMin(Views.interval(rotated, minC, maxC))
   else:
     imgRot = Views.interval(rotated, img)
   return imgRot
+
+
+def filterBankRotations(img,
+                        angles=xrange(0, 46, 9), # sequence, in degrees
+                        filterBankFn=filterBank, # function that takes an img as sole positional argument
+                        outputType=FloatType()):
+  """ img: a RandomAccessibleInterval.
+      filterBankFn: the function from which to obtain a sequence of ImgMath ops.
+      angles: a sequence of angles in degrees.
+      outputType: for materializing rotated operations and rotating them back.
+
+      For every angle, will prepare a rotated view of the image,
+      then create a list of ops on the basis of that rotated view,
+      then materialize each op into an image so that an unrotated view
+      can be returned back.
+
+      returns a list of unrotated views, each containing the values of applying
+      each op to the rotated view. 
+  """
+  ops_rotations = []
+  
+  for angle in angles:
+    imgRot = img if 0 == angle else rotatedView(img, angle)
+    ops = filterBankFn(imgRot)
+
+    # Materialize these two combination ops and rotate them back (rather, a rotated view)
+    interval = Intervals.translate(img, [(imgRot.dimension(d) - img.dimension(d)) / 2
+                                         for d in xrange(img.numDimensions())])
+    for op in ops:
+      imgOpRot = compute(op).intoArrayImg(outputType)
+      if 0 == angle:
+        ops_rotations.append(imgOpRot)
+        continue
+      # Rotate them back and crop view
+      imgOpUnrot = rotatedView(imgOpRot, -angle, enlarge=False)
+      imgOp = Views.zeroMin(Views.interval(imgOpUnrot, interval))
+      #if angle == 0 or angle == 45:
+      #  IL.wrap(imgOpRot, "imgOpRot angle=%i" % angle).show()
+      #  IL.wrap(imgOpUnrot, "imgOpUnrot angle=%i" % angle).show()
+      #  IL.wrap(imgOp, "imgOp angle=%i" % angle).show()
+      ops_rotations.append(imgOp)
+  
+  return ops_rotations
 
 
 def filterBankOrthogonalEdges(img,
@@ -260,10 +304,10 @@ def filterBankOrthogonalEdges(img,
   op5 = let("3VL", block3VL,
             "3VC", block3VC,
             "3VR", block3VR,
-            IF(AND(GT(var("3VL"), var("3VC")),
-                   GT(var("3VR"), var("3VC"))),
-               THEN(sub(add(var("3VL"), var("3VR")), var("3VC"))), # like Viola and Jones 2001
-               ELSE(div(add(var("3VL"), var("3VC"), var("3VR")), 3)))) # average block value
+            IF(AND(GT("3VL", "3VC"),
+                   GT("3VR", "3VC")),
+               THEN(sub(add("3VL", "3VR"), "3VC")), # like Viola and Jones 2001
+               ELSE(div(add("3VL", "3VC", "3VR"), 3)))) # average block value
   # Purely like Viola and Jones 2001: work poorly for EM membranes
   #op5 = sub(block3VC, block3VL, block3VR) # center minus sides
   #op6 = sub(add(block3VL, block3VR), block3VC) # sides minus center
@@ -275,10 +319,10 @@ def filterBankOrthogonalEdges(img,
   op7 = let("3HT", block3HT,
             "3HC", block3HC,
             "3HB", block3HB,
-            IF(AND(GT(var("3HT"), var("3HC")),
-                   GT(var("3HB"), var("3HC"))),
-               THEN(sub(add(var("3HT"), var("3HB")), var("3HC"))),
-               ELSE(div(add(var("3HT"), var("3HC"), var("3HB")), 3)))) # average block value TODO make a single block 
+            IF(AND(GT("3HT", "3HC"),
+                   GT("3HB", "3HC")),
+               THEN(sub(add("3HT", "3HB"), "3HC")),
+               ELSE(div(add("3HT", "3HC", "3HB"), 3)))) # average block value TODO make a single block 
   #op7 = sub(block3HC, block3HT, block3HB) # center minus top and bottom
   #op8 = sub(add(block3HT, block3HB), block3HC) # top and bottom minus center
 
@@ -308,48 +352,6 @@ def filterBankOrthogonalEdges(img,
   op12 = sub(blockSmallT, blockLargeB)
 
   return [op1, op2, op3, op4, op5, op7, op9, op10, op11, op12]
-
-
-def filterBankRotations(img,
-                        angles=xrange(0, 46, 9), # sequence, in degrees
-                        bs=4,
-                        bl=8,
-                        sumType=UnsignedLongType(),
-                        outputType=FloatType(),
-                        converter=Util.genericRealTypeConverter()):
-  """ Haar-like features from Viola and Jones using integral images
-      tuned to identify edges, particularly neuron membranes in electron microscopy.
-      bs: length of the short side of a block
-      bl: length of the long side of a block
-      sumType: the type with which to add up pixel values in the integral image
-      converter: for the IntegralImg, to convert from input to sumType
-      outputType: for materializing rotated operations and rotating them back
-  """
-  ops_rotations = []
-  
-  for angle in angles:
-    imgRot = img if 0 == angle else rotatedView(img, angle)
-    ops = filterBank(imgRot, bs=bs, bl=bl, sumType=sumType, converter=converter)
-
-    # Materialize these two combination ops and rotate them back (rather, a rotated view)
-    interval = Intervals.translate(img, [(imgRot.dimension(d) - img.dimension(d)) / 2
-                                         for d in xrange(img.numDimensions())])
-    for op in ops:
-      imgOpRot = compute(op).intoArrayImg(outputType)
-      if 0 == angle:
-        ops_rotations.append(imgOpRot)
-        continue
-      # Rotate them back and crop view
-      imgOpUnrot = rotatedView(imgOpRot, -angle, enlarge=False)
-      imgOp = Views.zeroMin(Views.interval(imgOpUnrot, interval))
-      #if angle == 0 or angle == 45:
-      #  IL.wrap(imgOpRot, "imgOpRot angle=%i" % angle).show()
-      #  IL.wrap(imgOpUnrot, "imgOpUnrot angle=%i" % angle).show()
-      #  IL.wrap(imgOp, "imgOp angle=%i" % angle).show()
-      ops_rotations.append(imgOp)
-  
-  return ops_rotations
-
 
 
 def as2DKernel(imgE, weights):
@@ -384,6 +386,13 @@ def filterBankEdges(img):
   return [opTop, opBottom, opLeft, opRight]
 
 
+def filterBankPatch(img, width=5):
+  """ Returns the raw pixel value of a square block of pixels (a patch) centered each pixel.
+  """
+  half = width / 2 # e.g. for 5, it's 2
+  imgE = Views.extendBorder(img)
+  ops = [offset(imgE, [x, y]) for x in xrange(-half, half + 1) for y in xrange(-half, half + 1)]
+  return ops
 
 
 
@@ -458,6 +467,21 @@ def createRandomForestClassifier(img, samples, class_names, n_samples=0, ops=Non
   return trainClassifier(rf, img, samples, class_names, n_samples=n_samples, ops=ops, filepath=filepath)
 
 
+def createPerceptronClassifier(img, samples, class_names, n_samples, ops=None, filepath=None, params={}):
+  mp = MultilayerPerceptron()
+  if "learning_rate" in params:
+    # In (0, 1]
+    mp.setLearningRate(params.get("learning_rate", mp.getLearningRate()))
+  # Number of nodes per layer: a set of comma-separated values (numbers), or:
+  # 'a' = (number of attributes + number of classes) / 2
+  # 'i' = number of attributes,
+  # 'o' = number of classes
+  # 't' = number of attributes + number of classes.
+  # See MultilayerPerceptron.setHiddenLayers
+  # https://weka.sourceforge.io/doc.dev/weka/classifiers/functions/MultilayerPerceptron.html#setHiddenLayers-java.lang.String-
+  mp.setHiddenLayers(params.get("hidden_layers", "10,5"))
+  return trainClassifier(mp, img, samples, class_names, n_samples, ops=ops, filepath=filepath)
+  
 
 
 def classify(img, classifier, class_names, ops=None, distribution_class_index=-1):
@@ -496,6 +520,7 @@ def classify(img, classifier, class_names, ops=None, distribution_class_index=-1
   while cr.hasNext():
     tc = cop.next()
     vector = array((tc.get(i).getRealDouble() for i in xrange(len(opImgs))), 'd')
+    vector += array([0], 'd')
     di = DenseInstance(1.0, vector)
     di.setDataset(info) # the list of attributes
     if distribution_class_index > -1:
