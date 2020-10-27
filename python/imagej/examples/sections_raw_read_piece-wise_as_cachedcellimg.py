@@ -23,7 +23,7 @@ bytesPerPixel = 1 # 8-bit pixels
 filepaths = [os.path.join(folderpath, filename)
              for filename in sorted(os.listdir(folderpath))]
 
-# Desired dimensions for reaching chunks of a single section
+# Desired dimensions for reading in chunks of a single section
 #cell_width, cell_height = 1024, 1024 # one megabyte
 cell_width, cell_height = 256, 256
 
@@ -85,11 +85,9 @@ class CellLoader(CacheLoader):
       width, height, _ = cellDims # ignore depth: it's 1
       # Read cell from file into a byte array
       ra = RandomAccessFile(filepaths[ z ], 'r')
-      read_width = width * bytesPerPixel
-      bytes = zeros(read_width * height, 'b')
+      bytes = zeros(read_width * height, 'b') # will contain the entire Cell pixel data
       # Initial offset to the Cell origin
       offset = (section_width * y + x) * bytesPerPixel
-      n_read = 0
       n_pixels = width * height
       if width == section_width:
         # Read whole block in one go: cell data is continuous in the file
@@ -97,6 +95,8 @@ class CellLoader(CacheLoader):
         ra.read(bytes, 0, n_pixels * bytesPerPixel)
       else:
         # Read line by line
+        n_read = 0
+        read_width = width * bytesPerPixel
         while n_read < n_pixels:
           ra.seek(offset)
           ra.read(bytes, n_read, read_width)
@@ -110,7 +110,10 @@ class CellLoader(CacheLoader):
       if ra:
         ra.close()
 
+# Create the cache, which can load any Cell when needed using CellLoader
 loading_cache = SoftRefLoaderCache().withLoader(CellLoader()).unchecked()
+# Create a CachedCellImg: a LazyCellImg that caches Cell instances with a SoftReference, for best performance
+# and also self-regulating regarding the amount of memory to allocate to the cache.
 cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
                   dimensions, createType(bytesPerPixel), loading_cache,
                   ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
