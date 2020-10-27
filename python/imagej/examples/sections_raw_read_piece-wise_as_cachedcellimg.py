@@ -120,6 +120,95 @@ IL.wrap(cachedCellImg, "sections").show()
 
 # Now show only a subset of it, to demonstrate loading a lot less data
 from net.imglib2.view import Views
-crop = Views.interval(cachedCellImg, [1307, 448, 0], [1307 + 976 -1, 448 + 732 -1, len(filepaths) -1])
-IL.wrap(crop, "sections crop").show()
+#crop = Views.interval(cachedCellImg, [1307, 448, 0], [1307 + 976 -1, 448 + 732 -1, len(filepaths) -1])
+#IL.wrap(crop, "sections crop").show()
 
+# Now show a UI that enables moving a window around a data set
+from net.imglib2 import AbstractInterval
+from jarray import array
+from java.awt.event import KeyAdapter, KeyEvent
+
+""" Super constructor not released yet
+class MovableInterval(AbstractInterval):
+  def __init__(self, mins, maxs):
+    super(AbstractInterval, self).__init__(mins, maxs, False) # don't copy arrays
+    self.mins = mins
+    self.maxs = maxs
+  def move(self, d, inc):
+    self.mins[d] += inc
+    self.maxs[d] += inc
+"""
+
+class MovableInterval(AbstractInterval):
+  def __init__(self, mins, maxs):
+    super(AbstractInterval, self).__init__(len(mins))
+    # Hack: grab and edit super fields
+    fmins = AbstractInterval.getDeclaredField("min")
+    fmins.setAccessible(True)
+    self.mins = fmins.get(self)
+    fmaxs = AbstractInterval.getDeclaredField("max")
+    fmaxs.setAccessible(True)
+    self.maxs = fmaxs.get(self)
+    for d in xrange(len(mins)):
+      self.mins[d] = mins[d]
+      self.maxs[d] = maxs[d]
+  def move(self, d, inc):
+    self.mins[d] += inc
+    self.maxs[d] += inc
+
+mins = array([1307, 448, 0], 'l')
+maxs = array([1307 + 976 -1, 448 + 732 -1, len(filepaths) -1], 'l')
+interval = MovableInterval(mins, maxs)
+imgE = Views.extendZero(cachedCellImg)
+crop = Views.interval(imgE, interval)
+imp = IL.wrap(crop, "sections crop")
+imp.show()
+win = imp.getWindow()
+
+# Remove key listeners from the ImageCanvas
+kls = win.getCanvas().getKeyListeners()
+for kl in kls:
+  win.getCanvas().removeKeyListener(kl)
+
+from net.imglib2.img.display.imagej import ImageJVirtualStack
+stack = imp.getStack() # an net.imglib2.img.display.imagej.ImageJVirtualStackUnsignedByte
+fsource = ImageJVirtualStack.getDeclaredField("source")
+fsource.setAccessible(True)
+
+class Navigator(KeyAdapter):
+  def keyPressed(self, ke):
+    if not ke.isControlDown():
+      for kl in kls:
+        kl.keyPressed(ke)
+      return
+    inc = 20
+    if ke.isShiftDown():
+      inc = 200
+    keyCode = ke.getKeyCode()
+    if KeyEvent.VK_UP == keyCode:
+      interval.move(1, -inc)
+    elif KeyEvent.VK_DOWN == keyCode:
+      interval.move(1, inc)
+    elif KeyEvent.VK_LEFT == keyCode:
+      interval.move(0, -inc)
+    elif KeyEvent.VK_RIGHT == keyCode:
+      interval.move(0, inc)
+    else:
+      # Other KeyListener will handle the event
+      for kl in kls:
+        kl.keyPressed(ke)
+      return
+    # Replace source with shifted cropped volume
+    fsource.set(stack, Views.zeroMin(Views.interval(imgE, interval)))
+    ke.consume()
+    imp.updateVirtualSlice()
+
+win.getCanvas().addKeyListener(Navigator())
+
+
+# Open a full section but black, with only a small moving window
+# under an ROI shown
+# NOT USEFUL: the XY image that ImageJ creates can be huge anyway
+#from net.imglib2 import FinalInterval
+#black = Views.interval(Views.extendZero(crop), FinalInterval(dimensions))
+#IL.wrap(black, "window").show()
