@@ -11,10 +11,11 @@
 
 from ij import IJ
 from ij.io import OpenDialog
-from javax.swing import JFrame, JPanel, JLabel, JScrollPane, JTable, JTextField, JButton, BoxLayout, SwingUtilities
+from javax.swing import JFrame, JPanel, JLabel, JScrollPane, JTable, JTextField, JButton, SwingUtilities
+from javax.swing.border import EmptyBorder
 from javax.swing.table import AbstractTableModel
 from java.awt.event import MouseAdapter, KeyAdapter, KeyEvent, WindowAdapter
-from java.awt import Cursor
+from java.awt import Cursor, GridBagLayout, GridBagConstraints as GC
 from java.util import ArrayList
 from java.util.concurrent import Executors
 from java.util.function import Predicate
@@ -112,25 +113,37 @@ class Closing(WindowAdapter):
     exe.shutdownNow()
 
 def makeUI(model):
+  # Components:
   table = JTable(model)
   jsp = JScrollPane(table)
   regex_label = JLabel("Search: ")
   regex_field = JTextField(20)
-  top = JPanel()
-  top.add(regex_label)
-  top.add(regex_field)
-  top.setLayout(BoxLayout(top, BoxLayout.X_AXIS))
   base_path_label = JLabel("Base path:")
   base_path_field = JTextField(50)
-  bottom = JPanel()
-  bottom.add(base_path_label)
-  bottom.add(base_path_field)
-  bottom.setLayout(BoxLayout(bottom, BoxLayout.X_AXIS))
+  # Panel for all components
   all = JPanel()
-  all.add(top)
+  all.setBorder(EmptyBorder(20, 20, 20, 20))
+  layout, c = GridBagLayout(), GC()
+  all.setLayout(layout)
+  # First row: label and regex text field
+  c.gridx = 0; c.gridy = 0; c.anchor = GC.NORTHWEST; c.fill = GC.NONE; c.weighty = 0.0
+  layout.setConstraints(regex_label, c)
+  all.add(regex_label)
+  c.gridx = 1; c.fill = GC.HORIZONTAL; c.weightx = 1.0
+  layout.setConstraints(regex_field, c)
+  all.add(regex_field)
+  # Second row: the table
+  c.gridx = 0; c.gridy = 1; c.fill = GC.BOTH; c.gridwidth = 2; c.weightx = 1.0; c.weighty = 1.0
+  layout.setConstraints(jsp, c)
   all.add(jsp)
-  all.add(bottom)
-  all.setLayout(BoxLayout(all, BoxLayout.Y_AXIS))
+  # Third row: the base path
+  c.gridy = 2; c.fill = GC.NONE; c.gridwidth = 1; c.weightx = 0.0; c.weighty = 0.0
+  layout.setConstraints(base_path_label, c)
+  all.add(base_path_label)
+  c.gridx = 1; c.fill = GC.HORIZONTAL; c.weightx = 1.0
+  layout.setConstraints(base_path_field, c)
+  all.add(base_path_field)  
+  # Window frame
   frame = JFrame("File paths")
   frame.getContentPane().add(all)
   frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
