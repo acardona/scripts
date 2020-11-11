@@ -36,10 +36,10 @@ dimensions = [section_width, section_height, len(filepaths)]
 # The grid of the CellImg
 grid = CellGrid(dimensions, cell_dimensions)
 
-
+"""
 def createAccess(bytes, bytesPerPixel):
-  """ Return a new volatile access instance for the appropriate pixel type.
-      Supports byte, short, float and long. """
+  # Return a new volatile access instance for the appropriate pixel type.
+  # Supports byte, short, float and long.
   if 1 == bytesPerPixel: # BYTE
     return VolatileByteArray(bytes, True)
   # Transform bytes into another type
@@ -56,6 +56,20 @@ def createAccess(bytes, bytesPerPixel):
     pixels = zeros(len(bytes) / 8, 'l')
     bb.asLongBuffer().get(pixels)
     return VolatileLongArray(pixels, True)
+"""
+
+def createAccess(bytes, bytesPerPixel):
+  if 1 == bytesPerPixel:
+    return VolatileByteArray(bytes, True)
+  # Else, convert
+  t = {2: "Short",
+       4: "Float",
+       8: "Long"}[bytesPerPixel]
+  bb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
+  pixels = zeros(len(bytes) / bytesPerPixel, t[0].lower()) # t[0].lower() is 's', 'f', 'l'
+  getattr(bb, "as%sBuffer" % t)().get(pixels) # e.g. bb.asShortBuffer().get(pixels)
+  return locals()["Volatile%sArray" % t](pixels, True) # e.g. VolatileShortArray(pixels, True)
+    
 
 
 def createType(bytesPerPixel):
@@ -76,15 +90,16 @@ class CellLoader(CacheLoader):
     ra = None
     try:
       # Read cell origin and dimensions for cell at index
-      cellMin  = zeros(3, 'l') # long, 3 dimensions
-      cellDims = zeros(3, 'i') # integer, 3 dimensions
+      cellMin  = zeros(3, 'l') # long[3]
+      cellDims = zeros(3, 'i') # integer[3]
       grid.getCellDimensions(index, cellMin, cellDims)
       # Unpack Cell origin (in pixel coordinates)
       x, y, z = cellMin
       # Unpack Cell dimensions: at margins, may be smaller than cell_width, cell_height
       width, height, _ = cellDims # ignore depth: it's 1
       # Read cell from file into a byte array
-      ra = RandomAccessFile(filepaths[ z ], 'r')
+      ra = RandomAccessFile(filepaths[z], 'r')
+      read_width = width * bytesPerPixel
       bytes = zeros(read_width * height, 'b') # will contain the entire Cell pixel data
       # Initial offset to the Cell origin
       offset = (section_width * y + x) * bytesPerPixel
@@ -96,7 +111,6 @@ class CellLoader(CacheLoader):
       else:
         # Read line by line
         n_read = 0
-        read_width = width * bytesPerPixel
         while n_read < n_pixels:
           ra.seek(offset)
           ra.read(bytes, n_read, read_width)
@@ -118,7 +132,8 @@ cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
                   dimensions, createType(bytesPerPixel), loading_cache,
                   ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
 
- 
+
+# View the image as an ImageJ ImagePlus with an underlying VirtualStack
 IL.wrap(cachedCellImg, "sections").show()
 
 
