@@ -156,7 +156,6 @@ def add(parent, child,
         anchor=GC.NORTHWEST, fill=GC.NONE,
         weightx=0.0, weighty=0.0,
         gridwidth=1):
-  """
   c = GC()
   c.gridx = gridx
   c.gridy = gridy
@@ -166,11 +165,12 @@ def add(parent, child,
   c.weighty = weighty
   c.gridwidth = gridwidth
   """
-  # Same, more flexible, less verbose:
+  # Same, more flexible, less verbose: BUT FAILS at parent, child args
   kv = locals() # dict of local variables including the function arguments
   c = GC()
   for key, value in kv.iteritems():
     setattr(c, key, value)
+  """
   #
   parent.getLayout().setConstraints(child, c)
   parent.add(child)
