@@ -356,8 +356,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     imgT = Views.zeroMin(Views.interval(imgA, self.interval))
     aimg = img.factory().create(self.interval)
     ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),
-                 aimg,
-                 self.copy_threads)
+                 aimg)
     return Cell(self.cell_dimensions,
                [0, 0, index],
                aimg.update(None))
