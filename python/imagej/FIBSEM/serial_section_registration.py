@@ -58,8 +58,8 @@ from java.util.concurrent import Executors, TimeUnit
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
 tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
 
-filepaths = [os.path.join(srcDir, filepath)
-             for filepath in sorted(os.listdir(srcDir))
+filepaths = [os.path.join(srcDir, filename)
+             for filename in sorted(os.listdir(srcDir))
              if filepath.endswith("InLens_raw.tif")]
 
 # Image properties: ASSUMES all images have the same properties
