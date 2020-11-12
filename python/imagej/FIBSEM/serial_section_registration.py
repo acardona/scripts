@@ -58,9 +58,10 @@ from java.util.concurrent import Executors, TimeUnit
 srcDir = "/lmb/home/acardona/zstore1/20201024_162701/" # MUST have an ending slash
 tgtDir = "/lmb/home/acardona/lab/experiments/FIBSEM/test-volume-L2/"
 
-filepaths = [os.path.join(srcDir, filepath)
-             for filepath in sorted(os.listdir(srcDir))
-             if filepath.endswith(".tiff")]
+
+filepaths = [os.path.join(srcDir, filename)
+             for filename in sorted(os.listdir(srcDir))
+             if filepath.endswith("InLens_raw.tif")]
 
 # Image properties: ASSUMES all images have the same properties
 dimensions = [12288, 9216]
@@ -115,16 +116,17 @@ def loadImp(filepath):
   return IJ.openImage(filepath)
 
 def loadUnsignedShort(filepath):
-    imp = loadImp(filepath)
+    imp = loadImp(filepath) # an instance of an ij.ImagePlus
     return ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
 
 def loadFloatProcessor(filepath, scale=True):
   try:
+    # Convert an ij.process.ShortProcessor into a FloatProcessor
     fp = loadImp(filepath).getProcessor().convertToFloatProcessor()
     # Preprocess images: Gaussian-blur to scale down, then normalize contrast
     if scale:
-      fp = Filter.createDownsampled(fp, params["scale"], 0.5, 1.6)
-      Util.normalizeContrast(fp)
+      fp = Filter.createDownsampled(fp, params["scale"], 0.5, 1.6) # TODO isn't this paramsSIFT.initialSigma
+      Util.normalizeContrast(fp) # TODO should be outside the if clause
     return fp
   except:
     syncPrint(sys.exc_info())
@@ -224,7 +226,7 @@ def pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload):
 def ensurePointMatches(filepaths, csvDir, params, n_adjacent):
   """ If a pointmatches csv file doesn't exist, will create it. """
   w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(numCPUs()))
-  exeload = newFixedThreadPool()
+  exeload = newFixedThreadPool() # uses as many threads as CPUs
   try:
     count = 1
     for result in w.chunkConsume(numCPUs() * 2, pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload)):
@@ -296,7 +298,7 @@ def align(filepaths, csvDir, params, paramsTileConfiguration):
   # Return model matrices as double[] arrays with 6 values
   matrices = []
   for tile in tiles:
-    # BUG in TransformationModel2D.toMatrix
+    # BUG in TransformationModel2D.toMatrix   # TODO can be updated now, it's been fixed
     #a = nativeArray('d', [2, 3])
     #tile.getModel().toMatrix(a)
     #matrices.append(a[0] + a[1])
@@ -355,8 +357,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     imgT = Views.zeroMin(Views.interval(imgA, self.interval))
     aimg = img.factory().create(self.interval)
     ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),
-                 aimg,
-                 self.copy_threads)
+                 aimg)
     return Cell(self.cell_dimensions,
                [0, 0, index],
                aimg.update(None))
