@@ -17,7 +17,7 @@
 # 4. Export volume for CATMAID as N5.
 
 import os, sys, traceback
-sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")
+sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from os.path import basename
 from mpicbg.ij.blockmatching import BlockMatching
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration
@@ -55,15 +55,15 @@ from jarray import zeros, array
 from functools import partial
 from java.util.concurrent import Executors, TimeUnit
 
-srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
-tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
+srcDir = "/lmb/home/acardona/zstore1/20201024_162701/" # MUST have an ending slash
+tgtDir = "/lmb/home/acardona/lab/experiments/FIBSEM/test-volume-L2/"
 
 filepaths = [os.path.join(srcDir, filepath)
              for filepath in sorted(os.listdir(srcDir))
-             if filepath.endswith("InLens_raw.tif")]
+             if filepath.endswith(".tiff")]
 
 # Image properties: ASSUMES all images have the same properties
-dimensions = [16875, 18125]
+dimensions = [12288, 9216]
 interval = None #[[4096, 4096],
                 # [12288 -1, 12288 -1]] # to open only that, or None
 pixelType = UnsignedShortType
