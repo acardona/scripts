@@ -4,7 +4,7 @@ from javax.swing.table import AbstractTableModel
 from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font
 from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent
 from javax.swing.event import ListSelectionListener
-from java.lang import Thread
+from java.lang import Thread, Integer, String
 
 import csv, os
 
@@ -51,25 +51,29 @@ def writeAccepted():
           for y in xrange(model.getRowCount())]
   writeCSV(acceptedfilepath, ["ApplicantID", "Accepted"], rows)
 
+column_names = ["Index"] + header_rows[1][:2] + ["Accepted"]
+column_classes = [Integer, Integer, Integer, String]
 
 # Blend both CSV files into 3 columns: ApplicantID, Preference and Accepted 
 class TableModel(AbstractTableModel):
   def getColumnName(self, col):
-    if 2 == col:
-      return "Accepted"
-    return header_rows[1][col]
+    return column_names[col]
+  def getColumnClass(self, col): # for e.g. proper numerical sorting
+    return column_classes[col]
   def getRowCount(self):
     return len(applicants)
   def getColumnCount(self):
-    return 3
+    return len(column_names)
   def getValueAt(self, row, col):
-    if 2 == col:
+    if 0 == col:
+      return row + 1 # index
+    if 3 == col:
       return accepted[row]
-    return applicants[row][col]
+    return int(applicants[row][col -1])
   def isCellEditable(self, row, col):
-    return 2 == col
+    return 3 == col
   def setValueAt(self, value, row, col):
-    if 2 == col:
+    if 3 == col:
       old = self.getValueAt(row, col)
       if old == value:
         return
@@ -90,6 +94,7 @@ all.setLayout(gb)
 c = GridBagConstraints()
 table = JTable(TableModel())
 table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
 jsp = JScrollPane(table)
 jsp.setPreferredSize(Dimension(200, 500))
 c.anchor = GridBagConstraints.NORTHWEST
@@ -102,6 +107,7 @@ c.weighty = 1.0
 textarea = JTextArea()
 textarea.setLineWrap(True)
 textarea.setWrapStyleWord(True) # wrap text by cutting at whitespace
+textarea.setEditable(False) # avoid changing the text, as any changes wouldn't be persisted to disk
 font = textarea.getFont().deriveFont(20.0)
 textarea.setFont(font)
 textarea.setPreferredSize(Dimension(500, 500))
