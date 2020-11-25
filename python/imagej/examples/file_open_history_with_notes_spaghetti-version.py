@@ -23,6 +23,7 @@ from ij import ImageListener, ImagePlus, IJ, WindowManager
 from ij.io import OpenDialog
 from java.util.concurrent import Executors, TimeUnit
 from java.util.concurrent.atomic import AtomicBoolean
+from java.io import File
 
 # EDIT here: where you want the CSV file to live.
 # By default, lives in your user home directory as a hidden file.
@@ -71,6 +72,26 @@ image_paths = {row[3]: i for i, row in enumerate(entries)}
 
 # Flag to set to True to request the table model data be saved to the CSV file
 requested_save_csv = AtomicBoolean(False)
+
+# A function to save the table to disk in CSV format.
+# Checks if the requested_save_csv flag was set, and if so, writes the CSV file.
+def saveTable():
+  def after():
+    # UI elements to alter under the event dispatch thread
+    note_status.setText("Saved.")
+    edit_note.setEnabled(True)
+    save_note.setEnabled(False)
+  # Repeatedly attempt to write the CSV until there are no more updates,
+  # in which case the scheduled thread (see below) will pause for a bit before retrying.
+  while requested_save_csv.getAndSet(False):
+    writeCSV(csv_image_notes, header, entries)
+    SwingUtilities.invokeLater(after)
+
+# Every 500 milliseconds, save to CSV only if it has been requested
+# This background thread is shutdown when the JFrame window is closed
+exe = Executors.newSingleThreadScheduledExecutor()
+exe.scheduleAtFixedRate(saveTable, 0, 500, TimeUnit.MILLISECONDS)
+
 
 # A model (i.e. an interface to access the data) of the JTable listing all opened image files
 class TableModel(AbstractTableModel):
@@ -144,6 +165,13 @@ jsp = JScrollPane(table)
 jsp.setMinimumSize(Dimension(400, 500))
 gb.setConstraints(jsp, c)
 all.add(jsp)
+
+# Convert from row index in the view (could e.g. be sorted)
+# to the index in the underlying table model
+def getSelectedRowIndex():
+  viewIndex = table.getSelectionModel().getLeadSelectionIndex()
+  modelIndex = table.convertRowIndexToModel(viewIndex)
+  return modelIndex
 
 # Top component: a text area showing the full file path to the image in the selected table row
 c.gridx = 1
@@ -229,7 +257,7 @@ all.add(edit_note)
 # Function for the bottom right button to request saving the text note to the CSV file
 def requestSave(event):
   # Update table model data
-  rowIndex = table.getSelectionModel().getLeadSelectionIndex()
+  rowIndex = getSelectedRowIndex()
   table_entries[rowIndex][-1] = textarea.getText()
   # Signal synchronize to disk next time the scheduled thread wakes up
   requested_save_csv.set(True)
@@ -260,7 +288,7 @@ def cleanup(event):
   exe.shutdown()
   ImagePlus.removeImageListener(open_imp_listener)
 
-frame = JFrame("CSV", windowClosing=cleanup)
+frame = JFrame("History of opened images", windowClosing=cleanup)
 frame.getContentPane().add(all)
 frame.pack()
 frame.setVisible(True)
@@ -316,7 +344,7 @@ ImagePlus.addImageListener(open_imp_listener)
 # A listener to detect whether there have been any edits to the text note
 class TypingListener(KeyAdapter):
   def keyPressed(self, event):
-    rowIndex = table.getSelectionModel().getLeadSelectionIndex()
+    rowIndex = getSelectedRowIndex()
     if event.getSource().getText() != table_entries[rowIndex][-1]:
       note_status.setText("Unsaved changes.")
 
@@ -333,7 +361,7 @@ class TableSelectionListener(ListSelectionListener):
     # Must run later in the context of the event dispatch thread
     # when the latter has updated the table selection
     def after():
-      rowIndex = table.getSelectionModel().getLeadSelectionIndex()
+      rowIndex = getSelectedRowIndex()
       path.setText(table_entries[rowIndex][-2])
       path.setToolTipText(path.getText()) # for mouse over to show full path
       textarea.setText(table_entries[rowIndex][-1])
@@ -359,14 +387,13 @@ class PathOpener(MouseAdapter):
           imp = WindowManager.getImage(ID)
           fi = imp.getOriginalFileInfo()
           filepath = os.path.join(fi.directory, fi.fileName)
-          if File(filepath).equals(File(event.getText())):
+          if File(filepath).equals(File(event.getSource().getText())):
             imp.getWindow().toFront()
             is_open = True
         if is_open:
           return
       # otherwise open it
-      rowIndex = table.getSelectionModel().getLeadSelectionIndex()
-      IJ.open(table_entries[rowIndex][-2])
+      IJ.open(table_entries[getSelectedRowIndex()][-2])
 
 path.addMouseListener(PathOpener())
 

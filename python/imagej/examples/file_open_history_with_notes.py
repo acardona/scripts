@@ -23,6 +23,7 @@ from ij import ImageListener, ImagePlus, IJ, WindowManager
 from ij.io import OpenDialog
 from java.util.concurrent import Executors, TimeUnit
 from java.util.concurrent.atomic import AtomicBoolean
+from java.io import File
 
 
 # EDIT here: where you want the CSV file to live.
@@ -199,6 +200,13 @@ frame.setVisible(True)
 
 # Wire up the buttons and fields with functions
 
+# Convert from row index in the view (could e.g. be sorted)
+# to the index in the underlying table model
+def getSelectedRowIndex():
+  viewIndex = table.getSelectionModel().getLeadSelectionIndex()
+  modelIndex = table.convertRowIndexToModel(viewIndex)
+  return modelIndex
+
 # For regular expression-based filtering of the table rows
 def filterTable():
   global table_entries # flag global variable as one to modify here
@@ -252,13 +260,16 @@ class ClickEditButton(ActionListener):
 edit_note.addActionListener(ClickEditButton())
 
 # Function for the bottom right button to request saving the text note to the CSV file
+def requestSave():
+  # Update table model data
+  rowIndex = getSelectedRowIndex()
+  table_entries[rowIndex][-1] = textarea.getText()
+  # Signal synchronize to disk next time the scheduled thread wakes up
+  requested_save_csv.set(True)
+
 class RequestSave(ActionListener):
   def actionPerformed(self, event):
-    # Update table model data
-    rowIndex = table.getSelectionModel().getLeadSelectionIndex()
-    table_entries[rowIndex][-1] = textarea.getText()
-    # Signal synchronize to disk next time the scheduled thread wakes up
-    requested_save_csv.set(True)
+    requestSave()
 
 save_note.addActionListener(RequestSave())
 
@@ -291,7 +302,7 @@ exe.scheduleAtFixedRate(saveTable, 0, 500, TimeUnit.MILLISECONDS)
 def askToSaveUnsavedChanges():
   if note_status.getText() == "Unsaved changes.":
     if IJ.showMessageWithCancel("Alert", "Save current note?"):
-      requestSave(None)
+      requestSave()
     else:
       # Stash current note in the log window
       IJ.log("Discarded note for image at:")
@@ -360,7 +371,7 @@ ImagePlus.addImageListener(open_imp_listener)
 # A listener to detect whether there have been any edits to the text note
 class TypingListener(KeyAdapter):
   def keyPressed(self, event):
-    rowIndex = table.getSelectionModel().getLeadSelectionIndex()
+    rowIndex = getSelectedRowIndex()
     if event.getSource().getText() != table_entries[rowIndex][-1]:
       note_status.setText("Unsaved changes.")
 
@@ -377,7 +388,8 @@ class TableSelectionListener(ListSelectionListener):
     # Must run later in the context of the event dispatch thread
     # when the latter has updated the table selection
     def after():
-      rowIndex = table.getSelectionModel().getLeadSelectionIndex()
+      rowIndex = getSelectedRowIndex()
+      print "rowIndex:", rowIndex
       path.setText(table_entries[rowIndex][-2])
       path.setToolTipText(path.getText()) # for mouse over to show full path
       textarea.setText(table_entries[rowIndex][-1])
@@ -403,14 +415,13 @@ class PathOpener(MouseAdapter):
           imp = WindowManager.getImage(ID)
           fi = imp.getOriginalFileInfo()
           filepath = os.path.join(fi.directory, fi.fileName)
-          if File(filepath).equals(File(event.getText())):
+          if File(filepath).equals(File(event.getSource().getText())):
             imp.getWindow().toFront()
             is_open = True
         if is_open:
           return
       # otherwise open it
-      rowIndex = table.getSelectionModel().getLeadSelectionIndex()
-      IJ.open(table_entries[rowIndex][-2])
+      IJ.open(table_entries[getSelectedRowIndex()][-2])
 
 path.addMouseListener(PathOpener())
 
