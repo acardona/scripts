@@ -242,6 +242,18 @@ save_note.setEnabled(False)
 gb.setConstraints(save_note, c)
 all.add(save_note)
 
+
+def askToSaveUnsavedChanges():
+  if note_status.getText() == "Unsaved changes.":
+    if IJ.showMessageWithCancel("Alert", "Save current note?"):
+      requestSave(None)
+    else:
+      # Stash current note in the log window
+      IJ.log("Discarded note for image at:")
+      IJ.log(path.getText())
+      IJ.log(textarea.getText())
+      IJ.log("===")
+
 # Function to run upon closing the window
 def cleanup(event):
   askToSaveUnsavedChanges()
@@ -310,16 +322,6 @@ class TypingListener(KeyAdapter):
 
 textarea.addKeyListener(TypingListener())
 
-def askToSaveUnsavedChanges():
-  if note_status.getText() == "Unsaved changes.":
-    if IJ.showMessageWithCancel("Alert", "Save current note?"):
-      requestSave(None)
-    else:
-      # Stash current note in the log window
-      IJ.log("Discarded note for image at:")
-      IJ.log(path.getText())
-      IJ.log(textarea.getText())
-      IJ.log("===")
 
 # React to a row being selected by showing the corresponding note
 # in the textarea to the right
