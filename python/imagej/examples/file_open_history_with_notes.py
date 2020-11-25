@@ -263,6 +263,9 @@ class RequestSave(ActionListener):
 save_note.addActionListener(RequestSave())
 
 
+# Flag to set to True to request the table model data be saved to the CSV file
+requested_save_csv = AtomicBoolean(False)
+
 # A function to save the table to disk in CSV format.
 # Checks if the requested_save_csv flag was set, and if so, writes the CSV file.
 def saveTable():
@@ -328,6 +331,7 @@ def addOrUpdateEntry(imp):
   if index is None:
     # File isn't yet in the table: add it
     entries.append([fi.fileName, now, now, filepath, ""])
+    image_paths[filepath] = len(entries) -1
   else:
     # File exists: edit its last seen date
     entries[index][2] = now

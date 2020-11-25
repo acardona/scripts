@@ -275,6 +275,7 @@ def addOrUpdateEntry(imp):
   if index is None:
     # File isn't yet in the table: add it
     entries.append([fi.fileName, now, now, filepath, ""])
+    image_paths[filepath] = len(entries) -1
   else:
     # File exists: edit its last seen date
     entries[index][2] = now
