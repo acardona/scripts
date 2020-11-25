@@ -17,16 +17,17 @@ from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font, Insets,
 from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent
 from javax.swing.event import ListSelectionListener
 from java.lang import Thread, Integer, String, System
-import os, csv
+import os, csv, re
 from datetime import datetime
 from ij import ImageListener, ImagePlus, IJ, WindowManager
 from ij.io import OpenDialog
 from java.util.concurrent import Executors, TimeUnit
 from java.util.concurrent.atomic import AtomicBoolean
 
-# EDIT here: where you want the CSV file to live
+# EDIT here: where you want the CSV file to live.
+# By default, lives in your user home directory as a hidden file.
 csv_image_notes = os.path.join(System.getProperty("user.home"),
-                               ".fiji-image-notes.csv") # as a hidden file in my home
+                               ".fiji-image-notes.csv")
 
 # Generic read and write CSV functions
 def openCSV(filepath, header_length=1):
@@ -53,6 +54,7 @@ def writeCSV(filepath, header, rows):
      # when written in full, replace the old one if any
      os.rename(filepath + ".tmp", filepath)
 
+# Prepare main data structure: a list (rows) of lists (columns)
 # Load the CSV file if it exists, otherwise use an empty data structure
 if os.path.exists(csv_image_notes):
   header_rows, entries = openCSV(csv_image_notes, header_length=1)
@@ -61,17 +63,25 @@ else:
   header = ["name", "first opened", "last opened", "filepath", "notes"]
   entries = []
 
+# The subset of entries that are shown in the table (or all)
+table_entries = entries
+
 # Map of file paths vs. index of entries
 image_paths = {row[3]: i for i, row in enumerate(entries)}
 
 # Flag to set to True to request the table model data be saved to the CSV file
 requested_save_csv = AtomicBoolean(False)
 
+# This function refers to global variables defined far below: that's fine,
+# they will exist by the time this function is first invoked.
 def saveTable():
   def after():
+    # UI elements to alter under the event dispatch thread
     note_status.setText("Saved.")
     edit_note.setEnabled(True)
     save_note.setEnabled(False)
+  # Repeatedly attempt to write the CSV until there are no more updates,
+  # in which case the scheduled thread (see below) will pause for a bit before retrying.
   while requested_save_csv.getAndSet(False):
     writeCSV(csv_image_notes, header, entries)
     SwingUtilities.invokeLater(after)
@@ -81,48 +91,81 @@ def saveTable():
 exe = Executors.newSingleThreadScheduledExecutor()
 exe.scheduleAtFixedRate(saveTable, 0, 500, TimeUnit.MILLISECONDS)
 
-# A model (i.e. the data) of the JTable listing all opened files
+
+# A model (i.e. an interface to access the data) of the JTable listing all opened image files
 class TableModel(AbstractTableModel):
   def getColumnName(self, col):
     return header[col]
   def getColumnClass(self, col): # for e.g. proper numerical sorting
     return String # all as strings
   def getRowCount(self):
-    return len(entries)
+    return len(table_entries)
   def getColumnCount(self):
     return len(header) -2 # don't show neither the full filepath nor the notes in the table
   def getValueAt(self, row, col):
-    return entries[row][col]
+    return table_entries[row][col]
   def isCellEditable(self, row, col):
     return False # none editable
   def setValueAt(self, value, row, col):
     pass # none editable
 
 
-# Create the UI: a 3-column table and a text area next to it
-# to show and write notes for any selected row, plus some buttons:
+# Create the GUI: a 3-column table and a text area next to it
+# to show and write notes for any selected row, plus some buttons and a search field
 all = JPanel()
 all.setBackground(Color.white)
 gb = GridBagLayout()
 all.setLayout(gb)
 c = GridBagConstraints()
 
-table = JTable(TableModel())
-table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
-table.setCellSelectionEnabled(True)
-table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
+# For regular expression-based filtering of the table rows
+def filterTable():
+  global table_entries # flag global variable as one to modify here
+  try:
+    text = search_field.getText()
+    if 0 == len(text):
+      table_entries = entries # reset: show all rows
+    else:
+      pattern = re.compile(text)
+      # Search in filepath and notes
+      table_entries = [row for row in entries if pattern.search(row[-2]) or pattern.search(row[-1])]
+    SwingUtilities.invokeLater(lambda: table.updateUI()) # executed by the event dispatch thread
+  except:
+    print "Malformed regex pattern"
 
+def typingInSearchField(event):
+  if KeyEvent.VK_ENTER == event.getKeyCode():
+    filterTable()
+  elif KeyEvent.VK_ESCAPE == event.getKeyCode():
+    search_field.setText("")
+    filterTable() # to restore the full list of rows
+
+# Top-left element: a text field for filtering rows by regular expression match
 c.gridx = 0
 c.gridy = 0
+c.anchor = GridBagConstraints.CENTER
+c.fill = GridBagConstraints.HORIZONTAL
+search_field = JTextField("", keyPressed=typingInSearchField)
+gb.setConstraints(search_field, c)
+all.add(search_field)
+
+# Bottom left element: the table, wrapped in a scrollable component
+table = JTable(TableModel())
+table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+#table.setCellSelectionEnabled(True)
+table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
+c.gridx = 0
+c.gridy = 1
 c.anchor = GridBagConstraints.NORTHWEST
 c.fill = GridBagConstraints.BOTH # resize with the frame
 c.weightx = 1.0
-c.gridheight = 3
+c.gridheight = 2
 jsp = JScrollPane(table)
 jsp.setMinimumSize(Dimension(400, 500))
 gb.setConstraints(jsp, c)
 all.add(jsp)
 
+# Top component: a text area showing the full file path to the image in the selected table row
 c.gridx = 1
 c.gridy = 0
 c.gridheight = 1
@@ -135,13 +178,18 @@ path.setWrapStyleWord(True)
 gb.setConstraints(path, c)
 all.add(path)
 
+# Function for the button to open the folder containing the image file path in the selected table row
 def openAtFolder(event):
+  if 0 == path.getText().find("http"):
+    IJ.showMessage("Can't open folder: it's an URL")
+    return
   directory = os.path.dirname(path.getText())
   od = OpenDialog("Open", directory, None)
   filepath = od.getPath()
   if filepath:
     IJ.open(filepath)
 
+# Top-right button to open the folder containing the image in the selected table row
 c.gridx = 3
 c.gridy = 0
 c.gridwidth = 1
@@ -151,6 +199,7 @@ parent = JButton("Open folder", actionPerformed=openAtFolder)
 gb.setConstraints(parent, c)
 all.add(parent)
 
+# Middle-right textarea showing the text of a note associated with the selected table row image
 c.gridx = 1
 c.gridy = 1
 c.weighty = 1.0
@@ -169,6 +218,7 @@ textarea.setPreferredSize(Dimension(500, 500))
 gb.setConstraints(textarea, c)
 all.add(textarea)
 
+# Bottom text label showing the status of the note: whether it's being edited, or saved.
 c.gridx = 1
 c.gridy = 2
 c.gridwidth = 1
@@ -178,6 +228,7 @@ note_status = JLabel("")
 gb.setConstraints(note_status, c)
 all.add(note_status)
 
+# Function for the button to enable editing the note for the selected table row
 def clickEditButton(event):
   edit_note.setEnabled(False)
   save_note.setEnabled(True)
@@ -185,6 +236,7 @@ def clickEditButton(event):
   textarea.setEditable(True)
   textarea.requestFocus()	
 
+# 2nd-to-last Bottom right button for editing the note text in the middle-right text area
 c.gridx = 2
 c.gridy = 2
 c.weightx = 0.0
@@ -194,13 +246,15 @@ edit_note.setEnabled(False)
 gb.setConstraints(edit_note, c)
 all.add(edit_note)
 
+# Function for the bottom right button to request saving the text note to the CSV file
 def requestSave(event):
   # Update table model data
   rowIndex = table.getSelectionModel().getLeadSelectionIndex()
-  entries[rowIndex][-1] = textarea.getText()
-  # Signal synchronize to disk
+  table_entries[rowIndex][-1] = textarea.getText()
+  # Signal synchronize to disk next time the scheduled thread wakes up
   requested_save_csv.set(True)
 
+# Bottom right button for requesting that the text note in the text area be saved to the CSV file
 c.gridx = 3
 c.gridy = 2
 save_note = JButton("Save note", actionPerformed=requestSave)
@@ -208,7 +262,9 @@ save_note.setEnabled(False)
 gb.setConstraints(save_note, c)
 all.add(save_note)
 
+# Function to run upon closing the window
 def cleanup(event):
+  askToSaveUnsavedChanges()
   exe.shutdown()
   ImagePlus.removeImageListener(open_imp_listener)
 
@@ -232,7 +288,7 @@ def addOrUpdateEntry(imp):
   if not fi:
     # Image was created new, not from a file: ignore
     return
-  filepath =  os.path.join(fi.directory, fi.fileName)
+  filepath =  os.path.join(fi.directory, fi.fileName) if not fi.url else fi.url
   # Had we opened this file before?
   index = image_paths.get(filepath, None)
   now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -242,6 +298,8 @@ def addOrUpdateEntry(imp):
   else:
     # File exists: edit its last seen date
     entries[index][2] = now
+  # Rerun filtering if needed
+  filterTable()
   # Update table to reflect changes to the underlying data model
   def repaint():
     table.updateUI()
@@ -262,13 +320,25 @@ class OpenImageListener(ImageListener):
 open_imp_listener = OpenImageListener() # keep a reference for unregistering on window closing
 ImagePlus.addImageListener(open_imp_listener)
 
+# A listener to detect whether there have been any edits to the text note
 class TypingListener(KeyAdapter):
   def keyPressed(self, event):
     rowIndex = table.getSelectionModel().getLeadSelectionIndex()
-    if event.getSource().getText() != entries[rowIndex][-1]:
+    if event.getSource().getText() != table_entries[rowIndex][-1]:
       note_status.setText("Unsaved changes.")
 
 textarea.addKeyListener(TypingListener())
+
+def askToSaveUnsavedChanges():
+  if note_status.getText() == "Unsaved changes.":
+    if IJ.showMessageWithCancel("Alert", "Save current note?"):
+      requestSave(None)
+    else:
+      # Stash current note in the log window
+      IJ.log("Discarded note for image at:")
+      IJ.log(path.getText())
+      IJ.log(textarea.getText())
+      IJ.log("===")
 
 # React to a row being selected by showing the corresponding note
 # in the textarea to the right
@@ -276,22 +346,14 @@ class TableSelectionListener(ListSelectionListener):
   def valueChanged(self, event):
     if event.getValueIsAdjusting():
       return
-    if note_status.getText() == "Unsaved changes.":
-      if IJ.showMessageWithCancel("Alert", "Save current note?"):
-        requestSave(None)
-      else:
-        # Stash current note in the log window
-        IJ.log("Discarded note for image at:")
-        IJ.log(path.getText())
-        IJ.log(textarea.getText())
-        IJ.log("===")
+    askToSaveUnsavedChanges()
     # Must run later in the context of the event dispatch thread
     # when the latter has updated the table selection
     def after():
       rowIndex = table.getSelectionModel().getLeadSelectionIndex()
-      path.setText(entries[rowIndex][-2])
+      path.setText(table_entries[rowIndex][-2])
       path.setToolTipText(path.getText()) # for mouse over to show full path
-      textarea.setText(entries[rowIndex][-1])
+      textarea.setText(table_entries[rowIndex][-1])
       textarea.setEditable(False)
       edit_note.setEnabled(True)
       save_note.setEnabled(False)
@@ -321,7 +383,7 @@ class PathOpener(MouseAdapter):
           return
       # otherwise open it
       rowIndex = table.getSelectionModel().getLeadSelectionIndex()
-      IJ.open(entries[rowIndex][-2])
+      IJ.open(table_entries[rowIndex][-2])
 
 path.addMouseListener(PathOpener())
 
@@ -347,7 +409,6 @@ class FontSizeAdjuster(KeyAdapter):
           r = table.prepareRenderer(table.getCellRenderer(0, 1), 0, 1)
           table.setRowHeight(max(table.getRowHeight(), r.getPreferredSize().height))
       SwingUtilities.invokeLater(repaint)
-
 
 for component in components:
   component.addKeyListener(FontSizeAdjuster())
