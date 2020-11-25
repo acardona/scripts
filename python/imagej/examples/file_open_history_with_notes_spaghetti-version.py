@@ -14,7 +14,7 @@ from javax.swing import JPanel, JFrame, JTable, JScrollPane, JButton, JTextField
                         JTextArea, ListSelectionModel, SwingUtilities, JLabel, BorderFactory
 from javax.swing.table import AbstractTableModel
 from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font, Insets, Color
-from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, WindowAdapter
+from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent
 from javax.swing.event import ListSelectionListener
 from java.lang import Thread, Integer, String, System
 import os, csv, re
@@ -23,7 +23,6 @@ from ij import ImageListener, ImagePlus, IJ, WindowManager
 from ij.io import OpenDialog
 from java.util.concurrent import Executors, TimeUnit
 from java.util.concurrent.atomic import AtomicBoolean
-
 
 # EDIT here: where you want the CSV file to live.
 # By default, lives in your user home directory as a hidden file.
@@ -70,6 +69,9 @@ table_entries = entries
 # Map of file paths vs. index of entries
 image_paths = {row[3]: i for i, row in enumerate(entries)}
 
+# Flag to set to True to request the table model data be saved to the CSV file
+requested_save_csv = AtomicBoolean(False)
+
 # A model (i.e. an interface to access the data) of the JTable listing all opened image files
 class TableModel(AbstractTableModel):
   def getColumnName(self, col):
@@ -96,12 +98,34 @@ gb = GridBagLayout()
 all.setLayout(gb)
 c = GridBagConstraints()
 
+# For regular expression-based filtering of the table rows
+def filterTable():
+  global table_entries # flag global variable as one to modify here
+  try:
+    text = search_field.getText()
+    if 0 == len(text):
+      table_entries = entries # reset: show all rows
+    else:
+      pattern = re.compile(text)
+      # Search in filepath and notes
+      table_entries = [row for row in entries if pattern.search(row[-2]) or pattern.search(row[-1])]
+    SwingUtilities.invokeLater(lambda: table.updateUI()) # executed by the event dispatch thread
+  except:
+    print "Malformed regex pattern"
+
+def typingInSearchField(event):
+  if KeyEvent.VK_ENTER == event.getKeyCode():
+    filterTable()
+  elif KeyEvent.VK_ESCAPE == event.getKeyCode():
+    search_field.setText("")
+    filterTable() # to restore the full list of rows
+
 # Top-left element: a text field for filtering rows by regular expression match
 c.gridx = 0
 c.gridy = 0
 c.anchor = GridBagConstraints.CENTER
 c.fill = GridBagConstraints.HORIZONTAL
-search_field = JTextField("")
+search_field = JTextField("", keyPressed=typingInSearchField)
 gb.setConstraints(search_field, c)
 all.add(search_field)
 
@@ -134,15 +158,26 @@ path.setWrapStyleWord(True)
 gb.setConstraints(path, c)
 all.add(path)
 
+# Function for the button to open the folder containing the image file path in the selected table row
+def openAtFolder(event):
+  if 0 == path.getText().find("http"):
+    IJ.showMessage("Can't open folder: it's an URL")
+    return
+  directory = os.path.dirname(path.getText())
+  od = OpenDialog("Open", directory, None)
+  filepath = od.getPath()
+  if filepath:
+    IJ.open(filepath)
+
 # Top-right button to open the folder containing the image in the selected table row
 c.gridx = 3
 c.gridy = 0
 c.gridwidth = 1
 c.fill = GridBagConstraints.NONE
 c.weightx = 0.0 # let the previous ('path') component stretch as much as possible
-open_from_folder = JButton("Open folder")
-gb.setConstraints(open_from_folder, c)
-all.add(open_from_folder)
+parent = JButton("Open folder", actionPerformed=openAtFolder)
+gb.setConstraints(parent, c)
+all.add(parent)
 
 # Middle-right textarea showing the text of a note associated with the selected table row image
 c.gridx = 1
@@ -171,105 +206,52 @@ c.weightx = 0.5
 c.weighty = 0.0
 note_status = JLabel("")
 gb.setConstraints(note_status, c)
-all.add(note_status)	
+all.add(note_status)
+
+# Function for the button to enable editing the note for the selected table row
+def clickEditButton(event):
+  edit_note.setEnabled(False)
+  save_note.setEnabled(True)
+  note_status.setText("Editing...")
+  textarea.setEditable(True)
+  textarea.requestFocus()	
 
 # 2nd-to-last Bottom right button for editing the note text in the middle-right text area
 c.gridx = 2
 c.gridy = 2
 c.weightx = 0.0
 c.anchor = GridBagConstraints.NORTHEAST
-edit_note = JButton("Edit note")
+edit_note = JButton("Edit note", actionPerformed=clickEditButton)
 edit_note.setEnabled(False)
 gb.setConstraints(edit_note, c)
 all.add(edit_note)
 
+# Function for the bottom right button to request saving the text note to the CSV file
+def requestSave(event):
+  # Update table model data
+  rowIndex = table.getSelectionModel().getLeadSelectionIndex()
+  table_entries[rowIndex][-1] = textarea.getText()
+  # Signal synchronize to disk next time the scheduled thread wakes up
+  requested_save_csv.set(True)
+
 # Bottom right button for requesting that the text note in the text area be saved to the CSV file
 c.gridx = 3
 c.gridy = 2
-save_note = JButton("Save note")
+save_note = JButton("Save note", actionPerformed=requestSave)
 save_note.setEnabled(False)
 gb.setConstraints(save_note, c)
 all.add(save_note)
 
-frame = JFrame("History of opened images")
+# Function to run upon closing the window
+def cleanup(event):
+  askToSaveUnsavedChanges()
+  exe.shutdown()
+  ImagePlus.removeImageListener(open_imp_listener)
+
+frame = JFrame("CSV", windowClosing=cleanup)
 frame.getContentPane().add(all)
 frame.pack()
 frame.setVisible(True)
-
-
-# Wire up the buttons and fields with functions
-
-# For regular expression-based filtering of the table rows
-def filterTable():
-  global table_entries # flag global variable as one to modify here
-  try:
-    text = search_field.getText()
-    if 0 == len(text):
-      table_entries = entries # reset: show all rows
-    else:
-      pattern = re.compile(text)
-      # Search in filepath and notes
-      table_entries = [row for row in entries if pattern.search(row[-2]) or pattern.search(row[-1])]
-    SwingUtilities.invokeLater(lambda: table.updateUI()) # executed by the event dispatch thread
-  except:
-    print "Malformed regex pattern"
-
-class TypingInSearchField(KeyAdapter):
-  def keyPressed(self, event):
-    if KeyEvent.VK_ENTER == event.getKeyCode():
-      filterTable()
-    elif KeyEvent.VK_ESCAPE == event.getKeyCode():
-      search_field.setText("")
-      filterTable() # to restore the full list of rows
-
-search_field.addKeyListener(TypingInSearchField())
-
-
-# Function for the button to open the folder containing the image file path in the selected table row
-class OpenAtFolder(ActionListener):
-  def actionPerformed(self, event):
-    if 0 == path.getText().find("http"):
-      IJ.showMessage("Can't open folder: it's an URL")
-      return
-    directory = os.path.dirname(path.getText())
-    od = OpenDialog("Open", directory, None)
-    filepath = od.getPath()
-    if filepath:
-      IJ.open(filepath)
-
-open_from_folder.addActionListener(OpenAtFolder())
-
-
-# Function for the button to enable editing the note for the selected table row
-class ClickEditButton(ActionListener):
-  def actionPerformed(self, event):
-    edit_note.setEnabled(False)
-    save_note.setEnabled(True)
-    note_status.setText("Editing...")
-    textarea.setEditable(True)
-    textarea.requestFocus()
-
-edit_note.addActionListener(ClickEditButton())
-
-# Function for the bottom right button to request saving the text note to the CSV file
-class RequestSave(ActionListener):
-  def actionPerformed(self, event):
-    # Update table model data
-    rowIndex = table.getSelectionModel().getLeadSelectionIndex()
-    table_entries[rowIndex][-1] = textarea.getText()
-    # Signal synchronize to disk next time the scheduled thread wakes up
-    requested_save_csv.set(True)
-
-save_note.addActionListener(RequestSave())
-
-# Function to run upon closing the window
-class Cleanup(WindowAdapter):
-  def windowClosing(self, event):
-    askToSaveUnsavedChanges()
-    exe.shutdown()
-    ImagePlus.removeImageListener(open_imp_listener)
-
-frame.addWindowListener(Cleanup())
 
 
 def addOrUpdateEntry(imp):
