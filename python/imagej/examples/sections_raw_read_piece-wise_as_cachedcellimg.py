@@ -36,10 +36,10 @@ dimensions = [section_width, section_height, len(filepaths)]
 # The grid of the CellImg
 grid = CellGrid(dimensions, cell_dimensions)
 
-"""
+
 def createAccess(bytes, bytesPerPixel):
-  # Return a new volatile access instance for the appropriate pixel type.
-  # Supports byte, short, float and long.
+  """ Return a new volatile access instance for the appropriate pixel type.
+      Supports byte, short, float and long. """
   if 1 == bytesPerPixel: # BYTE
     return VolatileByteArray(bytes, True)
   # Transform bytes into another type
@@ -56,8 +56,8 @@ def createAccess(bytes, bytesPerPixel):
     pixels = zeros(len(bytes) / 8, 'l')
     bb.asLongBuffer().get(pixels)
     return VolatileLongArray(pixels, True)
-"""
 
+"""
 def createAccess(bytes, bytesPerPixel):
   if 1 == bytesPerPixel:
     return VolatileByteArray(bytes, True)
@@ -69,6 +69,7 @@ def createAccess(bytes, bytesPerPixel):
   pixels = zeros(len(bytes) / bytesPerPixel, t[0].lower()) # t[0].lower() is 's', 'f', 'l'
   getattr(bb, "as%sBuffer" % t)().get(pixels) # e.g. bb.asShortBuffer().get(pixels)
   return locals()["Volatile%sArray" % t](pixels, True) # e.g. VolatileShortArray(pixels, True)
+"""
     
 
 
@@ -131,7 +132,6 @@ loading_cache = SoftRefLoaderCache().withLoader(CellLoader()).unchecked()
 cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
                   dimensions, createType(bytesPerPixel), loading_cache,
                   ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
-
 
 # View the image as an ImageJ ImagePlus with an underlying VirtualStack
 IL.wrap(cachedCellImg, "sections").show()
