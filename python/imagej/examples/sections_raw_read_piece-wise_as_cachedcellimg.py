@@ -2,7 +2,8 @@ from net.imglib2.img.cell import CellGrid, Cell
 from net.imglib2.cache import CacheLoader
 from net.imglib2.cache.ref import SoftRefLoaderCache
 from net.imglib2.cache.img import CachedCellImg, ReadOnlyCachedCellImgFactory, ReadOnlyCachedCellImgOptions
-from net.imglib2.img.basictypeaccess.volatiles.array import VolatileByteArray, VolatileShortArray, VolatileFloatArray, VolatileLongArray
+from net.imglib2.img.basictypeaccess.volatiles.array import VolatileByteArray, VolatileShortArray,\
+                                                            VolatileFloatArray, VolatileLongArray
 from net.imglib2.type.numeric.integer import UnsignedByteType, UnsignedShortType, UnsignedLongType
 from net.imglib2.type.numeric.real import FloatType
 from java.nio import ByteBuffer, ByteOrder
@@ -150,6 +151,8 @@ imgE = Views.extendZero(cachedCellImg)
 crop = Views.interval(imgE, FinalInterval(mins, maxs))
 imp = IL.wrap(crop, "sections crop")
 imp.show()
+
+# Once shown, a reference to the ij.gui.ImageWindow exists
 win = imp.getWindow()
 
 # Remove and store key listeners from the ImageCanvas
