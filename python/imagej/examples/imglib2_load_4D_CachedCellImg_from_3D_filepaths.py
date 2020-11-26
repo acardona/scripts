@@ -12,11 +12,14 @@ from net.imglib2.img.basictypeaccess.volatiles.array import VolatileByteArray, V
 from net.imglib2.cache.img import ReadOnlyCachedCellImgFactory as Factory, \
                                   ReadOnlyCachedCellImgOptions as Options
 
-source_dir = "/home/albert/dropbox/Dropbox (HHMI)/data/4D-series/"
+# Get this data set of 11 stacks at:
+# https://www.dropbox.com/sh/dcp0coglw1ym6nb/AABVY8I1RenMq4kDN1RByLZTa?dl=0
+source_dir = "/home/albert/lab/presentations/20201130_I2K_Janelia/data/"
+series4D_dir = os.path.join(source_dir, "4D-series/")
 
 # One 3D stack (in KLB format) per time point in this 4D volume
-timepoint_paths = sorted(os.path.join(source_dir, filename)
-                         for filename in os.listdir(source_dir)
+timepoint_paths = sorted(os.path.join(series4D_dir, filename)
+                         for filename in os.listdir(series4D_dir)
                          if filename.endswith(".klb"))
 
 pattern = re.compile("(Byte|Short|Float|Long)")
@@ -73,10 +76,71 @@ from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
 imp = IL.wrap(cachedCellImg, "4D volume")
 imp.setDimensions(1, first.dimension(2), len(timepoint_paths))
+imp.setDisplayRange(16, 510) # min and max
 imp.show()
 
 
 # View in a BigDataViewer
 from bdv.util import BdvFunctions, Bdv
+from bdv.tools import InitializeViewerState
 
 bdv = BdvFunctions.show(cachedCellImg, "4D volume")
+bdv.setDisplayRange(16, 510)
+
+
+
+
+# In N5 format: *much* faster random access loading
+# because of both concurrent loading and loading smaller chunks
+# instead of entire timepoints.
+# And KLB is extra slow because of its strong compression.
+try:
+  from org.janelia.saalfeldlab.n5.imglib2 import N5Utils
+  from org.janelia.saalfeldlab.n5 import N5FSReader, N5FSWriter, GzipCompression, RawCompression
+except:
+  print "*** n5-imglib2 from github.com/saalfeldlab/n5-imglib2 not installed. ***"
+from com.google.gson import GsonBuilder
+from java.util.concurrent import Executors
+from java.lang import Runtime
+
+# The directory to store the N5 data.
+n5path = os.path.join(source_dir, "n5")
+# The name of the img data.
+dataset_name = "4D series"
+if not os.path.exists(n5path):
+  # Create directory for storing the dataset in N5 format
+  os.mkdir(n5path)
+  # An array or list as long as dimensions has the img,
+  # specifying how to chop up the img into pieces.
+  blockSize = [128, 128, 128, 1] # each block is about 2 MB
+  # Compression: 0 means none. 4 is sensible. Can go up to 9.
+  # See java.util.zip.Deflater for details
+  gzip_compression_level = 4
+  # Threads: as many as CPU cores, for parallel writing
+  exe = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
+
+  N5Utils.save(cachedCellImg, N5FSWriter(n5path, GsonBuilder()),
+               dataset_name, blockSize,
+               GzipCompression(gzip_compression_level) if gzip_compression_level > 0 else RawCompression(),
+               exe)
+
+  # The above waits until all jobs have run. Then:
+  exe.shutdown()
+
+# Interestingly:
+# KLB format: 11 stacks, 407 MB total
+# N5 format with GZIP compression level 4: 688 files, 584 MB total.
+
+# Open the N5 dataset
+imgN5 = N5Utils.open(N5FSReader(n5path, GsonBuilder()), dataset_name)
+
+# ... as a virtual stack
+impN5 = IL.wrap(imgN5, "4D volume - N5")
+impN5.setDimensions(1, first.dimension(2), len(timepoint_paths))
+impN5.setDisplayRange(16, 510) # min and max
+impN5.show()
+
+# ... in a BigDataViewer for arbitrary reslicing
+bdvN5 = BdvFunctions.show(imgN5, "4D Volume - N5")
+bdvN5.setDisplayRange(16, 510)
+
