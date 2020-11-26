@@ -11,7 +11,6 @@ from net.imglib2.img.basictypeaccess.volatiles.array import VolatileByteArray, V
                                                             VolatileFloatArray, VolatileLongArray  
 from net.imglib2.cache.img import ReadOnlyCachedCellImgFactory as Factory, \
                                   ReadOnlyCachedCellImgOptions as Options
-from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
 source_dir = "/home/albert/dropbox/Dropbox (HHMI)/data/4D-series/"
 
@@ -68,7 +67,16 @@ cachedCellImg = Factory().createWithCacheLoader(
                   dimensions, pixel_type, loading_cache,
                   Options.options().volatileAccesses(True).cellDimensions(cell_dimensions))
 
+
 # View in a virtual stack window
+from net.imglib2.img.display.imagej import ImageJFunctions as IL
+
 imp = IL.wrap(cachedCellImg, "4D volume")
 imp.setDimensions(1, first.dimension(2), len(timepoint_paths))
 imp.show()
+
+
+# View in a BigDataViewer
+from bdv.util import BdvFunctions, Bdv
+
+bdv = BdvFunctions.show(cachedCellImg, "4D volume")
