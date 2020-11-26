@@ -406,7 +406,7 @@ table.getSelectionModel().addListSelectionListener(TableSelectionListener())
 class PathOpener(MouseAdapter):
   def mousePressed(self, event):
     if 2 == event.getClickCount():
-      # If the file is opened, bring it to the front
+      # If the file is open, bring it to the front
       ids = WindowManager.getIDList()
       if ids: # can be null
         is_open = False # to allow bringing to front more than one window
