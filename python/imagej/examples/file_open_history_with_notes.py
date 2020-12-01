@@ -260,9 +260,9 @@ class ClickEditButton(ActionListener):
 edit_note.addActionListener(ClickEditButton())
 
 # Function for the bottom right button to request saving the text note to the CSV file
-def requestSave():
+def requestSave(rowIndex=None):
   # Update table model data
-  rowIndex = getSelectedRowIndex()
+  rowIndex = getSelectedRowIndex() if rowIndex is None else rowIndex
   table_entries[rowIndex][-1] = textarea.getText()
   # Signal synchronize to disk next time the scheduled thread wakes up
   requested_save_csv.set(True)
@@ -299,10 +299,10 @@ exe.scheduleAtFixedRate(saveTable, 0, 500, TimeUnit.MILLISECONDS)
 # When selecting a different table row or closing the window
 # and changes weren't saved, ask whether to save them,
 # and in any case print them to the ImageJ log window to make them recoverable.
-def askToSaveUnsavedChanges():
+def askToSaveUnsavedChanges(rowIndex):
   if note_status.getText() == "Unsaved changes.":
     if IJ.showMessageWithCancel("Alert", "Save current note?"):
-      requestSave()
+      requestSave(rowIndex=rowIndex)
     else:
       # Stash current note in the log window
       IJ.log("Discarded note for image at:")
@@ -313,7 +313,7 @@ def askToSaveUnsavedChanges():
 # Function to run upon closing the window
 class Cleanup(WindowAdapter):
   def windowClosing(self, event):
-    askToSaveUnsavedChanges()
+    askToSaveUnsavedChanges(getSelectedRowIndex())
     exe.shutdown()
     ImagePlus.removeImageListener(open_imp_listener)	
     event.getSource().dispose() # same as frame.dispose()
@@ -381,15 +381,19 @@ textarea.addKeyListener(TypingListener())
 # React to a row being selected by showing the corresponding note
 # in the textarea to the right
 class TableSelectionListener(ListSelectionListener):
+  def __init__(self):
+    self.lastRowIndex = -1
   def valueChanged(self, event):
     if event.getValueIsAdjusting():
       return
-    askToSaveUnsavedChanges()
+    rowIndex = getSelectedRowIndex()
+    print "rowIndex:", rowIndex, "last:", self.lastRowIndex
+    if -1 != self.lastRowIndex and rowIndex != self.lastRowIndex:
+      askToSaveUnsavedChanges(self.lastRowIndex)
+    self.lastRowIndex = rowIndex
     # Must run later in the context of the event dispatch thread
     # when the latter has updated the table selection
     def after():
-      rowIndex = getSelectedRowIndex()
-      print "rowIndex:", rowIndex
       path.setText(table_entries[rowIndex][-2])
       path.setToolTipText(path.getText()) # for mouse over to show full path
       textarea.setText(table_entries[rowIndex][-1])
