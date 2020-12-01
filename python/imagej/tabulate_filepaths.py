@@ -24,13 +24,27 @@ from functools import partial
 import re
 import os
 import sys
+from org.janelia.simview.klb import KLB
+from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
 
 # EDIT HERE, or leave as None (a dialog will open and ask for the .txt file)
 
 # The path to the file listing the file paths to tabulate
 txt_file = None  # Set to e.g. "/path/to/list.txt"
+base_path = None
 
+# Laptop via sshfs
+#txt_file = "/home/albert/zstore1/barnesc/LarvalScreen.txt"
+#base_path = "/home/albert/zstore1/barnesc/flylight-backups/LarvalScreen/"
+
+# At LMB desktop:
+#txt_file = "/home/albert/LarvalScreen.txt"
+#basepath = "/home/albert/LarvalScreen/"
+
+# For I2K 2020 workshop
+#txt_file = "/home/albert/lab/presentations/20201130_I2K_Janelia/data/list.txt"
+#base_path = "/home/albert/lab/presentations/20201130_I2K_Janelia/data/"
 
 
 # Ensure UTF-8 encoding
@@ -80,7 +94,7 @@ class TableModel(AbstractTableModel):
       return
     fn = None
     if '/' == regex[0]:
-      fn = partial(re.match, re.compile(regex[1:]))
+      fn = partial(re.search, re.compile(regex[1:]))
     else:
       fn = lambda path: -1 != path.find(regex)
     try:
@@ -126,7 +140,17 @@ class OpenImageFromTableCell(AbstractAction):
     base_path_field = table.getParent().getParent().getParent().getComponents()[-1] # last one
     base_path = base_path_field.getText()
     def openImage():
-      IJ.open(os.path.join(base_path, rel_path))
+      print rel_path
+      if rel_path.endswith(".klb"):
+        try:
+          klb = KLB.newInstance()
+          img = klb.readFull(os.path.join(base_path, rel_path))
+          IL.wrap(img, rel_path).show()
+        except:
+          print sys.exc_info()
+      else:
+        print "via IJ.open"
+        IJ.open(os.path.join(base_path, rel_path))
     exe.submit(openImage)
     
 
@@ -147,8 +171,9 @@ class ArrowListener(KeyAdapter):
       sm.setLeadSelectionIndex(0)
 
 class Closing(WindowAdapter):
-  def windowClosed(self, event):
+  def windowClosing(self, event):
     exe.shutdownNow() # free resources: otherwise the exe thread pool remains alive
+    event.getSource().dispose()
 
 # Verbose, but simple to read:
 def add(parent, child,
@@ -203,6 +228,8 @@ def makeUI(model):
   regex_field = JTextField(20)
   base_path_label = JLabel("Base path:")
   base_path_field = JTextField(50)
+  if base_path is not None:
+    base_path_field.setText(base_path)
   # Panel for all components
   all = JPanel()
   all.setBorder(EmptyBorder(20, 20, 20, 20))
@@ -219,7 +246,7 @@ def makeUI(model):
   # Window frame
   frame = JFrame("File paths")
   frame.getContentPane().add(all)
-  frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
+  #frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE)
   frame.addWindowListener(Closing())
   frame.pack()
   frame.setVisible(True)
@@ -248,3 +275,57 @@ if txt_file is None:
 if txt_file:
   model = TableModel(txt_file)
   SwingUtilities.invokeLater(launch(model))
+
+
+# FOR THE I2K WORKSHOP:
+# Enable changing text font size in all components by control+shift+(plus|equals)/minus
+components = []
+tables = []
+frames = []
+def addFontResizing():
+  global frames
+  containers = [frame for frame in JFrame.getFrames()
+                if frame.getTitle() == "File paths" and frame.isVisible()]
+  frames = containers[:]
+  from java.awt import Container
+  while len(containers) > 0:
+    for component in containers.pop(0).getComponents():
+      if isinstance(component, JTable):
+        tables.append(component)
+        components.append(component)
+        components.append(component.getTableHeader())
+      elif isinstance(component, Container):
+        containers.append(component)
+      components.append(component)
+  #
+  for component in components:
+    #print type(component).getSimpleName()
+    component.addKeyListener(FontSizeAdjuster())
+
+class FontSizeAdjuster(KeyAdapter):
+  def keyPressed(self, event):
+    if event.isControlDown() and event.isShiftDown(): # like in e.g. a web browser
+      sign = {KeyEvent.VK_MINUS: -1,
+              KeyEvent.VK_PLUS: 1,
+              KeyEvent.VK_EQUALS: 1}.get(event.getKeyCode(), 0)
+      if 0 == sign: return
+      # Adjust font size of all UI components
+      for component in components:
+        font = component.getFont()
+        if not font: continue
+        size = max(8.0, font.getSize2D() + sign * 0.5)
+        if size != font.getSize2D():
+          component.setFont(font.deriveFont(size))
+      def repaint():
+        # Adjust the height of a JTable's rows (why it doesn't do so automatically is absurd)
+        for table in tables:
+          if table.getRowCount() > 0:
+            r = table.prepareRenderer(table.getCellRenderer(0, 0), 0, 0)
+            table.setRowHeight(max(table.getRowHeight(), r.getPreferredSize().height))
+        for frame in frames:
+          if frame.isVisible():
+            frame.pack()
+            frame.repaint()
+      SwingUtilities.invokeLater(repaint)
+
+SwingUtilities.invokeLater(addFontResizing)
