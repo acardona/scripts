@@ -26,10 +26,10 @@ import os
 import sys
 
 try: # try-except block allows users with default FIJI to run the script without KLB installation
-	from org.janelia.simview.klb import KLB 
+  from org.janelia.simview.klb import KLB 
 except ImportError:
-	print "Warning: KLB format unavailable"
-	KLB = None
+  print "Warning: KLB format unavailable"
+  KLB = None
 
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
