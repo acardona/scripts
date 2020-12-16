@@ -41,8 +41,8 @@ txt_file = None  # Set to e.g. "/path/to/list.txt"
 base_path = None
 
 # Laptop via sshfs
-#txt_file = "/home/albert/zstore1/barnesc/LarvalScreen.txt"
-#base_path = "/home/albert/zstore1/barnesc/flylight-backups/LarvalScreen/"
+txt_file = "/Volumes/zfs/barnesc/flylight-backups/LarvalScreen/manifest.txt"
+base_path = "/Volumes/zfs/barnesc/flylight-backups/LarvalScreen/"
 
 # At LMB desktop:
 #txt_file = "/home/albert/LarvalScreen.txt"
