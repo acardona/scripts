@@ -149,7 +149,7 @@ class OpenImageFromTableCell(AbstractAction):
       print rel_path
       if rel_path.endswith(".klb"):
         if(KLB==None):
-      	  print "Cannot open KLB due to missing module"
+          print "Cannot open KLB due to missing module"
         try:
           klb = KLB.newInstance()
           img = klb.readFull(os.path.join(base_path, rel_path))
