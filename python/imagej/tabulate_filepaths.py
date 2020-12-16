@@ -24,7 +24,13 @@ from functools import partial
 import re
 import os
 import sys
-from org.janelia.simview.klb import KLB
+
+try: # try-except block allows users with default FIJI to run the script without KLB installation
+	from org.janelia.simview.klb import KLB 
+except ImportError:
+	print "Warning: KLB format unavailable"
+	KLB = None
+
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
 
@@ -142,6 +148,8 @@ class OpenImageFromTableCell(AbstractAction):
     def openImage():
       print rel_path
       if rel_path.endswith(".klb"):
+      	if(KLB==None):
+      		print "Cannot open KLB due to missing module"
         try:
           klb = KLB.newInstance()
           img = klb.readFull(os.path.join(base_path, rel_path))
@@ -150,7 +158,7 @@ class OpenImageFromTableCell(AbstractAction):
           print sys.exc_info()
       else:
         print "via IJ.open"
-        IJ.open(os.path.join(base_path, rel_path))
+      	IJ.open(os.path.join(base_path, rel_path))
     exe.submit(openImage)
     
 
