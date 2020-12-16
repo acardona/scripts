@@ -158,7 +158,7 @@ class OpenImageFromTableCell(AbstractAction):
           print sys.exc_info()
       else:
         print "via IJ.open"
-      	IJ.open(os.path.join(base_path, rel_path))
+        IJ.open(os.path.join(base_path, rel_path))
     exe.submit(openImage)
     
 
