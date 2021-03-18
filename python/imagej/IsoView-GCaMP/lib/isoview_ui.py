@@ -869,7 +869,7 @@ deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                          params["Last time point"])
     tab = None
     for frame in JFrame.getFrames():
-      if str(frame).startswith("org.scijava.ui.swing.script.TextEditor["):
+      if str(frame).find("org.scijava.ui.swing.script.TextEditor[") > -1:
         try:
           tab = frame.newTab(script, "python")
           break
