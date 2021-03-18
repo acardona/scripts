@@ -70,7 +70,7 @@
 #
 # Note the chosen ROI will be stored in the target folder 'tgtDir'. Upon reusing
 # the same target folder, if the ROI file is present, it will be loaded.
-# This is indended for convenience, for either reuse with e.g. different
+# This is intended for convenience, for either reuse with e.g. different
 # parts of the same 4D series, or for a re-run with different parameters.
 #
 # Push "Run" (here in the "Registration" window) and soon a new 4D window opens,
@@ -85,7 +85,7 @@
 # be loaded (avoiding re-computing features and pointmatches), and the model
 # estimated from them, saving lots of time.
 # This is intended for re-running quickly to e.g. see the registration computed
-# for e.h. the first time point as applied to e.g. another time point.
+# for e.g. the first time point as applied to e.g. another time point.
 #
 # IMPORTANT: If you have changed the ROI, though, the crop will be different,
 # and you should remove these CSV files from the target folder 'tgtDir', as
