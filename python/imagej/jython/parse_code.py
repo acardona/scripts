@@ -9,7 +9,7 @@ from ij import IJ, ImageJ
 imp = IJ.getImage()
 
 def setRoi(an_imp):
-  ip = imp.getStack().getProcessor(3)
+  ip = an_imp.getStack().getProcessor(3)
   pixels = ip.
 """
 
@@ -21,6 +21,8 @@ code_without_last = "\n".join(code.split("\n")[:-2])
 # which methods we could autocomplete with:
 
 try:
+  # "exec" means consider the whole code provided.
+  # See https://greentreesnakes.readthedocs.io/en/latest/tofrom.html#modes
   mod = ParserFacade.parse(code_without_last,
                                 CompileMode.exec,
                                 "<none>",
@@ -29,6 +31,7 @@ except:
   print sys.exc_info()
 
 # mod.body is a list of parsed code blocks
+# equivalent to PythonTree.getChildren
 
 # ImportFrom
 importStatement = mod.body[0]
@@ -49,7 +52,7 @@ print fn.name # setRoi
 print fn.args.args[0].id # an_imp
 fn_assign = fn.body[0]
 print fn_assign.targets[0].id # ip
-print fn_assign.value.func.value.func.value.id # imp
+print fn_assign.value.func.value.func.value.id # an_imp
 print fn_assign.value.func.value.func.attr # getStack
 print fn_assign.value.func.attr # getProcessor
 print fn_assign.value.args # [3]
