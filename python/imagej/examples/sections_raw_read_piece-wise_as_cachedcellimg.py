@@ -149,7 +149,7 @@ mins = array([1307, 448, 0], 'l')
 maxs = array([1307 + 976 -1, 448 + 732 -1, len(filepaths) -1], 'l')
 imgE = Views.extendZero(cachedCellImg)
 crop = Views.interval(imgE, FinalInterval(mins, maxs))
-imp = IL.wrap(crop, "sections crop")
+imp = IL.wrap(crop, "sections crop") # ImagePlus
 imp.show()
 
 # Once shown, a reference to the ij.gui.ImageWindow exists
