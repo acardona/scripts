@@ -130,7 +130,7 @@ class KLBLoader(CacheLoader):
     return self.get(path)
 
   def get(self, path):
-    return self.klb.readFull(path)
+    return self.klb.readFull(path) # net.imglib2.img.Img
 
 
 class TransformedLoader(CacheLoader):
