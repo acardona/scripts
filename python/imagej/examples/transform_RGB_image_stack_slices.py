@@ -67,6 +67,7 @@ for index in xrange(1, 3): # stack1.size() + 1):
 imp3.show()
 
 
+
 # Third approach: pull (CORRECT!), and much faster (delegates pixel-wise operations
 # to java libraries)
 # Defines a list of views (recipes, really) for transforming every stack slice
@@ -84,18 +85,22 @@ img1 = Views.dropSingletonDimensions(IL.wrap(imp))
 transform = AffineTransform2D()
 transform.set(scale,     0, 0,
                   0, scale, 0)
+
+# Origins and dimensions (hence, interval) of the target image 
 interval2 = FinalInterval([int(img1.dimension(0) * scale),
                            int(img1.dimension(1) * scale),
                            img1.dimension(2)])
+# Interval of a single stack slice of the target image
 sliceInterval = FinalInterval([interval2.dimension(0),
                                interval2.dimension(1)])
+
 
 slices2 = []
 for index in xrange(img1.dimension(2)):
   # One single 2D RGB slice
   imgSlice1 = Views.hyperSlice(img1, 2, index)
   # Views of the 3 color channels, as extended and interpolatable
-  channels = [Views.interpolate(Views.extendZero(Converters.argbChannel(imgSlice1, i)), # TODO can interpolate ARGBType directly?
+  channels = [Views.interpolate(Views.extendZero(Converters.argbChannel(imgSlice1, i)),
                                 NLinearInterpolatorFactory())
               for i in [1, 2, 3]]
   # ARGBType 2D view of the transformed color channels
@@ -111,7 +116,7 @@ viewImg2 = Views.stack(slices2)
 img2 = ArrayImgs.argbs(Intervals.dimensionsAsLongArray(interval2))
 ImgUtil.copy(viewImg2, img2)
 
-imp4 = IL.wrap(img2, "imglib2-transformed (pull)")
+imp4 = IL.wrap(img2, "imglib2-transformed RGB (pull)")
 imp4.show()
 
 
@@ -133,23 +138,49 @@ viewImg3 = Views.stack(slices3)
 """
 
 # Functional code:
-viewImg3 = Views.stack([Views.interval(
-                          RealViews.transform(
-                            Views.interpolate(Views.extendZero(Views.hyperSlice(img1, 2, index)),
-                                              NLinearInterpolatorFactory()),
-                            transform),
-                          sliceInterval)
-                        for index in xrange(img1.dimension(2))])
+viewImg3 = Views.stack([Views.interval( # crop the transformed source image
+                          RealViews.transform( # the source image into the target image
+                            Views.interpolate( # to subsample the source image
+                              Views.extendZero(Views.hyperSlice(img1, 2, index)), # source stack slice with infinite borders
+                              NLinearInterpolatorFactory()), # interpolation strategy
+                            transform), # the e.g. AffineTransform2D
+                          sliceInterval) # of the target image
+                        for index in xrange(img1.dimension(2))]) # for every stack slice
 
-# Materialized image
+# Materialized target image
 img3 = ArrayImgs.argbs(Intervals.dimensionsAsLongArray(interval2))
 ImgUtil.copy(viewImg3, img3) # multi-threaded copy
 
-imp5 = IL.wrap(img3, "imglib2-transformed RGB (pull)")
+imp5 = IL.wrap(img3, "imglib2-transformed ARGB (pull)")
 imp5.show()
 
 
 
+# Fifth approach: volume-wise transform with a pull (correct, but not always)
+# Fast, yet, the interpolator has no way to know that it should restrict
+# the inputs of the interpolation operation to pixels in the 2D plane,
+# as generally in image stacks the Z resolution is much worse than that of XY.
+
+from net.imglib2.realtransform import AffineTransform3D
+
+transform3D = AffineTransform3D() # all matrix values are zero
+transform3D.identity() # diagonal of 1.0
+transform3D.scale(scale, scale, 1.0) # only X and Y
+
+viewImg4 = Views.interval(
+             RealViews.transform(
+               Views.interpolate(
+                 Views.extendZero(img1),
+                 NLinearInterpolatorFactory()),
+               transform3D),
+             interval2)
+
+# Materialized target image
+img4 = ArrayImgs.argbs(Intervals.dimensionsAsLongArray(interval2))
+ImgUtil.copy(viewImg4, img4) # multi-threaded copy
+
+imp5 = IL.wrap(img4, "imglib2-transformed ARGB (pull) volume-wise")
+imp5.show()
 
 
 
