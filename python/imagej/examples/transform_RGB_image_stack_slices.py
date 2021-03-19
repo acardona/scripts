@@ -69,6 +69,8 @@ imp3.show()
 
 # Third approach: pull (CORRECT!), and much faster (delegates pixel-wise operations
 # to java libraries)
+# Defines a list of views (recipes, really) for transforming every stack slice
+# and then materializes the view by copying it in a multi-threaded way into an ArrayImg.
 from net.imglib2 import FinalInterval
 from net.imglib2.converter import Converters, ColorChannelOrder
 from net.imglib2.view import Views
@@ -85,6 +87,8 @@ transform.set(scale,     0, 0,
 interval2 = FinalInterval([int(img1.dimension(0) * scale),
                            int(img1.dimension(1) * scale),
                            img1.dimension(2)])
+sliceInterval = FinalInterval([interval2.dimension(0),
+                               interval2.dimension(1)])
 
 slices2 = []
 for index in xrange(img1.dimension(2)):
@@ -96,8 +100,7 @@ for index in xrange(img1.dimension(2)):
               for i in [1, 2, 3]]
   # ARGBType 2D view of the transformed color channels
   imgSlice2 = Converters.mergeARGB(Views.stack(Views.interval(RealViews.transform(channel, transform),
-                                                              FinalInterval([interval2.dimension(0),
-                                                                             interval2.dimension(1)]))
+                                                              sliceInterval)
                                                for channel in channels),
                                    ColorChannelOrder.RGB)
   slices2.append(imgSlice2)
@@ -110,6 +113,46 @@ ImgUtil.copy(viewImg2, img2)
 
 imp4 = IL.wrap(img2, "imglib2-transformed (pull)")
 imp4.show()
+
+
+# Fourth approach: pull (CORRECT!), and much faster (delegates pixel-wise operations
+# to java libraries and delegates RGB color handling altogether)
+# Defines a list of views (recipes, really) for transforming every stack slice
+# and then materializes the view by copying it in a multi-threaded way into an ArrayImg.
+# Now without separating the color channels: will use the NLinearInterpolatorARGB
+# In practice, it's a tad slower than the third approach: also processes the alpha channel in ARGB
+# even though we know it is empty. Its conciseness adds clarity and is a win.
+"""
+# Procedural code:
+slices3 = []
+for index in xrange(img1.dimension(2)):
+  imgSlice1 = Views.interpolate(Views.extendZero(Views.hyperSlice(img1, 2, index)), NLinearInterpolatorFactory())
+  imgSlice3 = Views.interval(RealViews.transform(imgSlice1, transform), sliceInterval)
+  slices3.append(imgSlice3)
+viewImg3 = Views.stack(slices3)
+"""
+
+# Functional code:
+viewImg3 = Views.stack([Views.interval(
+                          RealViews.transform(
+                            Views.interpolate(Views.extendZero(Views.hyperSlice(img1, 2, index)),
+                                              NLinearInterpolatorFactory()),
+                            transform),
+                          sliceInterval)
+                        for index in xrange(img1.dimension(2))])
+
+# Materialized image
+img3 = ArrayImgs.argbs(Intervals.dimensionsAsLongArray(interval2))
+ImgUtil.copy(viewImg3, img3) # multi-threaded copy
+
+imp5 = IL.wrap(img3, "imglib2-transformed RGB (pull)")
+imp5.show()
+
+
+
+
+
+
 
 
 
