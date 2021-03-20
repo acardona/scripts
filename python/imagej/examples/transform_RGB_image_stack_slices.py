@@ -27,6 +27,7 @@ imp2 = ImagePlus("larger (push)", stack2)
 # Map data from stack to stack2 using the model transform
 position = zeros(2, 'd')
 
+"""
 
 # First approach: push (WRONG!)
 width1, height1 = stack1.getWidth(), stack1.getHeight()
@@ -66,7 +67,7 @@ for index in xrange(1, 3): # stack1.size() + 1):
 
 imp3.show()
 
-
+"""
 
 # Third approach: pull (CORRECT!), and much faster (delegates pixel-wise operations
 # to java libraries)
@@ -181,6 +182,33 @@ ImgUtil.copy(viewImg4, img4) # multi-threaded copy
 
 imp5 = IL.wrap(img4, "imglib2-transformed ARGB (pull) volume-wise")
 imp5.show()
+
+
+# Compare volume-wise with slice-wise:
+# (Like ImageJ's Image Calculator but using the ImgMath library to specify pixel-wise operations)
+from net.imglib2.algorithm.math.ImgMath import let, sub, IF, THEN, ELSE, LT
+from net.imglib2.type.numeric import ARGBType
+
+# Define an operation to compute the absolute value of the difference of two images
+def absdiff(imgA, imgB):
+  return let("diff", sub(imgA, imgB),
+             IF(LT("diff", 0),
+                THEN(sub(0, "diff")), # invert the sign to make it positive
+                ELSE("diff")))
+
+# Channel-wise pixel-wise differences, resulting in a list of 3 views of the absdiff op
+channels_diff = [absdiff(cA, cB).view()
+                 for cA, cB in zip(*[[Converters.argbChannel(img3, i) for i in [1, 2, 3]],
+                                     [Converters.argbChannel(img4, i) for i in [1, 2, 3]]])]
+view_diff = Converters.mergeARGB(Views.stack(channels_diff), ColorChannelOrder.RGB)
+img_diff = ArrayImgs.argbs(Intervals.dimensionsAsLongArray(interval2))
+ImgUtil.copy(view_diff, img_diff)
+IL.wrap(img_diff, "diff slice-wise vs volume-wise").show()
+print "Sum of abs diff:", sum(ARGBType.red(v) + ARGBType.green(v) + ARGBType.blue(v)
+                              for v in (t.get() for t in img_diff.cursor()))
+
+
+
 
 
 
