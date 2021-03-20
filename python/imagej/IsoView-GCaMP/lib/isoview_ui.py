@@ -757,8 +757,14 @@ def generateDeconvolutionScriptUI(srcDir,
 import sys, os
 sys.path.append("%s")
 from lib.isoview import deconvolveTimePoints
+from lib.io import KLBLoader, ImageJLoader, BinaryLoader
 from mpicbg.models import RigidModel3D, TranslationModel3D
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
+
+# Img loading function: *** EDIT HERE ***
+# from the lib.io, one of: KLBLoader, ImageJLoader, BinaryLoader
+# Note that the BinaryLoader takes argument such as dimensions, header size, byte order, etc.
+loader = KLBLoader()
 
 # The folder with the sequence of TM\d+ folders, one per time point in the 4D series.
 # Each folder should contain 4 KLB files, one per camera view of the IsoView microscope.
@@ -801,7 +807,7 @@ fineTransformsPostROICrop = \
 
 deconvolveTimePoints(srcDir, targetDir, kernelPath, calibration,
                     cameraTransformations, fineTransformsPostROICrop,
-                    params, roi, fine_fwd=True, subrange=range(%i, %i))
+                    params, roi, fine_fwd=True, subrange=range(%i, %i), loader=loader)
   """
 
   od = OpenDialog("Choose kernel file", srcDir, None)

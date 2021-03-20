@@ -102,14 +102,17 @@ from net.imglib2.view import Views
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2.realtransform import RealViews, AffineTransform3D
+from net.imglib2.cache import CacheLoader
 import os, sys
 from os.path import basename
 from bdv.util import BdvFunctions, Bdv
 sys.path.append(os.path.dirname(os.path.dirname(sys.argv[0])))
 from lib.ui import showAsStack
 from lib.isoview_ui import makeTranslationUI, makeCropUI, makeRegistrationUI
+from lib.io import KLBLoader, ImageJLoader, BinaryLoader
 from functools import partial
 from mpicbg.models import RigidModel3D, TranslationModel3D
+from ij import IJ
 
 # START EDITING HERE
 
@@ -118,6 +121,12 @@ srcDir = "/home/albert/Desktop/t2/IsoView/"
 tgtDir = "/home/albert/Desktop/t2/IsoView/" # to store e.g. CSV files
 
 calibration = [1.0, 1.0, 5.0]
+
+# Img loading function: adjust as desired
+# from the lib.io, one of: KLBLoader, ImageJLoader, BinaryLoader
+# Note that the BinaryLoader takes argument such as dimensions, header size, byte order, etc.
+loader = KLBLoader()
+### NOTE: you'll need the same loader in the generated script. ###
 
 # Parameters for feature-based registration
 csv_dir = tgtDir # Folder to store CSV files
@@ -168,10 +177,6 @@ paramsTileConfiguration = {
 
 # STOP EDITING HERE
 
-
-
-klb = KLB.newInstance()
-
 # paths for same timepoint, 4 different cameras
 paths = []
 timepointDir = srcDir + "TM000000/"
@@ -181,10 +186,10 @@ for camera_index, channel_index in zip(xrange(4), [1, 1, 0, 0]):
 for path in paths:
   print basename(path)
 
-img0 = klb.readFull(paths[0])
-img1 = klb.readFull(paths[1])
-img2 = klb.readFull(paths[2])
-img3 = klb.readFull(paths[3])
+img0 = loader.load(paths[0])
+img1 = loader.load(paths[1])
+img2 = loader.load(paths[2])
+img3 = loader.load(paths[3])
 
 
 # Make all isotropic (virtually, as a view)
