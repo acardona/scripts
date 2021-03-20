@@ -171,6 +171,23 @@ class InRAMLoader(CacheLoader):
     return self.get(path)
 
 
+class BinaryLoader(CacheLoader):
+  """ stype: a string such as "8-bit", "16-bit" or "floats".
+      dimensions: a list of integers
+      options: keyword arguments as present in the binary loading functions, such as header size, byte order, etc.
+  """
+  def __init__(self, stype, dimensions, **options):
+    self.fn = { "8-bit": readUnsignedBytes,
+               "16-bit": readUnsignedShorts,
+               "floats": readFloats}[stype]
+    self.dimensions = dimensions
+    self.options = options
+  def get(self, path):
+    return self.fn(path, self.dimensions, **self.options)
+  def load(self, path):
+    return self.get(path)
+
+
 class SectionCellLoader(CacheLoader):
   """
   A CacheLoader that can load Cell instances using ImageJ's I/O library. 
