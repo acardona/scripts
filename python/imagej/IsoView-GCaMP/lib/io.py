@@ -41,6 +41,17 @@ except:
 from com.google.gson import GsonBuilder
 from math import ceil
 from itertools import imap
+try:
+  from fiji.scripting import Weaver
+  # Check if the tools.jar is in the classpath
+  try:
+    Class.forName("com.sun.tools.javac.Main")
+  except:
+    print "*** tools.jar not in the classpath ***"
+except:
+  print "*** fiji.scripting.Weaver NOT installed ***"
+  Weaver = None
+  print sys.exc_info()
 
 
 def readFloats(path, dimensions, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
@@ -93,6 +104,75 @@ def readUnsignedBytes(path, dimensions, header=0):
     bytes = zeros(reduce(operator.mul, dimensions), 'b')
     ra.read(bytes)
     return ArrayImgs.unsignedBytes(bytes, dimensions)
+  finally:
+    ra.close()
+
+
+# An inlined java method for deinterleaving a short[] array
+# such as from .dat FIBSEM files where channels are stored
+# spatially array-adjacent, i.e. for 2 channels, 2 consecutive shorts.
+if Weaver:
+  wd = Weaver.method("""
+static public final short[][] deinterleave(final short[] source, final int numChannels, final int channel_index) {
+  if (channel_index >= 0) {
+    // Read a single channel
+    final short[] shorts = new short[source.length / numChannels];
+    for (int i=channel_index; k=0; i<source.length; ++k, i+=numChannels) {
+      shorts[k] = source[i];
+    }
+    return new short{shorts};
+  }
+  final short[][] channels = new short[numChannels][source.length / numChannels];
+  for (int i=0, k=0; i<source.length; ++k) {
+    for (int c=0; c<numChannels; ++c, ++i) {
+      channels[c][k] = source[i];
+    }
+  }
+  return channels;
+}
+""", [], False) # no imports, and don't show code
+
+
+def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570):
+  """ Read a file from Shan Xu's FIBSEM software, where two or more channels are interleaved.
+      Assumes channels are stored in 16-bit.
+      
+      path: the file path to the .dat file.
+      channel_index: the 0-based index of the channel to parse, or -1 (default) for all.
+      header: defaults to a length of 1024 bytes
+      magic_number: defaults to that for version 8 of Shan Xu's .dat image file format.
+  """
+  ra = RandomAccessFile(path, 'r')
+  try:
+    # Check the magic number
+    ra.seek(0)
+    if ra.readInt() & 0xffffffff != magic_number:
+      print "Magic number mismatch"
+      return None
+    # Read the number of channels
+    ra.seek(32)
+    numChannels = ra.readByte() & 0xff # a single byte as unsigned integer
+    # Parse width and height
+    ra.seek(100)
+    width = ra.readInt()
+    ra.seek(104)
+    height = ra.readInt()
+    # Read the whole interleaved pixel array
+    ra.seek(header)
+    bytes = zeros(width * height * 2 * numChannels, 'b') # 2 for 16-bit
+    ra.read(bytes)
+    # Parse as 16-bit array
+    sb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer()
+    shorts = zeros(width * height * numChannels, 'h')
+    sb.get(shorts)
+    # Deinterleave channels
+    # With Weaver: fast
+    channels = w.deinterleave(shorts, numChannels, channel_index)
+    # With python array sampling: very slow, and not just from iterating whole array once per channel
+    #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
+    #channels = [shorts[i::numChannels] for i in seq]
+    # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
+    return [ArrayImgs.shorts(s, [width, height]) for s in channels]
   finally:
     ra.close()
 
