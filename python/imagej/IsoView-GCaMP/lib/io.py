@@ -5,7 +5,7 @@ from java.nio import ByteBuffer, ByteOrder
 from java.math import BigInteger
 from java.util import Arrays
 from java.lang import System, Long
-import operator, sys
+import operator, sys, os
 from net.imglib2 import RandomAccessibleInterval, IterableInterval
 from net.imglib2.view import Views
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
@@ -64,7 +64,7 @@ def findFilePaths(srcDir, extension):
   for root, dirs, filenames in os.walk(srcDir):
     for filename in filenames:
       if filename.endswith(extension):
-        paths.append(filename)
+        paths.append(os.path.join(root, filename))
   paths.sort()
   return paths
   
