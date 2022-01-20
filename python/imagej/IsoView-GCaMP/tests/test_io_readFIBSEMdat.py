@@ -1,4 +1,4 @@
-rom java.io import RandomAccessFile
+from java.io import RandomAccessFile
 from net.imglib2.img.array import ArrayImgs
 #from net.imglib2.img.basictypeaccess.array import ShortArray
 from jarray import zeros, array
