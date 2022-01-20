@@ -54,6 +54,18 @@ except:
   print sys.exc_info()
 
 
+def findFilePaths(srcDir, extension):
+  """ Find file paths that match the filename extension,
+      recursively into any subdirectories. """
+  paths = []
+  for root, dirs, filenames in os.walk(srcDir):
+    for filename in filenames:
+      if filename.endswith(extension):
+        paths.append(filename)
+  paths.sort()
+  return paths
+  
+
 def readFloats(path, dimensions, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
   """ Read a file as an ArrayImg of FloatType """
   size = reduce(operator.mul, dimensions)
