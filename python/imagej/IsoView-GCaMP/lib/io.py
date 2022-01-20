@@ -44,11 +44,13 @@ from math import ceil
 from itertools import imap
 try:
   from fiji.scripting import Weaver
+  """ TODO isn't working, even when tools.jar is present
   # Check if the tools.jar is in the classpath
   try:
     Class.forName("com.sun.tools.javac.Main")
   except:
     print "*** tools.jar not in the classpath ***"
+  """
 except:
   print "*** fiji.scripting.Weaver NOT installed ***"
   Weaver = None
@@ -130,10 +132,10 @@ static public final short[][] deinterleave(final short[] source, final int numCh
   if (channel_index >= 0) {
     // Read a single channel
     final short[] shorts = new short[source.length / numChannels];
-    for (int i=channel_index; k=0; i<source.length; ++k, i+=numChannels) {
+    for (int i=channel_index, k=0; i<source.length; ++k, i+=numChannels) {
       shorts[k] = source[i];
     }
-    return new short{shorts};
+    return new short[][]{shorts};
   }
   final short[][] channels = new short[numChannels][source.length / numChannels];
   for (int i=0, k=0; i<source.length; ++k) {
@@ -180,7 +182,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570):
     sb.get(shorts)
     # Deinterleave channels
     # With Weaver: fast
-    channels = w.deinterleave(shorts, numChannels, channel_index)
+    channels = wd.deinterleave(shorts, numChannels, channel_index)
     # With python array sampling: very slow, and not just from iterating whole array once per channel
     #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
     #channels = [shorts[i::numChannels] for i in seq]
