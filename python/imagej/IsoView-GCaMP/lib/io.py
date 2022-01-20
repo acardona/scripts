@@ -32,6 +32,7 @@ try:
   # Needs 'SiMView' Fiji update site enabled
   from org.janelia.simview.klb import KLB
 except:
+  KLB = None
   print "*** KLB library is NOT installed ***"
 try:
   from org.janelia.saalfeldlab.n5.imglib2 import N5Utils
@@ -188,8 +189,8 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570):
   finally:
     ra.close()
 
-
-__klb__ = KLB.newInstance()
+if KLB:
+  __klb__ = KLB.newInstance()
 
 def readKLB(path):
   return __klb__.readFull(path)
