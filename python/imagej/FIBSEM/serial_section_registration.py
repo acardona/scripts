@@ -22,10 +22,13 @@ import os, sys
 sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.io import findFilePaths
 from lib.util import numCPUs, syncPrint
-from lib.serial2Dregistration import setup, viewAligned
+from lib.serial2Dregistration import setupImageLoader, viewAligned
 from lib.registration import loadMatrices
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2 import FinalInterval
+from mpicbg.imagefeatures import FloatArray2DSIFT
+
+
 
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
 tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
@@ -84,7 +87,7 @@ syncPrint("Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y
 
 
 # Adjust image loader as needed:
-if filepaths[0].endwith(".dat"):
+if filepaths[0].endswith(".dat"):
   syncPrint("Using io.readFIBSEMdat to read image files.")
   setupImageLoader(loadImg=lambda filepath: readFIBSEMdat(filepath, channel_index=0))
 else:
