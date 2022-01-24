@@ -37,6 +37,7 @@ def deconvolveTimePoints(srcDir,
                          kernel_dimensions=[19, 19, 25],
                          kernel_header=434,
                          fine_fwd=False,
+                         loader=ImageJLoader(),
                          n_threads=0): # 0 means all
   """
      Main program entry point.
@@ -72,6 +73,7 @@ def deconvolveTimePoints(srcDir,
                     When None, open the kernel file with IJ.openImage.
      fine_fwd: whether the fineTransformsPostROICrop were computed all-to-all, which optimizes the pose and produces direct transforms,
                or, when False, the fineTransformsPostROICrop were computed from 0 to 1, 0 to 2, and 0 to 3, so they are inverted.
+     loader: a CacheLoader like lib.io KLBLoader, ImageJLoader, or BinaryLoader
      n_threads: number of threads to use. Zero (default) means as many as possible.
   """
   if str == type(kernel_filepaths): # handle legacy invocations
@@ -87,9 +89,7 @@ def deconvolveTimePoints(srcDir,
   kernels = map(readKernel, kernel_filepath)
   if 1 == len(kernels):
     # Reuse the same kernel for all views
-    kernels = [kernels[0]] * (2 * len(camera_groups)) 
-  
-  klb_loader = KLBLoader()
+    kernels = [kernels[0]] * (2 * len(camera_groups))
 
   def getCalibration(img_filename):
     return calibration
@@ -135,7 +135,7 @@ def deconvolveTimePoints(srcDir,
   # All OK, submit all timepoint folders for registration and deconvolution
 
   # dimensions: all images from each camera have the same dimensions
-  dimensions = [Intervals.dimensionsAsLongArray(klb_loader.get(filepath))
+  dimensions = [Intervals.dimensionsAsLongArray(loader.get(filepath))
                 for index, filepath in sorted(TMs[0].items(), key=itemgetter(0))]
 
   cmTransforms = cameraTransformations(dimensions[0], dimensions[1], dimensions[2], dimensions[3], calibration)
@@ -183,7 +183,7 @@ def deconvolveTimePoints(srcDir,
     for i, filepaths in enumerate(TMs):
       if Thread.currentThread().isInterrupted(): break
       syncPrint("Deconvolving time point %i with files:\n  %s" %(i, "\n  ".join(sorted(filepaths.itervalues()))))
-      deconvolveTimePoint(filepaths, targetDir, klb_loader,
+      deconvolveTimePoint(filepaths, targetDir, loader,
                           transforms, target_interval,
                           params, PSF_kernels, exe, output_converter,
                           camera_groups=camera_groups)
@@ -193,7 +193,7 @@ def deconvolveTimePoints(srcDir,
     exe.awaitTermination(5, TimeUnit.MINUTES)
 
 
-def deconvolveTimePoint(filepaths, targetDir, klb_loader,
+def deconvolveTimePoint(filepaths, targetDir, loader,
                         transforms, target_interval,
                         params, PSF_kernels, exe, output_converter,
                         camera_groups=((0, 1), (2, 3)),
@@ -216,7 +216,7 @@ def deconvolveTimePoint(filepaths, targetDir, klb_loader,
     # 1. Ensure its pixel values conform to expectations (no zeros inside)
     # 2. Copy it into an ArrayImg for faster recurrent retrieval of same pixels
     syncPrint("Preparing %s CM0%i for deconvolution" % (tm_dirname, index))
-    img = klb_loader.get(filepaths[index]) # of UnsignedShortType
+    img = loader.get(filepaths[index]) # of UnsignedShortType
     imgP = prepareImgForDeconvolution(img, transforms[index], target_interval) # returns of FloatType
     # Copy transformed view into ArrayImg for best performance in deconvolution
     imgA = ArrayImgs.floats(Intervals.dimensionsAsLongArray(imgP))

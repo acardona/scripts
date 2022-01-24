@@ -56,27 +56,37 @@ from pixels import autoAdjust
 
 
 def loadImp(filepath):
-  # Images are TIFF with bit pack compression: can't byte-read array
+  """ Returns an ImagePlus """
   syncPrint("Loading image " + filepath)
   return IJ.openImage(filepath)
 
 def loadUnsignedShort(filepath):
+  """ Returns an ImgLib2 ArrayImg """
     imp = loadImp(filepath)
     return ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
 
-def loadFloatProcessor(filepath, params, scale=True):
+def loadFloatProcessor(filepath, paramsSIFT, scale=True):
   try:
     fp = loadImp(filepath).getProcessor().convertToFloatProcessor()
     # Preprocess images: Gaussian-blur to scale down, then normalize contrast
     if scale:
-      fp = Filter.createDownsampled(fp, params["scale"], 0.5, 1.6)
-      Util.normalizeContrast(fp)
+      fp = Filter.createDownsampled(fp, params["scale"], 0.5, paramsSIFT.initialSigma)
+      Util.normalizeContrast(fp) # TODO should be outside the if clause?
     return fp
   except:
     syncPrint(sys.exc_info())
 
+# Default value
+n_threads = numCPUs()
+  
 
-def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load):
+def setupImageLoader(loadImp_=loadImp):
+  """ Specify which function can read the image files into an ImagePlus.
+      Defaults to loadImp using ImageJ's IJ.loadImage. """
+  loadImp = loadImp_
+
+
+def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeload, load):
   """
   filepath1: the file path to an image of a section.
   filepath2: the file path to an image of another section.
@@ -195,21 +205,21 @@ def extractBlockMatches(filepath1, filepath2, params, csvDir, exeload, load):
     syncPrint("".join(traceback.format_exception()), out="stderr")
 
 
-def pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload):
-  loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, scale=True), maxsize=64)
+def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload):
+  loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, scale=True), maxsize=params["n_threads"])
   for i in xrange(len(filepaths) - n_adjacent):
     for inc in xrange(1, n_adjacent + 1):
       #syncPrint("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
-      yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, csvDir, exeload, loadFPMem)
+      yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, csvDir, exeload, loadFPMem)
 
 
 def ensurePointMatches(filepaths, csvDir, params, n_adjacent):
   """ If a pointmatches csv file doesn't exist, will create it. """
-  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(numCPUs()))
+  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(n_threads))
   exeload = newFixedThreadPool()
   try:
     count = 1
-    for result in w.chunkConsume(numCPUs() * 2, pointmatchingTasks(filepaths, csvDir, params, n_adjacent, exeload)):
+    for result in w.chunkConsume(n_threads * 2, pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload)):
       if result: # is False when CSV file already exists
         syncPrint("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
       count += 1
@@ -236,32 +246,34 @@ def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       yield Task(loadPointMatchesPlus, filepaths, i, i + inc, csvDir, params)
 
 # When done, optimize tile pose globally
-def makeLinkedTiles(filepaths, csvDir, params, n_adjacent):
-  ensurePointMatches(filepaths, csvDir, params, n_adjacent)
+def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent):
+  ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent)
   try:
     tiles = [Tile(TranslationModel2D()) for _ in filepaths]
     # FAILS when running in parallel, for mysterious reasons related to jython internals, perhaps syncPrint fails
     #w = ParallelTasks("loadPointMatches")
-    #for i, j, pointmatches in w.chunkConsume(numCPUs() * 2, loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
+    #for i, j, pointmatches in w.chunkConsume(n_threads * 2, loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
     syncPrint("Loading all pointmatches.")
     for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       i, j, pointmatches = task.call()
       tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
-    syncPrint("Finsihed loading all pointmatches.")
+    syncPrint("Finished loading all pointmatches.")
     return tiles
   finally:
     #w.destroy()
     pass
 
 
-def align(filepaths, csvDir, params, paramsTileConfiguration):
+def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration):
+  if not os.path.exists(csvDir):
+    os.mkdirs(csvDir) # recursively
   name = "matrices"
   matrices = loadMatrices(name, csvDir)
   if matrices:
     return matrices
   
   # Optimize
-  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsTileConfiguration["n_adjacent"])
+  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"])
   tc = TileConfiguration()
   tc.addTiles(tiles)
   tc.fixTile(tiles[len(tiles) / 2]) # middle tile
@@ -278,7 +290,7 @@ def align(filepaths, csvDir, params, paramsTileConfiguration):
   # Return model matrices as double[] arrays with 6 values
   matrices = []
   for tile in tiles:
-    # BUG in TransformationModel2D.toMatrix
+    # BUG in TransformationModel2D.toMatrix   # TODO can be updated now, it's been fixed
     #a = nativeArray('d', [2, 3])
     #tile.getModel().toMatrix(a)
     #matrices.append(a[0] + a[1])
@@ -287,20 +299,19 @@ def align(filepaths, csvDir, params, paramsTileConfiguration):
     tile.getModel().toArray(a)
     matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
 
-  saveMatrices(name, matrices, csvDir) # TODO check: saving correctly, now that it's 2D?
+  saveMatrices(name, matrices, csvDir)
   
   return matrices
 
 
 class TranslatedSectionGet(LazyCellImg.Get):
-  def __init__(self, filepaths, loadImg, matrices, img_dimensions, cell_dimensions, interval, copy_threads=1, preload=None):
+  def __init__(self, filepaths, loadImg, matrices, img_dimensions, cell_dimensions, interval, preload=None):
     self.filepaths = filepaths
     self.loadImg = loadImg # function to load images
     self.matrices = matrices
     self.img_dimensions = img_dimensions
     self.cell_dimensions = cell_dimensions # x,y must match dims of interval
     self.interval = interval # when smaller than the image, will crop
-    self.copy_threads = max(1, copy_threads)
     self.cache = SoftMemoize(partial(TranslatedSectionGet.makeCell, self), maxsize=256)
     self.exe = newFixedThreadPool(-1) # BEWARE native memory leak if not closed
     self.preload = preload
@@ -337,8 +348,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     imgT = Views.zeroMin(Views.interval(imgA, self.interval))
     aimg = img.factory().create(self.interval)
     ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),
-                 aimg,
-                 self.copy_threads)
+                 aimg)
     return Cell(self.cell_dimensions,
                [0, 0, index],
                aimg.update(None))
@@ -381,7 +391,7 @@ class SourcePanning(KeyAdapter):
       syncPrint(str(sys.exc_info()))
 
 
-def makeImg(filepaths, loadImg, img_dimensions, matrices, cropInterval, copy_threads, preload):
+def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterval, preload):
   dims = Intervals.dimensionsAsLongArray(cropInterval)
   voldims = [dims[0],
              dims[1],
@@ -391,7 +401,7 @@ def makeImg(filepaths, loadImg, img_dimensions, matrices, cropInterval, copy_thr
                      1]
   grid = CellGrid(voldims, cell_dimensions)
   cellGet = TranslatedSectionGet(filepaths, loadImg, matrices, img_dimensions, cell_dimensions,
-                                 cropInterval, copy_threads=copy_threads, preload=preload)
+                                 cropInterval, preload=preload)
   return LazyCellImg(grid, pixelType(), cellGet), cellGet
 
 class OnClosing(ImageListener):
@@ -406,9 +416,9 @@ class OnClosing(ImageListener):
   def imageUpdated(self, imp):
     pass
 
-def viewAligned(filepaths, csvDir, params, paramsTileConfiguration, img_dimensions, cropInterval):
-  matrices = align(filepaths, csvDir, params, paramsTileConfiguration)
-  cellImg, cellGet = makeImg(filepaths, loadUnsignedShort, img_dimensions, matrices, cropInterval, 1, 5)
+def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, img_dimensions, cropInterval):
+  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration)
+  cellImg, cellGet = makeImg(filepaths, params["pixelType"], loadUnsignedShort, img_dimensions, matrices, cropInterval, 5)
   print cellImg
   comp = showStack(cellImg, title=srcDir.split('/')[-2], proper=False)
   # Add the SourcePanning KeyListener as the first one
@@ -431,7 +441,6 @@ def export8bitN5(filepaths,
                  gzip_compression=6,
                  invert=True,
                  CLAHE_params=[400, 256, 3.0],
-                 copy_threads=2,
                  n5_threads=0, # 0 means as many as CPU cores
                  block_size=[128,128,128]):
   """
@@ -453,7 +462,7 @@ def export8bitN5(filepaths,
                      dims[1],
                      1]
 
-  def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, n_bins, slope, matrices, copy_threads, index, imp):
+  def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, n_bins, slope, matrices, index, imp):
     sp = imp.getProcessor() # ShortProcessor
     sp.setRoi(interval.min(0),
               interval.min(1),
@@ -475,7 +484,7 @@ def export8bitN5(filepaths,
     imgT = Views.zeroMin(Views.interval(imgA, img))
     imgMinMax = convert(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType)
     aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
-    ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg, copy_threads)
+    ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg)
     img = imgI = imgA = imgT = imgMinMax = None
     return aimg
     
@@ -483,7 +492,7 @@ def export8bitN5(filepaths,
   blockRadius, n_bins, slope = CLAHE_params
 
   loader = SectionCellLoader(filepaths, asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
-                                                           interval, invert, blockRadius, n_bins, slope, matrices, copy_threads))
+                                                           interval, invert, blockRadius, n_bins, slope, matrices))
 
   # How to preload block_size[2] files at a time? Or at least as many as numCPUs()?
   # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,

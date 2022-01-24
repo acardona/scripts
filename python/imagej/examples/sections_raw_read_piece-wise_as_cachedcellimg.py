@@ -2,7 +2,8 @@ from net.imglib2.img.cell import CellGrid, Cell
 from net.imglib2.cache import CacheLoader
 from net.imglib2.cache.ref import SoftRefLoaderCache
 from net.imglib2.cache.img import CachedCellImg, ReadOnlyCachedCellImgFactory, ReadOnlyCachedCellImgOptions
-from net.imglib2.img.basictypeaccess.volatiles.array import VolatileByteArray, VolatileShortArray, VolatileFloatArray, VolatileLongArray
+from net.imglib2.img.basictypeaccess.volatiles.array import VolatileByteArray, VolatileShortArray,\
+                                                            VolatileFloatArray, VolatileLongArray
 from net.imglib2.type.numeric.integer import UnsignedByteType, UnsignedShortType, UnsignedLongType
 from net.imglib2.type.numeric.real import FloatType
 from java.nio import ByteBuffer, ByteOrder
@@ -36,10 +37,10 @@ dimensions = [section_width, section_height, len(filepaths)]
 # The grid of the CellImg
 grid = CellGrid(dimensions, cell_dimensions)
 
-"""
+
 def createAccess(bytes, bytesPerPixel):
-  # Return a new volatile access instance for the appropriate pixel type.
-  # Supports byte, short, float and long.
+  """ Return a new volatile access instance for the appropriate pixel type.
+      Supports byte, short, float and long. """
   if 1 == bytesPerPixel: # BYTE
     return VolatileByteArray(bytes, True)
   # Transform bytes into another type
@@ -56,8 +57,8 @@ def createAccess(bytes, bytesPerPixel):
     pixels = zeros(len(bytes) / 8, 'l')
     bb.asLongBuffer().get(pixels)
     return VolatileLongArray(pixels, True)
-"""
 
+"""
 def createAccess(bytes, bytesPerPixel):
   if 1 == bytesPerPixel:
     return VolatileByteArray(bytes, True)
@@ -69,6 +70,7 @@ def createAccess(bytes, bytesPerPixel):
   pixels = zeros(len(bytes) / bytesPerPixel, t[0].lower()) # t[0].lower() is 's', 'f', 'l'
   getattr(bb, "as%sBuffer" % t)().get(pixels) # e.g. bb.asShortBuffer().get(pixels)
   return locals()["Volatile%sArray" % t](pixels, True) # e.g. VolatileShortArray(pixels, True)
+"""
     
 
 
@@ -132,7 +134,6 @@ cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
                   dimensions, createType(bytesPerPixel), loading_cache,
                   ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
 
-
 # View the image as an ImageJ ImagePlus with an underlying VirtualStack
 IL.wrap(cachedCellImg, "sections").show()
 
@@ -148,8 +149,10 @@ mins = array([1307, 448, 0], 'l')
 maxs = array([1307 + 976 -1, 448 + 732 -1, len(filepaths) -1], 'l')
 imgE = Views.extendZero(cachedCellImg)
 crop = Views.interval(imgE, FinalInterval(mins, maxs))
-imp = IL.wrap(crop, "sections crop")
+imp = IL.wrap(crop, "sections crop") # ImagePlus
 imp.show()
+
+# Once shown, a reference to the ij.gui.ImageWindow exists
 win = imp.getWindow()
 
 # Remove and store key listeners from the ImageCanvas

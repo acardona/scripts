@@ -9,13 +9,16 @@ from lib.util import newFixedThreadPool
 from lib.ui import showStack
 from lib.io import writeN5
 
-# Register deconvolved views across time and show them as a VirtualStack
+# Register deconvolved fused views across time and show them as a VirtualStack,
+# and also optionally export them as an N5 volume for fast random access
 
 # A folder to save deconvolved images in, and CSV files describing features, point matches and transformations
+# and where the deconvolved fused stacks already exist
 targetDir = "/home/albert/shares/cardonalab/Albert/2017-05-10_1018/"
 
 first_timepoint = 0
 last_timepoint = 399
+fixed_tile_indices = [last_timepoint / 2 + 1] # just the middle one
 
 # Deconvolved images have isotropic calibration
 calibration = [1.0, 1.0, 1.0]
@@ -54,7 +57,7 @@ paramsModel = {
 
 paramsTileConfiguration = {
   "n_adjacent": 12,
-  "fixed_tile_indices": [200],
+  "fixed_tile_indices": fixed_tile_indices,
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends 1000
@@ -106,4 +109,4 @@ if writeN5Volume:
   writeN5(img4D,
           targetDirN5,
           nameN5,
-          [img4D.dimension(0), img4D.dimension(1), 5, 1])
+          [img4D.dimension(0), img4D.dimension(1), 5, 1]) # dimensions of the block size: full X, full Y, just 5 Z sections and 1 single time point

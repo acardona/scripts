@@ -132,7 +132,7 @@ angles = [0, 30] # range(0, 46, 9)
 #ops = filterBankBlockStatistics(img, block_width=5, block_height=5)
 
 
-"""
+
 # Create a classifier: support vector machine (SVM, an SMO in WEKA)
 # and save it for later
 classifierSMO = createSMOClassifier(img, samples(), class_names, ops=ops,
@@ -140,6 +140,7 @@ classifierSMO = createSMOClassifier(img, samples(), class_names, ops=ops,
 
 print classifierSMO.toString()
 
+"""
 classifierRF = createRandomForestClassifier(img, samples(), class_names, ops=ops,
                                             n_samples=len(membrane[0]), filepath="/tmp/rf-mem-nonmem")
 
@@ -147,6 +148,7 @@ classifierRF = createRandomForestClassifier(img, samples(), class_names, ops=ops
 print classifierRF.toString()
 """
 
+"""
 params = {"learning_rate": 0.5,
           "hidden_layers": "%i,%i,%i" % (len(ops) * 3, int(len(ops) * 1.5 + 0.5), len(ops) * 3)
          }
@@ -155,8 +157,11 @@ classifierMP = createPerceptronClassifier(img, samples(), class_names, ops=ops,
                                           filepath="/tmp/mp-mem-nonmem",
                                           params=params)
 print classifierMP.toString()
+"""
 
-impEM = WindowManager.getImage("180-220-sub512x512-30.tif") # IJ.getImage() # e.g. 8-bit EM of Drosophila neurons 180-220-sub512x512-30.tif
+impOurs = WindowManager.getImage("sections crop")
+impEM = ImagePlus("ROI of large data set", impOurs.getProcessor())
+#impEM = WindowManager.getImage("180-220-sub512x512-30.tif") # IJ.getImage() # e.g. 8-bit EM of Drosophila neurons 180-220-sub512x512-30.tif
 #impEM = IJ.openImage("/home/albert/lab/TEM/abd/microvolumes/Seg/180-220-sub/180-220-sub512x512-30.tif")
 imgEM = IL.wrap(impEM)
 
@@ -164,18 +169,19 @@ ops = makeOps(imgEM)
 #ops = filterBankRotations(imgEM, angles=angles)
 #ops = filterBankBlockStatistics(imgEM, block_width=5, block_height=5)
 
-"""
+
 # Classify pixels as membrane or not
 resultSMO = classify(imgEM, classifierSMO, class_names, ops=ops)
 IL.wrap(resultSMO, "result SMO %s" % str(angles)).show()
 
+"""
 resultRF = classify(imgEM, classifierRF, class_names, ops=ops, distribution_class_index=-1)
 IL.wrap(resultRF, "result RF %s" % str(angles)).show()
-"""
+
 
 resultMP = classify(imgEM, classifierMP, class_names, ops=ops, distribution_class_index=-1)
 IL.wrap(resultMP, "result MP %s" % str(angles)).show()
-
+"""
 
 
 

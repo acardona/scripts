@@ -5,7 +5,7 @@ from java.nio import ByteBuffer, ByteOrder
 from java.math import BigInteger
 from java.util import Arrays
 from java.lang import System, Long
-import operator, sys
+import operator, sys, os
 from net.imglib2 import RandomAccessibleInterval, IterableInterval
 from net.imglib2.view import Views
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
@@ -32,6 +32,7 @@ try:
   # Needs 'SiMView' Fiji update site enabled
   from org.janelia.simview.klb import KLB
 except:
+  KLB = None
   print "*** KLB library is NOT installed ***"
 try:
   from org.janelia.saalfeldlab.n5.imglib2 import N5Utils
@@ -41,7 +42,32 @@ except:
 from com.google.gson import GsonBuilder
 from math import ceil
 from itertools import imap
+try:
+  from fiji.scripting import Weaver
+  """ TODO isn't working, even when tools.jar is present
+  # Check if the tools.jar is in the classpath
+  try:
+    Class.forName("com.sun.tools.javac.Main")
+  except:
+    print "*** tools.jar not in the classpath ***"
+  """
+except:
+  print "*** fiji.scripting.Weaver NOT installed ***"
+  Weaver = None
+  print sys.exc_info()
 
+
+def findFilePaths(srcDir, extension):
+  """ Find file paths that match the filename extension,
+      recursively into any subdirectories. """
+  paths = []
+  for root, dirs, filenames in os.walk(srcDir):
+    for filename in filenames:
+      if filename.endswith(extension):
+        paths.append(os.path.join(root, filename))
+  paths.sort()
+  return paths
+  
 
 def readFloats(path, dimensions, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
   """ Read a file as an ArrayImg of FloatType """
@@ -97,7 +123,76 @@ def readUnsignedBytes(path, dimensions, header=0):
     ra.close()
 
 
-__klb__ = KLB.newInstance()
+# An inlined java method for deinterleaving a short[] array
+# such as from .dat FIBSEM files where channels are stored
+# spatially array-adjacent, i.e. for 2 channels, 2 consecutive shorts.
+if Weaver:
+  wd = Weaver.method("""
+static public final short[][] deinterleave(final short[] source, final int numChannels, final int channel_index) {
+  if (channel_index >= 0) {
+    // Read a single channel
+    final short[] shorts = new short[source.length / numChannels];
+    for (int i=channel_index, k=0; i<source.length; ++k, i+=numChannels) {
+      shorts[k] = source[i];
+    }
+    return new short[][]{shorts};
+  }
+  final short[][] channels = new short[numChannels][source.length / numChannels];
+  for (int i=0, k=0; i<source.length; ++k) {
+    for (int c=0; c<numChannels; ++c, ++i) {
+      channels[c][k] = source[i];
+    }
+  }
+  return channels;
+}
+""", [], False) # no imports, and don't show code
+
+
+def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570):
+  """ Read a file from Shan Xu's FIBSEM software, where two or more channels are interleaved.
+      Assumes channels are stored in 16-bit.
+      
+      path: the file path to the .dat file.
+      channel_index: the 0-based index of the channel to parse, or -1 (default) for all.
+      header: defaults to a length of 1024 bytes
+      magic_number: defaults to that for version 8 of Shan Xu's .dat image file format.
+  """
+  ra = RandomAccessFile(path, 'r')
+  try:
+    # Check the magic number
+    ra.seek(0)
+    if ra.readInt() & 0xffffffff != magic_number:
+      print "Magic number mismatch"
+      return None
+    # Read the number of channels
+    ra.seek(32)
+    numChannels = ra.readByte() & 0xff # a single byte as unsigned integer
+    # Parse width and height
+    ra.seek(100)
+    width = ra.readInt()
+    ra.seek(104)
+    height = ra.readInt()
+    # Read the whole interleaved pixel array
+    ra.seek(header)
+    bytes = zeros(width * height * 2 * numChannels, 'b') # 2 for 16-bit
+    ra.read(bytes)
+    # Parse as 16-bit array
+    sb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer()
+    shorts = zeros(width * height * numChannels, 'h')
+    sb.get(shorts)
+    # Deinterleave channels
+    # With Weaver: fast
+    channels = wd.deinterleave(shorts, numChannels, channel_index)
+    # With python array sampling: very slow, and not just from iterating whole array once per channel
+    #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
+    #channels = [shorts[i::numChannels] for i in seq]
+    # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
+    return [ArrayImgs.shorts(s, [width, height]) for s in channels]
+  finally:
+    ra.close()
+
+if KLB:
+  __klb__ = KLB.newInstance()
 
 def readKLB(path):
   return __klb__.readFull(path)
@@ -130,7 +225,7 @@ class KLBLoader(CacheLoader):
     return self.get(path)
 
   def get(self, path):
-    return self.klb.readFull(path)
+    return self.klb.readFull(path) # net.imglib2.img.Img
 
 
 class TransformedLoader(CacheLoader):
@@ -167,6 +262,23 @@ class InRAMLoader(CacheLoader):
     self.table = table
   def get(self, path):
     return self.table[path]
+  def load(self, path):
+    return self.get(path)
+
+
+class BinaryLoader(CacheLoader):
+  """ stype: a string such as "8-bit", "16-bit" or "floats".
+      dimensions: a list of integers
+      options: keyword arguments as present in the binary loading functions, such as header size, byte order, etc.
+  """
+  def __init__(self, stype, dimensions, **options):
+    self.fn = { "8-bit": readUnsignedBytes,
+               "16-bit": readUnsignedShorts,
+               "floats": readFloats}[stype]
+    self.dimensions = dimensions
+    self.options = options
+  def get(self, path):
+    return self.fn(path, self.dimensions, **self.options)
   def load(self, path):
     return self.get(path)
 

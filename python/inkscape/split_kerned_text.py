@@ -62,8 +62,8 @@ class SplitKernedText(inkex.Effect):
 
     for text_node in text_nodes:
       # Keep non-empty entries
-      xs = map(float, filter(len, text_node.get("x").split(' ')))
-      ys = map(float, filter(len, text_node.get("y").split(' ')))
+      xs = list(map(float, filter(len, text_node.get("x").split(' '))))
+      ys = list(map(float, filter(len, text_node.get("y").split(' '))))
       
       if len(xs) < 2:
         inkex.debug("This text element does not contain text kerned in the X axis.")
@@ -73,7 +73,7 @@ class SplitKernedText(inkex.Effect):
         inkex.debug("Can't yet handle kerning in the Y axis.")
         continue
 
-      strings = filter(None, map(lambda a: a.strip(), self.plain_string(text_node))) # without empty strings
+      strings = list(filter(None, map(lambda a: a.strip(), self.plain_string(text_node)))) # without empty strings
       if not strings or len(strings) > 1:
         inkex.debug("Can only handle text that appears as single strings. You chose: ##" + ",".join(strings) + "##")
         continue
@@ -132,7 +132,7 @@ class SplitKernedText(inkex.Effect):
     """ Applies the effect. """
     preserve = self.options.preserve
 
-    for id, node in self.selected.iteritems():
+    for id, node in self.selected.items():
       if not (node.tag == inkex.addNS("text", "svg") or node.tag):
         inkex.debug("Please select only plain text elements.")
       else:
