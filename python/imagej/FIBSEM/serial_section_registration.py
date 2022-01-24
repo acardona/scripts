@@ -87,7 +87,7 @@ syncPrint("Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y
 
 
 # Adjust image loader as needed:
-if filepaths[0].endwith(".dat"):
+if filepaths[0].endswith(".dat"):
   syncPrint("Using io.readFIBSEMdat to read image files.")
   setupImageLoader(loadImg=lambda filepath: readFIBSEMdat(filepath, channel_index=0))
 else:
