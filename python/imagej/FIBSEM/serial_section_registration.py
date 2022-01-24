@@ -22,10 +22,13 @@ import os, sys
 sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")\
 from lib.io import findFilePaths
 from lib.util import numCPUs, syncPrint
-from lib.serial2Dregistration import setup, viewAligned
+from lib.serial2Dregistration import setupImageLoader, viewAligned
 from lib.registration import loadMatrices
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2 import FinalInterval
+from mpicbg.imagefeatures import FloatArray2DSIFT
+
+
 
 srcDir = "/groups/cardona/cardonalab/FIBSEM_L1116/" # MUST have an ending slash
 tgtDir = "/groups/cardona/cardonalab/Albert/FIBSEM_L1116/"
