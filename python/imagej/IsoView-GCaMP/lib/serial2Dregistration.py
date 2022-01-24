@@ -213,9 +213,9 @@ def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeloa
       yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, csvDir, exeload, loadFPMem)
 
 
-def ensurePointMatches(filepaths, csvDir, params, n_adjacent):
+def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent):
   """ If a pointmatches csv file doesn't exist, will create it. """
-  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(n_threads))
+  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(params["n_threads"]))
   exeload = newFixedThreadPool()
   try:
     count = 1
