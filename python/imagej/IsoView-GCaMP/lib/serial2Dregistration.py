@@ -62,8 +62,8 @@ def loadImp(filepath):
 
 def loadUnsignedShort(filepath):
   """ Returns an ImgLib2 ArrayImg """
-    imp = loadImp(filepath)
-    return ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
+  imp = loadImp(filepath)
+  return ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
 
 def loadFloatProcessor(filepath, paramsSIFT, scale=True):
   try:
