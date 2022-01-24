@@ -188,7 +188,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     #channels = [shorts[i::numChannels] for i in seq]
     # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
     if asImagePlus:
-      return [ImagePlus(str(i), ShortProcessor(width, height, s, None)) for i, s in enmumerate(channels)]
+      return [ImagePlus(str(i), ShortProcessor(width, height, s, None)) for i, s in enumerate(channels)]
     else:
       return [ArrayImgs.shorts(s, [width, height]) for s in channels]
   finally:
