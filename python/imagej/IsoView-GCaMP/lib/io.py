@@ -161,9 +161,11 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
   try:
     # Check the magic number
     ra.seek(0)
-    if ra.readInt() & 0xffffffff != magic_number:
-      print "Magic number mismatch"
-      return None
+    magic = ra.readInt() & 0xffffffff
+    if magic != magic_number:
+      msg = "magic number mismatch: v8 magic " + str(magic_number) + " != " + str(magic) + " for path:\n" + path
+      System.out.println(msg)
+      print msg
     # Read the number of channels
     ra.seek(32)
     numChannels = ra.readByte() & 0xff # a single byte as unsigned integer
