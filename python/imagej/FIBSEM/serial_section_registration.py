@@ -113,7 +113,7 @@ if False:
                name,
                exportDir,
                interval,
-               gzip_compression=0, Don't use compression: less than 5% gain, at considerable processing cost
+               gzip_compression=0, # Don't use compression: less than 5% gain, at considerable processing cost
                invert=True,
                CLAHE_params=[200, 256, 3.0],
                block_size=[256, 256, 64], # ~4 MB per block
