@@ -1,6 +1,6 @@
 # Albert Cardona 2019-05-31
 #
-# A cript to register FIBSEM serial sections.
+# A script to register FIBSEM serial sections.
 # ASSUMES there is only one single image per section.
 # ASSUMES all images have the same dimensions and pixel type.
 # 
