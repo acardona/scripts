@@ -148,7 +148,7 @@ static public final short[][] deinterleave(final short[] source, final int numCh
 """, [], False) # no imports, and don't show code
 
 
-def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570):
+def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, asImagePlus=False):
   """ Read a file from Shan Xu's FIBSEM software, where two or more channels are interleaved.
       Assumes channels are stored in 16-bit.
       
@@ -187,7 +187,10 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570):
     #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
     #channels = [shorts[i::numChannels] for i in seq]
     # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
-    return [ArrayImgs.shorts(s, [width, height]) for s in channels]
+    if asImagePlus:
+      return [ImagePlus(str(i), ShortProcessor(width, height, s, None)) for i, s in enmumerate(channels)]
+    else:
+      return [ArrayImgs.shorts(s, [width, height]) for s in channels]
   finally:
     ra.close()
 
