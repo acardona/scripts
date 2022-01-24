@@ -19,7 +19,7 @@
 # 5. Export volume for CATMAID as N5.
 
 import os, sys
-sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")\
+sys.path.append("/groups/cardona/home/cardonaa/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.io import findFilePaths
 from lib.util import numCPUs, syncPrint
 from lib.serial2Dregistration import setupImageLoader, viewAligned
