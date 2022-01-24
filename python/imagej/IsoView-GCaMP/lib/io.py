@@ -25,6 +25,7 @@ from net.imglib2.cache.ref import SoftRefLoaderCache
 from net.imglib2.cache.img import CachedCellImg
 from ij.io import FileSaver, ImageReader, FileInfo
 from ij import ImagePlus, IJ
+from ij.process import ShortProcessor
 from synchronize import make_synchronized
 from util import syncPrint, newFixedThreadPool
 from ui import showStack, showBDV
