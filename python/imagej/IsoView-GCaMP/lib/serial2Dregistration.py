@@ -80,10 +80,10 @@ def loadFloatProcessor(filepath, paramsSIFT, scale=True):
 n_threads = numCPUs()
   
 
-def setupImageLoader(loadImp_=loadImp):
+def setupImageLoader(loader=loadImp):
   """ Specify which function can read the image files into an ImagePlus.
       Defaults to loadImp using ImageJ's IJ.loadImage. """
-  loadImp = loadImp_
+  loadImp = loader
 
 
 def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeload, load):
