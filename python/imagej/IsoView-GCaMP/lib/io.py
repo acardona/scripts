@@ -129,7 +129,22 @@ def readUnsignedBytes(path, dimensions, header=0):
 # spatially array-adjacent, i.e. for 2 channels, 2 consecutive shorts.
 if Weaver:
   wd = Weaver.method("""
-static public final short[][] deinterleave(final short[] source, final int numChannels, final int channel_index) {
+static public final short[] toUnsigned(final short[] signed) {
+  final short[] s = signed[c];
+  short min = 32767; // max possible signed short value
+  for (int i=0; i<s.length; ++i) {
+    if (s[i] < min) min = s[i];
+  }
+  if (min < 0) {
+    for (int i=0; i<s.length; ++i) {
+      s[i] -= min;
+    }
+  }
+}
+
+static public final short[][] deinterleave(final short[] source,
+                                           final int numChannels,
+                                           final int channel_index {
   if (channel_index >= 0) {
     // Read a single channel
     final short[] shorts = new short[source.length / numChannels];
@@ -149,7 +164,7 @@ static public final short[][] deinterleave(final short[] source, final int numCh
 """, [], False) # no imports, and don't show code
 
 
-def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, asImagePlus=False):
+def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, asImagePlus=False, toUnsigned=True):
   """ Read a file from Shan Xu's FIBSEM software, where two or more channels are interleaved.
       Assumes channels are stored in 16-bit.
       
@@ -157,6 +172,8 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
       channel_index: the 0-based index of the channel to parse, or -1 (default) for all.
       header: defaults to a length of 1024 bytes
       magic_number: defaults to that for version 8 of Shan Xu's .dat image file format.
+      isSigned: defaults to True, will subtract the min value when negative.
+      asImagePlus: return a list of ImagePlus instead of ArrayImg which is the default.
   """
   ra = RandomAccessFile(path, 'r')
   try:
@@ -183,17 +200,20 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     sb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer()
     shorts = zeros(width * height * numChannels, 'h')
     sb.get(shorts)
-    # Deinterleave channels
+    # Deinterleave channels and convert to unsigned short
+    # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
     # With Weaver: fast
     channels = wd.deinterleave(shorts, numChannels, channel_index)
+    if toUnsigned:
+      for s in channels:
+        wd.toUnsigned(s)
     # With python array sampling: very slow, and not just from iterating whole array once per channel
     #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
     #channels = [shorts[i::numChannels] for i in seq]
-    # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
     if asImagePlus:
       return [ImagePlus(str(i), ShortProcessor(width, height, s, None)) for i, s in enumerate(channels)]
     else:
-      return [ArrayImgs.shorts(s, [width, height]) for s in channels]
+      return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
   finally:
     ra.close()
 
