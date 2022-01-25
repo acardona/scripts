@@ -82,7 +82,7 @@ n_threads = numCPUs()
 
 def setupImageLoader(loader=loadImp):
   """ Specify which function can read the image files into an ImagePlus.
-      Defaults to loadImp using ImageJ's IJ.loadImage. """
+      Defaults to loadImp using ImageJ's IJ.openImage. """
   global loadImp
   loadImp = loader
 
