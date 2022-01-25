@@ -144,7 +144,7 @@ static public final short[] toUnsigned(final short[] signed) {
 
 static public final short[][] deinterleave(final short[] source,
                                            final int numChannels,
-                                           final int channel_index {
+                                           final int channel_index) {
   if (channel_index >= 0) {
     // Read a single channel
     final short[] shorts = new short[source.length / numChannels];
