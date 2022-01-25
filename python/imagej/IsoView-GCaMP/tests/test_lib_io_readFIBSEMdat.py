@@ -10,3 +10,5 @@ print channels
 IL.wrap(channels[0], "channel 1").show() # looks good
 #IL.wrap(channels[1], "channel 2").show() # looks grainy, lots of shot noise
                                                                                                        
+channels = readFIBSEMdat(path, channel_index=0, asImagePlus=True)
+channels[0].show()
