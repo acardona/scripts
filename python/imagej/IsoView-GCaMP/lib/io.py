@@ -129,15 +129,14 @@ def readUnsignedBytes(path, dimensions, header=0):
 # spatially array-adjacent, i.e. for 2 channels, 2 consecutive shorts.
 if Weaver:
   wd = Weaver.method("""
-static public final short[] toUnsigned(final short[] signed) {
-  final short[] s = signed[c];
+static public final void toUnsigned(final short[] signed) {
   short min = 32767; // max possible signed short value
-  for (int i=0; i<s.length; ++i) {
-    if (s[i] < min) min = s[i];
+  for (int i=0; i<signed.length; ++i) {
+    if (signed[i] < min) min = signed[i];
   }
   if (min < 0) {
-    for (int i=0; i<s.length; ++i) {
-      s[i] -= min;
+    for (int i=0; i<signed.length; ++i) {
+      signed[i] -= min;
     }
   }
 }
