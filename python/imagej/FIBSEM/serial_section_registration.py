@@ -42,6 +42,7 @@ filepaths = findFilePaths(srcDir, "InLens_raw.tif")
 # the visualization and export would need minor adjustments to cope.)
 properties = {
   'img_dimensions': [16875, 18125],
+  "srcDir": srcDir,
   'pixelType': UnsignedShortType,
   'n_threads': numCPUs() # number of parallel threads to use
 }
