@@ -21,6 +21,16 @@ def printMsgQueue():
     except:
       System.out.println(str(sys.exc_info()))
 
+class Printer(Runnable):
+  def __init__(self, stdout):
+    self.stdout = sys.stdout
+  def run(self):
+    while not msgQueue.isEmpty():
+      try:
+        self.stdout.write(msgQueue.pop())
+      except:
+        System.out.println(str(sys.exc_info()))
+
 printService.scheduleWithFixedDelay(printMsgQueue, 500, 500, TimeUnit.MILLISECONDS)
 
 def syncPrintQ(msg):

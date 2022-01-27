@@ -183,6 +183,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
       msg = "magic number mismatch: v8 magic " + str(magic_number) + " != " + str(magic) + " for path:\n" + path
       System.out.println(msg)
       print msg
+      # Continue: attempt to parse the file anyway
     # Read the number of channels
     ra.seek(32)
     numChannels = ra.readByte() & 0xff # a single byte as unsigned integer
@@ -199,6 +200,9 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     sb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer()
     shorts = zeros(width * height * numChannels, 'h')
     sb.get(shorts)
+    # Attempt to help releasing memory
+    bytes = None
+    sb = None
     # Deinterleave channels and convert to unsigned short
     # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
     # With Weaver: fast

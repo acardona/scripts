@@ -47,7 +47,7 @@ from functools import partial
 from java.util.concurrent import Executors, TimeUnit
 # From lib
 from io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5
-from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint
+from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ
 from features import savePointMatches, loadPointMatches
 from registration import loadMatrices, saveMatrices
 from ui import showStack, wrap
@@ -57,7 +57,7 @@ from pixels import autoAdjust
 
 def loadImp(filepath):
   """ Returns an ImagePlus """
-  syncPrint("Loading image " + filepath)
+  syncPrintQ("Loading image " + filepath)
   return IJ.openImage(filepath)
 
 def loadUnsignedShort(filepath):
@@ -65,7 +65,7 @@ def loadUnsignedShort(filepath):
   imp = loadImp(filepath)
   return ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
 
-def loadFloatProcessor(filepath, paramsSIFT, scale=True):
+def loadFloatProcessor(filepath, params, paramsSIFT, scale=True):
   try:
     fp = loadImp(filepath).getProcessor().convertToFloatProcessor()
     # Preprocess images: Gaussian-blur to scale down, then normalize contrast
@@ -74,10 +74,8 @@ def loadFloatProcessor(filepath, paramsSIFT, scale=True):
       Util.normalizeContrast(fp) # TODO should be outside the if clause?
     return fp
   except:
-    syncPrint(sys.exc_info())
+    syncPrintQ(sys.exc_info())
 
-# Default value
-n_threads = numCPUs()
   
 
 def setupImageLoader(loader=loadImp):
@@ -124,7 +122,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
       # Fill the sourcePoints
       mesh = TransformMesh(params["meshResolution"], fp1.width, fp1.height)
       PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
-      syncPrint("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
+      syncPrintQ("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
       # Run
       BlockMatching.matchByMaximalPMCCFromPreScaledImages(
                 fp1,
@@ -142,14 +140,14 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
 
     # At least some should match to accept the translation
     if len(sourceMatches) < max(20, len(sourcePoints) / 5) / 2:
-      syncPrint("Found only %i blockmatching pointmatches (from %i source points)" % (len(sourceMatches), len(sourcePoints)))
-      syncPrint("... therefore invoking SIFT pointmatching for:\n  S: " + basename(filepath1) + "\n  T: " + basename(filepath2))
+      syncPrintQ("Found only %i blockmatching pointmatches (from %i source points)" % (len(sourceMatches), len(sourcePoints)))
+      syncPrintQ("... therefore invoking SIFT pointmatching for:\n  S: " + basename(filepath1) + "\n  T: " + basename(filepath2))
       # Can fail if there is a shift larger than the searchRadius
       # Try SIFT features, which are location independent
       #
       # Images are now scaled: load originals
-      futures = [exeload.submit(Task(loadFloatProcessor, filepath1, params, scale=False)),
-                 exeload.submit(Task(loadFloatProcessor, filepath2, params, scale=False))]
+      futures = [exeload.submit(Task(loadFloatProcessor, filepath1, params, paramsSIFT, scale=False)),
+                 exeload.submit(Task(loadFloatProcessor, filepath2, params, paramsSIFT, scale=False))]
 
       fp1 = futures[0].get() # FloatProcessor, original
       fp2 = futures[1].get() # FloatProcessor, original
@@ -206,27 +204,26 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
     syncPrint("".join(traceback.format_exception()), out="stderr")
 
 
-def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload):
-  loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, scale=True), maxsize=params["n_threads"])
-  for i in xrange(len(filepaths) - n_adjacent):
+def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties):
+  loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
     for inc in xrange(1, n_adjacent + 1):
-      #syncPrint("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
+      #syncPrintQ("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
       yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, csvDir, exeload, loadFPMem)
 
 
-def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent):
+def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties):
   """ If a pointmatches csv file doesn't exist, will create it. """
-  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(params["n_threads"]))
+  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(properties["n_threads"]))
   exeload = newFixedThreadPool()
   try:
     count = 1
-    for result in w.chunkConsume(n_threads * 2, pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload)):
+    for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties)):
       if result: # is False when CSV file already exists
-        syncPrint("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
+        syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
       count += 1
-    syncPrint("Awaiting all remaining pointmatching tasks to finish.")
+    syncPrintQ("Awaiting all remaining pointmatching tasks to finish.")
     w.awaitAll()
-    syncPrint("Finished all pointmatching tasks.")
+    syncPrintQ("Finished all pointmatching tasks.")
   except:
     print sys.exc_info()
   finally:
@@ -247,25 +244,25 @@ def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       yield Task(loadPointMatchesPlus, filepaths, i, i + inc, csvDir, params)
 
 # When done, optimize tile pose globally
-def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent):
-  ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent)
+def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties):
+  ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties)
   try:
     tiles = [Tile(TranslationModel2D()) for _ in filepaths]
     # FAILS when running in parallel, for mysterious reasons related to jython internals, perhaps syncPrint fails
     #w = ParallelTasks("loadPointMatches")
-    #for i, j, pointmatches in w.chunkConsume(n_threads * 2, loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
-    syncPrint("Loading all pointmatches.")
+    #for i, j, pointmatches in w.chunkConsume(properties["n_threads"], loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
+    syncPrintQ("Loading all pointmatches.")
     for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       i, j, pointmatches = task.call()
       tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
-    syncPrint("Finished loading all pointmatches.")
+    syncPrintQ("Finished loading all pointmatches.")
     return tiles
   finally:
     #w.destroy()
     pass
 
 
-def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration):
+def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties):
   if not os.path.exists(csvDir):
     os.mkdirs(csvDir) # recursively
   name = "matrices"
@@ -274,7 +271,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration):
     return matrices
   
   # Optimize
-  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"])
+  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties)
   tc = TileConfiguration()
   tc.addTiles(tiles)
   tc.fixTile(tiles[len(tiles) / 2]) # middle tile
@@ -417,9 +414,9 @@ class OnClosing(ImageListener):
   def imageUpdated(self, imp):
     pass
 
-def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, img_dimensions, cropInterval):
-  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration)
-  cellImg, cellGet = makeImg(filepaths, params["pixelType"], loadUnsignedShort, img_dimensions, matrices, cropInterval, 5)
+def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval):
+  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
+  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadUnsignedShort, properties["img_dimensions"], matrices, cropInterval, 5)
   print cellImg
   comp = showStack(cellImg, title=srcDir.split('/')[-2], proper=False)
   # Add the SourcePanning KeyListener as the first one
