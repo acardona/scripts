@@ -204,21 +204,21 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
     syncPrint("".join(traceback.format_exception()), out="stderr")
 
 
-def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload):
-  loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=params["n_threads"])
+def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties):
+  loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
   for i in xrange(len(filepaths) - n_adjacent):
     for inc in xrange(1, n_adjacent + 1):
       #syncPrintQ("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
       yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, csvDir, exeload, loadFPMem)
 
 
-def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent):
+def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties):
   """ If a pointmatches csv file doesn't exist, will create it. """
-  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(params["n_threads"]))
+  w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(properties["n_threads"]))
   exeload = newFixedThreadPool()
   try:
     count = 1
-    for result in w.chunkConsume(params["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload)):
+    for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties)):
       if result: # is False when CSV file already exists
         syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
       count += 1
@@ -245,13 +245,13 @@ def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       yield Task(loadPointMatchesPlus, filepaths, i, i + inc, csvDir, params)
 
 # When done, optimize tile pose globally
-def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent):
-  ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent)
+def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties):
+  ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties)
   try:
     tiles = [Tile(TranslationModel2D()) for _ in filepaths]
     # FAILS when running in parallel, for mysterious reasons related to jython internals, perhaps syncPrint fails
     #w = ParallelTasks("loadPointMatches")
-    #for i, j, pointmatches in w.chunkConsume(params["n_threads"], loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
+    #for i, j, pointmatches in w.chunkConsume(properties["n_threads"], loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
     syncPrintQ("Loading all pointmatches.")
     for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       i, j, pointmatches = task.call()
@@ -263,7 +263,7 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent):
     pass
 
 
-def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration):
+def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties):
   if not os.path.exists(csvDir):
     os.mkdirs(csvDir) # recursively
   name = "matrices"
@@ -272,7 +272,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration):
     return matrices
   
   # Optimize
-  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"])
+  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties)
   tc = TileConfiguration()
   tc.addTiles(tiles)
   tc.fixTile(tiles[len(tiles) / 2]) # middle tile
@@ -415,9 +415,9 @@ class OnClosing(ImageListener):
   def imageUpdated(self, imp):
     pass
 
-def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, img_dimensions, cropInterval):
-  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration)
-  cellImg, cellGet = makeImg(filepaths, params["pixelType"], loadUnsignedShort, img_dimensions, matrices, cropInterval, 5)
+def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval):
+  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
+  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadUnsignedShort, properties["img_dimensions"], matrices, cropInterval, 5)
   print cellImg
   comp = showStack(cellImg, title=srcDir.split('/')[-2], proper=False)
   # Add the SourcePanning KeyListener as the first one
