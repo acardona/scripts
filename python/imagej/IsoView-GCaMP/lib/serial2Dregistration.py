@@ -419,7 +419,7 @@ def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, 
   matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
   cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadUnsignedShort, properties["img_dimensions"], matrices, cropInterval, 5)
   print cellImg
-  comp = showStack(cellImg, title=srcDir.split('/')[-2], proper=False)
+  comp = showStack(cellImg, title=properties["srcDir"].split('/')[-2], proper=False)
   # Add the SourcePanning KeyListener as the first one
   canvas = comp.getWindow().getCanvas()
   kls = canvas.getKeyListeners()
