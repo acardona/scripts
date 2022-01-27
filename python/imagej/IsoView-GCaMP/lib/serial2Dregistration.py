@@ -74,7 +74,7 @@ def loadFloatProcessor(filepath, params, paramsSIFT, scale=True):
       Util.normalizeContrast(fp) # TODO should be outside the if clause?
     return fp
   except:
-    syncPrint(sys.exc_info())
+    syncPrintQ(sys.exc_info())
 
   
 
@@ -220,7 +220,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent):
     count = 1
     for result in w.chunkConsume(params["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload)):
       if result: # is False when CSV file already exists
-        syncPrint("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
+        syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
       count += 1
     syncPrintQ("Awaiting all remaining pointmatching tasks to finish.")
     w.awaitAll()
