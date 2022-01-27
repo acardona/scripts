@@ -40,7 +40,11 @@ filepaths = findFilePaths(srcDir, "InLens_raw.tif")
 # Image properties: ASSUMES all images have the same properties
 # (While the script an cope with images of different dimensions for registration,
 # the visualization and export would need minor adjustments to cope.)
-dimensions = [16875, 18125]
+properties = {
+  'img_dimensions': [16875, 18125],
+  'pixelType': UnsignedShortType,
+  'n_threads': numCPUs() # number of parallel threads to use
+}
 
 # Parameters for blockmatching
 params = {
@@ -51,8 +55,6 @@ params = {
  'maxCurvature': 1000.0, # default is 10
  'searchRadius': 100, # a low value: we expect little translation
  'blockRadius': 200, # small, yet enough
- 'pixelType': UnsignedShortType,
- 'n_threads': numCPUs() # number of parallel threads to use
 }
 
 # Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
