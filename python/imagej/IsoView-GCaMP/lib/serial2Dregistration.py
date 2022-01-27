@@ -206,6 +206,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
 
 def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties):
   loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
+  for i in xrange(len(filepaths) - n_adjacent):
     for inc in xrange(1, n_adjacent + 1):
       #syncPrintQ("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
       yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, csvDir, exeload, loadFPMem)
