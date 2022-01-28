@@ -44,7 +44,9 @@ properties = {
   'img_dimensions': [16875, 18125],
   "srcDir": srcDir,
   'pixelType': UnsignedShortType,
-  'n_threads': numCPUs() # number of parallel threads to use
+  'n_threads': numCPUs(), # number of parallel threads to use
+  'invert': True, # For viewAligned. FIBSEM images need to be inverted
+  'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
 }
 
 # Parameters for blockmatching
@@ -73,7 +75,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 2, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
+  "maxIterations": 100, # Saalfeld recommends 1000 -- sometimes can be as low as 2 iterations (!!) to reach the lowest mean and max error for FIBSEM section series 
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
 }
 

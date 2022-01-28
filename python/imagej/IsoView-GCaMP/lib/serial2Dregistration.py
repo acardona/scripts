@@ -60,9 +60,14 @@ def loadImp(filepath):
   syncPrintQ("Loading image " + filepath)
   return IJ.openImage(filepath)
 
-def loadUnsignedShort(filepath):
+def loadUnsignedShort(filepath, invert=True, CLAHE_params=None):
   """ Returns an ImgLib2 ArrayImg """
   imp = loadImp(filepath)
+  if invert:
+    imp.getProcessor().invert()
+  if CLAHE_params is not None:
+    blockRadius, n_bins, slope = CLAHE_params
+    CLAHE.run(imp, blockRadius, n_bins, slope, None)
   return ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
 
 def loadFloatProcessor(filepath, params, paramsSIFT, scale=True):
@@ -403,6 +408,7 @@ def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterva
                                  cropInterval, preload=preload)
   return LazyCellImg(grid, pixelType(), cellGet), cellGet
 
+
 class OnClosing(ImageListener):
   def __init__(self, imp, cellGet):
     self.imp = imp
@@ -417,7 +423,9 @@ class OnClosing(ImageListener):
 
 def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval):
   matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
-  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadUnsignedShort, properties["img_dimensions"], matrices, cropInterval, 5)
+  def loadImg(filepath):
+    return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"])
+  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, 5)
   print cellImg
   comp = showStack(cellImg, title=properties["srcDir"].split('/')[-2], proper=False)
   # Add the SourcePanning KeyListener as the first one
