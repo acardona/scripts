@@ -477,19 +477,25 @@ def export8bitN5(filepaths,
 
   def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, n_bins, slope, matrices, index, imp):
     sp = imp.getProcessor() # ShortProcessor
-    sp.setRoi(interval.min(0),
-              interval.min(1),
-              interval.max(0) - interval.min(0) + 1,
-              interval.max(1) - interval.min(1) + 1)
-    sp = sp.crop()
+    # Crop to interval if needed
+    x = interval.min(0)
+    y = interval.min(1)
+    width  = interval.max(0) - interval.min(0) + 1
+    height = interval.max(1) - interval.min(1) + 1
+    if 0 != x or 0 != y or sp.getWidth() != width or sp.getHeight() != height:
+      sp.setRoi(x, y, width, height)
+      sp = sp.crop()
+    
     if invert:
       sp.invert()
+    
     CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None) # far less memory requirements than NormalizeLocalContrast, and faster.
     minimum, maximum = autoAdjust(sp)
 
    	# Transform and convert image to 8-bit, mapping to display range
     img = ArrayImgs.unsignedShorts(sp.getPixels(), [sp.getWidth(), sp.getHeight()])
     sp = None
+    imp = None
     affine = AffineTransform2D()
     affine.set(matrices[index])
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
