@@ -547,23 +547,23 @@ def export8bitN5(filepaths,
       first = max(0, keys[-1] - (keys[-1] % block_size[2]))
       last = min(len(filepaths), first + block_size[2] -1)
       keys = None
-      msg = "Preloading %i-%i" % (first, last)
+      syncPrintQ("### Preloading %i-%i ###" % (first, last))
       futures = []
       for index in xrange(first, last + 1):
         futures.append(exe.submit(TimeItTask(softCache.get, index, loader)))
       softCache = None
       # Wait for all
-      count = 1
+      loaded_any = False
+      count = 0
       while len(futures) > 0:
         r, t = futures.pop(0).get() # waits for the image to load
+        if t > 1000: # in miliseconds. Less than this is for sure a cache hit, more a cache miss and reload
+          loaded_any = True
+        r = None
         # t in miliseconds
-        if t > 500:
-          if msg:
-            syncPrintQ(msg)
-            msg = None
-          syncPrintQ("preloaded index %i in %f ms" % (first + count, t))
+        syncPrintQ("preloaded index %i in %f ms" % (first + count, t))
         count += 1
-      if not msg: # msg was printed
+      if not loaded_any:
         syncPrintQ("Completed preloading %i-%i" % (first, first + block_size[2] -1))
     except:
       syncPrintQ(sys.exc_info())
