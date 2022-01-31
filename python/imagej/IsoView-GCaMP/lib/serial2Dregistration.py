@@ -525,7 +525,7 @@ def export8bitN5(filepaths,
 
   exe_preloader = newFixedThreadPool(n_threads=min(block_size[2], n5_threads if n5_threads > 0 else numCPUs()), name="preloader")
 
-  def preload(cachedCellImg, loader, block_size, filepaths, exe_preloader):
+  def preload(cachedCellImg, loader, block_size, filepaths, exe):
     """
     Find which is the last cell index in the cache, identify to which block
     (given the blockSize[2] AKA Z dimension) that index belongs to,
@@ -544,12 +544,12 @@ def export8bitN5(filepaths,
       keys = sorted(f2.get(softCache).keySet())
       if 0 == len(keys):
         return
-      first = keys[-1] - (keys[-1] % block_size[2])
+      first = max(0, keys[-1] - (keys[-1] % block_size[2]))
       last = max(len(filepaths), first + block_size[2] -1)
       keys = None
-      msg = "Preloading %i-%i" % (first, first + block_size[2] -1)
+      msg = "Preloading %i-%i" % (first, last)
       futures = []
-      for index in xrange(first, first + block_size[2]):
+      for index in xrange(first, last + 1):
         futures.append(exe.submit(TimeItTask(softCache.get, index, loader)))
       softCache = None
       # Wait for all
