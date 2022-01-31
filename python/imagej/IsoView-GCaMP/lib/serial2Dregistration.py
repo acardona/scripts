@@ -336,7 +336,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     y0 = max(0, min(a[1] + dy, self.img_dimensions[1] - height))
     self.interval = FinalInterval([x0, y0],
                                   [x0 + width -1, y0 + height - 1])
-    syncPrint(str(Intervals.dimensionsAsLongArray(self.interval)))
+    syncPrintQ(str(Intervals.dimensionsAsLongArray(self.interval)))
     self.cache.clear()
 
   def get(self, index):
@@ -380,19 +380,19 @@ class SourcePanning(KeyAdapter):
       dx, dy = self.delta.get(event.getKeyCode(), (0, 0))
       if dx + dy == 0:
         return
-      syncPrint("Translating source")
+      syncPrintQ("Translating source")
       if event.isShiftDown():
         dx *= self.shift
         dy *= self.shift
       if event.isAltDown():
         dx *= self.alt
         dy *= self.alt
-      syncPrint("... by x=%i, y=%i" % (dx, dy))
+      syncPrintQ("... by x=%i, y=%i" % (dx, dy))
       self.cellGet.translate(dx, dy)
       self.imp.updateAndDraw()
       event.consume()
     except:
-      syncPrint(str(sys.exc_info()))
+      syncPrintQ(str(sys.exc_info()))
 
 
 def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterval, preload):
@@ -559,14 +559,14 @@ def export8bitN5(filepaths,
         # t in miliseconds
         if t > 500:
           if msg:
-            syncPrint(msg)
+            syncPrintQ(msg)
             msg = None
-          syncPrint("preloaded index %i in %f ms" % (first + count, t))
+          syncPrintQ("preloaded index %i in %f ms" % (first + count, t))
         count += 1
       if not msg: # msg was printed
-        syncPrint("Completed preloading %i-%i" % (first, first + block_size[2] -1))
+        syncPrintQ("Completed preloading %i-%i" % (first, first + block_size[2] -1))
     except:
-      syncPrint(sys.exc_info())
+      syncPrintQ(sys.exc_info())
 
   preloader = Executors.newSingleThreadScheduledExecutor()
   preloader.scheduleWithFixedDelay(RunTask(preload, cachedCellImg, loader, block_size, filepaths, exe_preloader), 10, 60, TimeUnit.SECONDS)
