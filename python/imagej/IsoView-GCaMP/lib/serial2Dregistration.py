@@ -336,7 +336,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     y0 = max(0, min(a[1] + dy, self.img_dimensions[1] - height))
     self.interval = FinalInterval([x0, y0],
                                   [x0 + width -1, y0 + height - 1])
-    syncPrint(str(Intervals.dimensionsAsLongArray(self.interval)))
+    syncPrintQ(str(Intervals.dimensionsAsLongArray(self.interval)))
     self.cache.clear()
 
   def get(self, index):
@@ -380,19 +380,19 @@ class SourcePanning(KeyAdapter):
       dx, dy = self.delta.get(event.getKeyCode(), (0, 0))
       if dx + dy == 0:
         return
-      syncPrint("Translating source")
+      syncPrintQ("Translating source")
       if event.isShiftDown():
         dx *= self.shift
         dy *= self.shift
       if event.isAltDown():
         dx *= self.alt
         dy *= self.alt
-      syncPrint("... by x=%i, y=%i" % (dx, dy))
+      syncPrintQ("... by x=%i, y=%i" % (dx, dy))
       self.cellGet.translate(dx, dy)
       self.imp.updateAndDraw()
       event.consume()
     except:
-      syncPrint(str(sys.exc_info()))
+      syncPrintQ(str(sys.exc_info()))
 
 
 def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterval, preload):
@@ -440,6 +440,7 @@ def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, 
 
 
 def export8bitN5(filepaths,
+                 loadFn,
                  img_dimensions,
                  matrices,
                  name,
@@ -453,12 +454,17 @@ def export8bitN5(filepaths,
   """
   Export into an N5 volume, in parallel, in 8-bit.
 
+  filepaths: the ordered list of filepaths, one per serial section.
+  loadFn: a function to load a filepath into an ImagePlus.
   name: name to assign to the N5 volume.
-  img3D: the serial sections to export.
+  matrices: the list of transformation matrices (each one is an array), one per section
   exportDir: the directory into which to save the N5 volume.
   interval: for cropping.
-  gzip_compression: defaults to 6 as suggested by Saalfeld.
-  block_size: defaults to 128x128x128 px.
+  gzip_compression: defaults to 6 as suggested by Saalfeld. 0 means no compression.
+  invert:  Defaults to True (necessary for FIBSEM). Whether to invert the images upon loading.
+  CLAHE_params: defaults to [400, 256, 3.0]. If not None, the a list of the 3 parameters needed for a CLAHE filter to apply to each image.
+  n5_threads: defaults to 0, meaning as many as CPU cores.
+  block_size: defaults to 128x128x128 px. A list of 3 integer numbers, the dimensions of each individual block.
   """
 
   dims = Intervals.dimensionsAsLongArray(interval)
@@ -471,19 +477,25 @@ def export8bitN5(filepaths,
 
   def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, n_bins, slope, matrices, index, imp):
     sp = imp.getProcessor() # ShortProcessor
-    sp.setRoi(interval.min(0),
-              interval.min(1),
-              interval.max(0) - interval.min(0) + 1,
-              interval.max(1) - interval.min(1) + 1)
-    sp = sp.crop()
+    # Crop to interval if needed
+    x = interval.min(0)
+    y = interval.min(1)
+    width  = interval.max(0) - interval.min(0) + 1
+    height = interval.max(1) - interval.min(1) + 1
+    if 0 != x or 0 != y or sp.getWidth() != width or sp.getHeight() != height:
+      sp.setRoi(x, y, width, height)
+      sp = sp.crop()
+    
     if invert:
       sp.invert()
+    
     CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None) # far less memory requirements than NormalizeLocalContrast, and faster.
     minimum, maximum = autoAdjust(sp)
 
    	# Transform and convert image to 8-bit, mapping to display range
     img = ArrayImgs.unsignedShorts(sp.getPixels(), [sp.getWidth(), sp.getHeight()])
     sp = None
+    imp = None
     affine = AffineTransform2D()
     affine.set(matrices[index])
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
@@ -498,8 +510,11 @@ def export8bitN5(filepaths,
 
   blockRadius, n_bins, slope = CLAHE_params
 
-  loader = SectionCellLoader(filepaths, asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
-                                                           interval, invert, blockRadius, n_bins, slope, matrices))
+  # A CacheLoader that interprets the list of filepaths as a 3D volume: a stack of 2D slices
+  loader = SectionCellLoader(filepaths, 
+                             asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
+                                                interval, invert, blockRadius, n_bins, slope, matrices),
+                             loadFn=loadFn)
 
   # How to preload block_size[2] files at a time? Or at least as many as numCPUs()?
   # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,
@@ -508,14 +523,15 @@ def export8bitN5(filepaths,
 
   cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE)
 
-  def preload(cachedCellImg, loader, block_size, filepaths):
+  exe_preloader = newFixedThreadPool(n_threads=min(block_size[2], n5_threads if n5_threads > 0 else numCPUs()), name="preloader")
+
+  def preload(cachedCellImg, loader, block_size, filepaths, exe_preloader):
     """
     Find which is the last cell index in the cache, identify to which block
     (given the blockSize[2] AKA Z dimension) that index belongs to,
     and concurrently load all cells (sections) that the Z dimension of the blockSize will need.
     If they are already loaded, these operations are insignificant.
     """
-    exe = newFixedThreadPool(n_threads=min(block_size[2], numCPUs()), name="preloader")
     try:
       # The SoftRefLoaderCache.map is a ConcurrentHashMap with Long keys, aka numbers
       cache = cachedCellImg.getCache()
@@ -539,26 +555,25 @@ def export8bitN5(filepaths,
       # Wait for all
       count = 1
       while len(futures) > 0:
-        r, t = futures.pop(0).get()
+        r, t = futures.pop(0).get() # waits for the image to load
         # t in miliseconds
         if t > 500:
           if msg:
-            syncPrint(msg)
+            syncPrintQ(msg)
             msg = None
-          syncPrint("preloaded index %i in %f ms" % (first + count, t))
+          syncPrintQ("preloaded index %i in %f ms" % (first + count, t))
         count += 1
       if not msg: # msg was printed
-        syncPrint("Completed preloading %i-%i" % (first, first + block_size[2] -1))
+        syncPrintQ("Completed preloading %i-%i" % (first, first + block_size[2] -1))
     except:
-      syncPrint(sys.exc_info())
-    finally:
-      exe.shutdown()
+      syncPrintQ(sys.exc_info())
 
   preloader = Executors.newSingleThreadScheduledExecutor()
-  preloader.scheduleWithFixedDelay(RunTask(preload, cachedCellImg, loader, block_size), 10, 60, TimeUnit.SECONDS)
+  preloader.scheduleWithFixedDelay(RunTask(preload, cachedCellImg, loader, block_size, filepaths, exe_preloader), 10, 60, TimeUnit.SECONDS)
 
   try:
     syncPrint("N5 directory: " + exportDir + "\nN5 dataset name: " + name + "\nN5 blockSize: " + str(block_size))
     writeN5(cachedCellImg, exportDir, name, block_size, gzip_compression_level=gzip_compression, n_threads=n5_threads)
   finally:
     preloader.shutdown()
+    exe_preloader.shutdown()

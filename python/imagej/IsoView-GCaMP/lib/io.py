@@ -332,9 +332,9 @@ class SectionCellLoader(CacheLoader):
   def get(self, index):
     img = self.asArrayImg(index, self.loadFn(self.filepaths[index]))
     dims = Intervals.dimensionsAsLongArray(img)
-    return Cell(list(dims) + [1],
-                [0] * img.numDimensions() + [index],
-                img.update(None))
+    return Cell(list(dims) + [1], # cell dimensions
+                [0] * img.numDimensions() + [index], # position in the grid: 0, 0, 0, Z-index
+                img.update(None)) # get the underlying LongAccess
 
 
 def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType):
