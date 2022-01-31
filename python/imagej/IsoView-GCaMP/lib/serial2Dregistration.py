@@ -523,14 +523,15 @@ def export8bitN5(filepaths,
 
   cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE)
 
-  def preload(cachedCellImg, loader, block_size, filepaths):
+  exe_preloader = newFixedThreadPool(n_threads=min(block_size[2], n5_threads if n5_threads > 0 else numCPUs()), name="preloader")
+
+  def preload(cachedCellImg, loader, block_size, filepaths, exe_preloader):
     """
     Find which is the last cell index in the cache, identify to which block
     (given the blockSize[2] AKA Z dimension) that index belongs to,
     and concurrently load all cells (sections) that the Z dimension of the blockSize will need.
     If they are already loaded, these operations are insignificant.
     """
-    exe = newFixedThreadPool(n_threads=min(block_size[2], numCPUs()), name="preloader")
     try:
       # The SoftRefLoaderCache.map is a ConcurrentHashMap with Long keys, aka numbers
       cache = cachedCellImg.getCache()
@@ -554,7 +555,7 @@ def export8bitN5(filepaths,
       # Wait for all
       count = 1
       while len(futures) > 0:
-        r, t = futures.pop(0).get()
+        r, t = futures.pop(0).get() # waits for the image to load
         # t in miliseconds
         if t > 500:
           if msg:
@@ -566,14 +567,13 @@ def export8bitN5(filepaths,
         syncPrint("Completed preloading %i-%i" % (first, first + block_size[2] -1))
     except:
       syncPrint(sys.exc_info())
-    finally:
-      exe.shutdown()
 
   preloader = Executors.newSingleThreadScheduledExecutor()
-  preloader.scheduleWithFixedDelay(RunTask(preload, cachedCellImg, loader, block_size), 10, 60, TimeUnit.SECONDS)
+  preloader.scheduleWithFixedDelay(RunTask(preload, cachedCellImg, loader, block_size, filepaths, exe_preloader), 10, 60, TimeUnit.SECONDS)
 
   try:
     syncPrint("N5 directory: " + exportDir + "\nN5 dataset name: " + name + "\nN5 blockSize: " + str(block_size))
     writeN5(cachedCellImg, exportDir, name, block_size, gzip_compression_level=gzip_compression, n_threads=n5_threads)
   finally:
     preloader.shutdown()
+    exe_preloader.shutdown()
