@@ -27,6 +27,7 @@ from lib.registration import loadMatrices
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2 import FinalInterval
 from mpicbg.imagefeatures import FloatArray2DSIFT
+from ij import IJ
 
 
 
@@ -94,9 +95,11 @@ syncPrint("Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y
 # Adjust image loader as needed:
 if filepaths[0].endswith(".dat"):
   syncPrint("Using io.readFIBSEMdat to read image files.")
-  setupImageLoader(loader=lambda filepath: readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0])
+  loadFn = lambda filepath: readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0]
+  setupImageLoader(loader=loadFn)
 else:
-  syncPrint("Using IJ.loadImage to read image files.")
+  loadFn = IJ.openImage
+  syncPrint("Using IJ.openImage to read image files.")
 
 
 # Triggers the whole alignment and ends by showing a virtual stack of the aligned sections.
@@ -116,6 +119,7 @@ if False:
   interval = FinalInterval([0, 0], [dimensions[0] -1, dimensions[1] -1])
 
   export8bitN5(filepaths,
+               loadFn,
                dimensions,
                loadMatrices("matrices", csvDir), # expects matrices.csv file to exist already
                name,
@@ -124,6 +128,7 @@ if False:
                gzip_compression=0, # Don't use compression: less than 5% gain, at considerable processing cost
                invert=True,
                CLAHE_params=[200, 256, 3.0],
-               block_size=[256, 256, 64], # ~4 MB per block
-               n5_threads=0)
+               n5_threads=0,
+               block_size=[256, 256, 64]) # ~4 MB per block
+
 

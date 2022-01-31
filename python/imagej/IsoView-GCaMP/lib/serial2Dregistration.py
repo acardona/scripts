@@ -440,6 +440,7 @@ def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, 
 
 
 def export8bitN5(filepaths,
+                 loadFn,
                  img_dimensions,
                  matrices,
                  name,
@@ -453,12 +454,17 @@ def export8bitN5(filepaths,
   """
   Export into an N5 volume, in parallel, in 8-bit.
 
+  filepaths: the ordered list of filepaths, one per serial section.
+  loadFn: a function to load a filepath into an ImagePlus.
   name: name to assign to the N5 volume.
-  img3D: the serial sections to export.
+  matrices: the list of transformation matrices (each one is an array), one per section
   exportDir: the directory into which to save the N5 volume.
   interval: for cropping.
-  gzip_compression: defaults to 6 as suggested by Saalfeld.
-  block_size: defaults to 128x128x128 px.
+  gzip_compression: defaults to 6 as suggested by Saalfeld. 0 means no compression.
+  invert:  Defaults to True (necessary for FIBSEM). Whether to invert the images upon loading.
+  CLAHE_params: defaults to [400, 256, 3.0]. If not None, the a list of the 3 parameters needed for a CLAHE filter to apply to each image.
+  n5_threads: defaults to 0, meaning as many as CPU cores.
+  block_size: defaults to 128x128x128 px. A list of 3 integer numbers, the dimensions of each individual block.
   """
 
   dims = Intervals.dimensionsAsLongArray(interval)
@@ -498,8 +504,11 @@ def export8bitN5(filepaths,
 
   blockRadius, n_bins, slope = CLAHE_params
 
-  loader = SectionCellLoader(filepaths, asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
-                                                           interval, invert, blockRadius, n_bins, slope, matrices))
+  # A CacheLoader that interprets the list of filepaths as a 3D volume: a stack of 2D slices
+  loader = SectionCellLoader(filepaths, 
+                             asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
+                                                interval, invert, blockRadius, n_bins, slope, matrices),
+                             loadFn=loadFn)
 
   # How to preload block_size[2] files at a time? Or at least as many as numCPUs()?
   # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,
