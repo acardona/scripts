@@ -492,7 +492,7 @@ def export8bitN5(filepaths,
     CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None) # far less memory requirements than NormalizeLocalContrast, and faster.
     minimum, maximum = autoAdjust(sp)
 
-   	# Transform and convert image to 8-bit, mapping to display range
+    # Transform and convert image to 8-bit, mapping to display range
     img = ArrayImgs.unsignedShorts(sp.getPixels(), [sp.getWidth(), sp.getHeight()])
     sp = None
     imp = None
