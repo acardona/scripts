@@ -45,13 +45,12 @@ from math import ceil
 from itertools import imap
 try:
   from fiji.scripting import Weaver
-  """ TODO isn't working, even when tools.jar is present
   # Check if the tools.jar is in the classpath
   try:
+    from java.lang import Class
     Class.forName("com.sun.tools.javac.Main")
   except:
     print "*** tools.jar not in the classpath ***"
-  """
 except:
   print "*** fiji.scripting.Weaver NOT installed ***"
   Weaver = None
