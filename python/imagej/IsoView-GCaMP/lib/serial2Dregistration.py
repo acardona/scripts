@@ -545,7 +545,7 @@ def export8bitN5(filepaths,
       if 0 == len(keys):
         return
       first = max(0, keys[-1] - (keys[-1] % block_size[2]))
-      last = min(len(filepaths), first + block_size[2] -1)
+      last = min(len(filepaths), first + block_size[2]) -1
       keys = None
       syncPrintQ("### Preloading %i-%i ###" % (first, last))
       futures = []
