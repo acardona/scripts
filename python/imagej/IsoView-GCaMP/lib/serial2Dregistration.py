@@ -437,6 +437,7 @@ def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, 
   for kl in kls:
     canvas.addKeyListener(kl)
   ImagePlus.addImageListener(OnClosing(comp, cellGet))
+  return comp
 
 
 def export8bitN5(filepaths,
