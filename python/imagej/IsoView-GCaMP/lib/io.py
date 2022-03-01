@@ -311,6 +311,17 @@ class BinaryLoader(CacheLoader):
     return self.get(path)
 
 
+class DATLoader(CacheLoader):
+  """ Read .dat FIBSEM files from Shan Xu's software using io.readFIBSEMdat """
+  def __init__(self, channel_index=0, asImagePlus=False):
+    self.channel_index = channel_index
+    self.asImagePlus = asImagePlus
+  def get(self, path):
+    return readFIBSEMdat(path, channel_index=self.channel_index, asImagePlus=self.asImagePlus)[0]
+  def load(self, path):
+    return self.get(path)
+
+
 class SectionCellLoader(CacheLoader):
   """
   A CacheLoader that can load Cell instances using ImageJ's I/O library. 
@@ -774,4 +785,30 @@ class TIFFSlices(CacheLoader):
     access, primitiveType, pixelType = self.types[self.IFDs[0]["bitDepth"]]
     return lazyCachedCellImg(self, self.cell_dimensions[:-1] + [len(self.IFDs)],
                              self.cell_dimensions, pixelType, primitiveType)
+
+
+class DATSlices(CacheLoader):
+  """ Load a series of 2D .dat files as an ImgLib2 cached lazy Img.
+      filepaths: list of full filepaths, one per 2D image.
+      channel_index: defaults to 0; the channel to load from the .dat, which can contain more than one.
+      filterFn: defaults to None; a function that takes a RandomAccessibleInterval as argument and
+                returns another or the same. Invoked upon loading the filepath. """
+  def __init__(self, filepaths, channel_index=0, filterFn=None):
+    self.filepaths = filepaths
+    self.loader = DATLoader(channel_index=channel_index)
+    self.filterFn = filterFn
+    self.dimensions2D = None
+
+  def get(self, index):
+    img = self.loader.load(self.filepaths[index])
+    if self.filterFn:
+      img = self.filterFn(img)
+    return Cell([img.dimension(0), img.dimension(1), 1], [0, 0, index], img.update(None))
+
+  def asLazyCachedCellImg(self):
+    if self.dimensions2D is None:
+      img = self.get(0)
+      self.dimensions2D = [img.dimension(0), img.dimension(1)]
+    return lazyCachedCellImg(self, self.dimensions2D + [len(self.filepaths)], self.dimensions2D + [1], UnsignedShortType, PrimitiveType.SHORT)
+
 
