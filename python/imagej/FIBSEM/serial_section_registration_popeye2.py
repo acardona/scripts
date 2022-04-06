@@ -127,13 +127,13 @@ else:
 
 # Triggers the whole alignment and ends by showing a virtual stack of the aligned sections.
 # Crashware: can be restarted anytime, will resume from where it left off.
-#viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-#            FinalInterval([x0, y0], [x1, y1]))
+viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+            FinalInterval([x0, y0], [x1, y1]))
 
 
 # When the alignment is good enough, then export as N5 by swapping "False" for "True" below:
 
-if True:
+if False:
   # Write the whole volume in N5 format
   name = properties["name"] # srcDir.split('/')[-2]
   exportDir = os.path.join(tgtDirN5, "n5")
