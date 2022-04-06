@@ -162,7 +162,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
       area2 = fp2.width * fp2.height
       
       if area1 == area2:
-        paramsSIFT1 = params["paramsSIFT"].clone()
+        paramsSIFT1 = paramsSIFT.clone()
         paramsSIFT1.maxOctaveSize = int(max(1024, fp1.width * params["scale"]))
         paramsSIFT1.minOctaveSize = int(paramsSIFT1.maxOctaveSize / pow(2, paramsSIFT1.steps))
         paramsSIFT2 = paramsSIFT1
@@ -174,7 +174,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
         else:
           target_width_smaller = smaller.width * params["scale"]
         #
-        paramsSIFT1 = params["paramsSIFT"].clone()
+        paramsSIFT1 = paramsSIFT.clone()
         paramsSIFT1.maxOctaveSize = target_width_bigger
         paramsSIFT1.minOctaveSize = int(paramsSIFT1.maxOctaveSize / pow(2, paramsSIFT1.steps))
         paramsSIFT2 = params["paramsSIFT"].clone()
