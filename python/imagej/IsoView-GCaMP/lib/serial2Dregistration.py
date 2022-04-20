@@ -270,7 +270,7 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
 
 def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties):
   if not os.path.exists(csvDir):
-    os.mkdirs(csvDir) # recursively
+    os.makedirs(csvDir) # recursively
   name = "matrices"
   matrices = loadMatrices(name, csvDir)
   if matrices:
