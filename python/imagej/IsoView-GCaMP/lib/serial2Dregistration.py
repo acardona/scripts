@@ -123,7 +123,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
     # Don't use blockmatching if the dimensions are different
     use_blockmatching = fp1.getWidth() == fp2.getWidth() and fp1.getHeight() == fp2.getHeight()
 
-    if use_blockmatching:
+    if use_blockmatching and not params["use_SIFT"]:
       # Fill the sourcePoints
       mesh = TransformMesh(params["meshResolution"], fp1.width, fp1.height)
       PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
@@ -145,7 +145,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
 
     # At least some should match to accept the translation
     if len(sourceMatches) < max(20, len(sourcePoints) / 5) / 2:
-      syncPrintQ("Found only %i blockmatching pointmatches (from %i source points)" % (len(sourceMatches), len(sourcePoints)))
+      if not params["use_SIFT"]: syncPrintQ("Found only %i blockmatching pointmatches (from %i source points)" % (len(sourceMatches), len(sourcePoints)))
       syncPrintQ("... therefore invoking SIFT pointmatching for:\n  S: " + basename(filepath1) + "\n  T: " + basename(filepath2))
       # Can fail if there is a shift larger than the searchRadius
       # Try SIFT features, which are location independent
