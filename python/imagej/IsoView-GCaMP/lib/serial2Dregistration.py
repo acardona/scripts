@@ -177,7 +177,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
         paramsSIFT1 = paramsSIFT.clone()
         paramsSIFT1.maxOctaveSize = target_width_bigger
         paramsSIFT1.minOctaveSize = int(paramsSIFT1.maxOctaveSize / pow(2, paramsSIFT1.steps))
-        paramsSIFT2 = params["paramsSIFT"].clone()
+        paramsSIFT2 = paramsSIFT.clone()
         paramsSIFT2.maxOctaveSize = target_width_smaller
         paramsSIFT2.minOctaveSize = int(paramsSIFT2.maxOctaveSize / pow(2, paramsSIFT2.steps))
       
