@@ -48,7 +48,7 @@ from java.util.concurrent import Executors, TimeUnit
 # From lib
 from io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ
-from features import savePointMatches, loadPointMatches
+from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures
 from registration import loadMatrices, saveMatrices
 from ui import showStack, wrap
 from converter import convert
@@ -88,6 +88,21 @@ def setupImageLoader(loader=loadImp):
       Defaults to loadImp using ImageJ's IJ.openImage. """
   global loadImp
   loadImp = loader
+
+
+def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, load):
+  features = loadFeatures(os.basename(filepath), csvDir, params, validateOnly=True)
+  if not features:
+    # Extract features
+    paramsSIFT = paramsSIFT.clone()
+    paramsSIFT.maxOctaveSize = int(max(1024, fp1.width * params["scale"]))
+    paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
+    ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
+    features = ArrayList() # of Point instances
+    fp = load(filepath)
+    ijSIFT.extractFeatures(fp, features)
+    saveFeatures(os.basename(os.path.basename(filepath), csvDir, features, params)
+    syncPrintQ("Extracted %i SIFT features for %s" % (len(features), os.basename(filepath)))
 
 
 def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeload, load):
@@ -209,8 +224,41 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
     syncPrint("".join(traceback.format_exception()), out="stderr")
 
 
-def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties):
-  loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
+def extractSIFTMatches(filepath1, filepath2, params, csvDir):
+  # Skip if pointmatches CSV file exists already:
+  csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepath2) + ".pointmatches.csv")
+  if os.path.exists(csvpath):
+    return False
+
+  try:
+    # ASSUMES SIFT features exist already
+    features1 = loadFeatures(os.path.basename(filepath1), csvDir, params)
+    features2 = loadFeatures(os.path.basename(filepath2), csvDir, params)
+    # Vector of PointMatch instances
+    sourceMatches = FloatArray2DSIFT.createMatches(features1,
+                                                   features2,
+                                                   1.5, # max_sd
+                                                   TranslationModel2D(),
+                                                   Double.MAX_VALUE,
+                                                   params["rod"]) # rod: ratio of best vs second best
+    
+    syncPrintQ("Found %i SIFT pointmatches for %s vs %s" % (sourceMatches.size(),
+                                                            os.path.basename(filepath1),
+                                                            os.path.basename(filepath2)))
+    
+    # Store pointmatches
+    savePointMatches(os.path.basename(filepath1),
+                     os.path.basename(filepath2),
+                     sourceMatches,
+                     csvDir,
+                     params)
+    return True
+  except:
+    syncPrint(sys.exc_info())
+    syncPrint("".join(traceback.format_exception()), out="stderr")
+
+
+def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem):
   for i in xrange(len(filepaths) - n_adjacent):
     for inc in xrange(1, n_adjacent + 1):
       #syncPrintQ("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
@@ -221,15 +269,35 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
   """ If a pointmatches csv file doesn't exist, will create it. """
   w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(properties["n_threads"]))
   exeload = newFixedThreadPool()
+  loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
   try:
-    count = 1
-    for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties)):
-      if result: # is False when CSV file already exists
-        syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
-      count += 1
-    syncPrintQ("Awaiting all remaining pointmatching tasks to finish.")
-    w.awaitAll()
-    syncPrintQ("Finished all pointmatching tasks.")
+    if params["use_SIFT"]:
+      # Extract SIFT features for all images first
+      futures = []
+      for filepath in filepaths:
+        futures.append(exeload.submit(Task(ensureSIFTFeatures, filepath, params, paramsSIFT, csvDir, loadFPMem)))
+      for i, fu in enumerate(futures):
+        fu.get()
+        if 0 == i % params["n_threads"]:
+          syncPrintQ("Completed extracting SIFT features for %i images." % i)
+      # Extract pointmatches
+      futures = []
+      count = 1
+      for i in xrange(len(flepaths) - n_adjacent):
+        for inc in xrange(1, n_adjacent + 1):
+          futures.append(exeload.submit(Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], params, csvDir)))
+      for fu in futures:
+        fu.get()
+    else:
+      # Use blockmatches
+      count = 1
+      for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem)):
+        if result: # is False when CSV file already exists
+          syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
+        count += 1
+      syncPrintQ("Awaiting all remaining pointmatching tasks to finish.")
+      w.awaitAll()
+      syncPrintQ("Finished all pointmatching tasks.")
   except:
     print sys.exc_info()
   finally:
