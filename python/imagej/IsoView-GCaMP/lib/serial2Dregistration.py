@@ -212,16 +212,20 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
 def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, load, validateOnly=False):
   features = loadFeatures(os.path.basename(filepath), csvDir, params, validateOnly=validateOnly)
   if not features:
-    # Extract features
-    paramsSIFT = paramsSIFT.clone()
-    paramsSIFT.maxOctaveSize = int(max(1024, fp1.width * params["scale"]))
-    paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
-    ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
-    features = ArrayList() # of Point instances
-    fp = load(filepath)
-    ijSIFT.extractFeatures(fp, features)
-    saveFeatures(os.path.basename(filepath), csvDir, features, params)
-    syncPrintQ("Extracted %i SIFT features for %s" % (len(features), os.path.basename(filepath)))
+    try:
+      # Extract features
+      fp = load(filepath)
+      paramsSIFT = paramsSIFT.clone()
+      paramsSIFT.maxOctaveSize = int(max(1024, fp.width * params["scale"]))
+      paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
+      ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
+      features = ArrayList() # of Point instances
+      ijSIFT.extractFeatures(fp, features)
+      saveFeatures(os.path.basename(filepath), csvDir, features, params)
+      syncPrintQ("Extracted %i SIFT features for %s" % (len(features), os.path.basename(filepath)))
+    except:
+      syncPrint(sys.exc_info())
+      syncPrint("".join(traceback.format_exception()), out="stderr")
   return features
 
 
