@@ -303,7 +303,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
   w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(properties["n_threads"]))
   exeload = newFixedThreadPool()
   try:
-    if params["use_SIFT"]:
+    if properties.get("use_SIFT", False):
       syncPrintQ("use_SIFT is True")
       # Pre-extract SIFT features for all images first
       futures = []
