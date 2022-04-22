@@ -255,7 +255,7 @@ def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateOnly=Fa
   return features
 
 
-def extractSIFTMatches(filepath1, filepath2, paramsSIFT, properties, csvDir):
+def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csvDir):
   # Skip if pointmatches CSV file exists already:
   csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepath2) + ".pointmatches.csv")
   if os.path.exists(csvpath):
@@ -318,9 +318,10 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       # Compute pointmatches across adjacent sections
       futures = []
       count = 1
+      paramsRod = {"rod": params["rod"]} # only this parameter is needed for SIFT pointmatches
       for i in xrange(max(1, len(filepaths) - n_adjacent)):
         for inc in xrange(1, min(n_adjacent + 1, len(filepaths))):
-          futures.append(exeload.submit(Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], paramsSIFT, properties, csvDir)))
+          futures.append(exeload.submit(Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], paramsRod, paramsSIFT, properties, csvDir)))
       for fu in futures:
         fu.get()
         syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
