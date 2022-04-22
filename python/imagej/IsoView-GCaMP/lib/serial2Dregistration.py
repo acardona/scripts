@@ -21,7 +21,7 @@ from mpicbg.ij.blockmatching import BlockMatching
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij.util import Filter, Util
-from mpicbg.ij import SIFT
+from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
 from java.lang import Double
@@ -46,7 +46,7 @@ from jarray import zeros, array
 from functools import partial
 from java.util.concurrent import Executors, TimeUnit
 # From lib
-from io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5
+from io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ
 from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures
 from registration import loadMatrices, saveMatrices
@@ -210,22 +210,47 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
 
 
 def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, load, validateOnly=False):
-  features = loadFeatures(os.path.basename(filepath), csvDir, params, validateOnly=validateOnly)
-  if not features:
-    try:
-      # Extract features
-      fp = load(filepath)
-      paramsSIFT = paramsSIFT.clone()
-      paramsSIFT.maxOctaveSize = int(max(1024, fp.width * params["scale"]))
-      paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
-      ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
-      features = ArrayList() # of Point instances
-      ijSIFT.extractFeatures(fp, features)
-      saveFeatures(os.path.basename(filepath), csvDir, features, params)
-      syncPrintQ("Extracted %i SIFT features for %s" % (len(features), os.path.basename(filepath)))
-    except:
-      syncPrint(sys.exc_info())
-      syncPrint("".join(traceback.format_exception()), out="stderr")
+  """
+     filepath: to the image from which SIFT features have been or have to be extracted.
+     params: dict of registration parameters, including the key "scale".
+     paramsSIFT: FloatArray2DSIFT.Params instance.
+     csvDir: directory into which serialized features have been or will be saved.
+     load: function to load an image as an ImageProcessor from the filepath.
+     validateOnly: whether to merely check that the Params match from the deserialized features file.
+     
+     First check if serialized features exist for the image, and if the Params match.
+     Otherwise extract the features and store them serialized.
+     Returns the ArrayList of Feature instances.
+  """
+  path = os.path.join(csvDir, os.path.basename(filepath) + ".SIFT-features.obj")
+  # An ArrayList whose last element is a mpicbg.imagefeatures.FloatArray2DSIFT.Param
+  # and all other elements are mpicbg.imagefeatures.Feature
+  features = deserialize(path) if os.path.exists(path) else None
+  if features:
+    if features.get(features.size() -1).equals(paramsSIFT):
+      if validateOnly:
+        return True
+      features.remove(feature.size() -1)
+      return features
+    else:
+      # Remove the file: paramsSIFT have changed
+      os.remove(path)
+  # Else, extract de novo:
+  try:
+    # Extract features
+    fp = load(filepath)
+    paramsSIFT = paramsSIFT.clone()
+    paramsSIFT.maxOctaveSize = int(max(1024, fp.width * params["scale"]))
+    paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
+    ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
+    features = ArrayList() # of Feature instances
+    ijSIFT.extractFeatures(fp, features)
+    features.add(paramsSIFT) # append Params instance at the end for future validation
+    serialize(features, path)
+    syncPrintQ("Extracted %i SIFT features for %s" % (len(features), os.path.basename(filepath)))
+  except:
+    syncPrint(sys.exc_info())
+    syncPrint("".join(traceback.format_exception()), out="stderr")
   return features
 
 
