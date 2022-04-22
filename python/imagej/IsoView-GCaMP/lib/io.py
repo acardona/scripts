@@ -842,7 +842,7 @@ def deserialize(filepath):
   try:
     f = FileInputStream(filepath)
     o = ObjectInputStream(f)
-    obj = ois.readObject()
+    obj = o.readObject()
   except:
     print sys.exc_info()
   finally:
