@@ -352,8 +352,8 @@ def loadPointMatchesPlus(filepaths, i, j, csvDir, params):
                                 verbose=False)
 
 def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
-  for i in xrange(len(filepaths) - n_adjacent):
-    for inc in xrange(1, n_adjacent + 1):
+  for i in xrange(max(1, len(filepaths) - n_adjacent)):
+    for inc in xrange(1, min(n_adjacent + 1, len(filepaths))):
       yield Task(loadPointMatchesPlus, filepaths, i, i + inc, csvDir, params)
 
 # When done, optimize tile pose globally
