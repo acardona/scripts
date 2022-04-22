@@ -250,8 +250,8 @@ def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, load, validateOnly=
     syncPrintQ("Extracted %i SIFT features for %s" % (features.size(), os.path.basename(filepath)))
   except:
     e = sys.exc_info()
+    System.out.println("".join(traceback.format_exception(e[0], e[1], e[2])))
     syncPrint(e)
-    System.out.println("".join(traceback.format_exception(e[0], e[1], e[2])), out="stderr")
   return features
 
 
@@ -285,8 +285,9 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, csvDir, load):
                      params)
     return True
   except:
-    syncPrint(sys.exc_info())
-    syncPrint("".join(traceback.format_exception()), out="stderr")
+    e = sys.exc_info()
+    System.out.println("".join(traceback.format_exception(e[0], e[1], e[2])))
+    syncPrint(e)
 
 
 def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem):
