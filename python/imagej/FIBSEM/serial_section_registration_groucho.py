@@ -53,7 +53,6 @@ properties = {
  'invert': True,
  'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': True, # enforce SIFT instead of blockmatching for all sections
- 'SIFT_max_size': 2048, # for the octaves
 }
 
 # Validate file sizes:
@@ -91,7 +90,7 @@ params = {
 paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
-paramsSIFT.maxOctaveSize = int(max(2048, dimensions[0] * params["scale"]))
+paramsSIFT.maxOctaveSize = 2048  # int(max(2048, dimensions[0] * params["scale"]))
 paramsSIFT.steps = 3
 paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
 paramsSIFT.initialSigma = 1.6 # default 1.6
