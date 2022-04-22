@@ -247,10 +247,11 @@ def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, load, validateOnly=
     ijSIFT.extractFeatures(fp, features)
     features.add(paramsSIFT) # append Params instance at the end for future validation
     serialize(features, path)
-    syncPrintQ("Extracted %i SIFT features for %s" % (len(features), os.path.basename(filepath)))
+    syncPrintQ("Extracted %i SIFT features for %s" % (features.size(), os.path.basename(filepath)))
   except:
-    syncPrint(sys.exc_info())
-    syncPrint("".join(traceback.format_exception()), out="stderr")
+    e = sys.exc_info()
+    syncPrint(e)
+    System.out.println("".join(traceback.format_exception(e[0], e[1], e[2])), out="stderr")
   return features
 
 
