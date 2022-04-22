@@ -247,6 +247,7 @@ def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, load, validateOnly=
     ijSIFT.extractFeatures(fp, features)
     features.add(paramsSIFT) # append Params instance at the end for future validation
     serialize(features, path)
+    features.remove(features.size() -1) # to return without the Params for immediate use
     syncPrintQ("Extracted %i SIFT features for %s" % (features.size(), os.path.basename(filepath)))
   except:
     e = sys.exc_info()
