@@ -291,7 +291,7 @@ def extractSIFTMatches(filepath1, filepath2, paramsSIFT, properties, csvDir, loa
     syncPrint(e)
 
 
-def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, properties, n_adjacent, exeload, properties, loadFPMem):
+def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem):
   for i in xrange(len(filepaths) - n_adjacent):
     for inc in xrange(1, n_adjacent + 1):
       #syncPrintQ("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
@@ -328,7 +328,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       # Use blockmatches
       loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
       count = 1
-      for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, properties, n_adjacent, exeload, properties, loadFPMem)):
+      for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem)):
         if result: # is False when CSV file already exists
           syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
         count += 1
