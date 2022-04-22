@@ -230,7 +230,7 @@ def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, load, validateOnly=
     if features.get(features.size() -1).equals(paramsSIFT):
       if validateOnly:
         return True
-      features.remove(feature.size() -1)
+      features.remove(features.size() -1)
       return features
     else:
       # Remove the file: paramsSIFT have changed
