@@ -231,6 +231,7 @@ def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateOnly=Fa
       if validateOnly:
         return True
       features.remove(features.size() -1) # removes the Params
+      syncPrintQ("Loaded %i SIFT features for %s" % (features.size(), os.path.basename(filepath)))
       return features
     else:
       # Remove the file: paramsSIFT have changed
@@ -240,8 +241,6 @@ def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateOnly=Fa
     # Extract features
     ip = loadImp(filepath).getProcessor()
     paramsSIFT = paramsSIFT.clone()
-    paramsSIFT.maxOctaveSize = int(properties.get("SIFT_max_size", 2048))
-    paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
     ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
     features = ArrayList() # of Feature instances
     ijSIFT.extractFeatures(ip, features)
@@ -266,6 +265,8 @@ def extractSIFTMatches(filepath1, filepath2, paramsSIFT, properties, csvDir, loa
     # Load from CSV files or extract features de novo
     features1 = ensureSIFTFeatures(filepath1, paramsSIFT, properties, csvDir)
     features2 = ensureSIFTFeatures(filepath2, paramsSIFT, properties, csvDir)
+    syncPrintQ("Loaded %i features for %s\n       %i features for %s" % (features1.size(), os.path.basename(filepath1),
+                                                                         features2.size(), os.path.basename(filepath2)))
     # Vector of PointMatch instances
     sourceMatches = FloatArray2DSIFT.createMatches(features1,
                                                    features2,
