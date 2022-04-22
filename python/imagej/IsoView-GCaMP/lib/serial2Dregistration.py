@@ -255,7 +255,7 @@ def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateOnly=Fa
   return features
 
 
-def extractSIFTMatches(filepath1, filepath2, paramsSIFT, properties, csvDir, load):
+def extractSIFTMatches(filepath1, filepath2, paramsSIFT, properties, csvDir):
   # Skip if pointmatches CSV file exists already:
   csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepath2) + ".pointmatches.csv")
   if os.path.exists(csvpath):
@@ -320,7 +320,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       count = 1
       for i in xrange(max(1, len(filepaths) - n_adjacent)):
         for inc in xrange(1, min(n_adjacent + 1, len(filepaths))):
-          futures.append(exeload.submit(Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], paramsSIFT, properties, csvDir, loadFPMem)))
+          futures.append(exeload.submit(Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], paramsSIFT, properties, csvDir)))
       for fu in futures:
         fu.get()
         syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
