@@ -52,6 +52,8 @@ properties = {
  'n_threads': 32,
  'invert': True,
  'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
+ 'use_SIFT': True, # enforce SIFT instead of blockmatching for all sections
+ 'SIFT_max_size': 2048, # for the octaves
 }
 
 # Validate file sizes:
@@ -83,7 +85,6 @@ params = {
  'maxCurvature': 1000.0, # default is 10
  'searchRadius': 100, # a low value: we expect little translation
  'blockRadius': 200, # small, yet enough
- 'use_SIFT': True, # enforce SIFT instead of blockmatching for all sections
 }
 
 # Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
