@@ -365,6 +365,8 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
     #w = ParallelTasks("loadPointMatches")
     #for i, j, pointmatches in w.chunkConsume(properties["n_threads"], loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
     syncPrintQ("Loading all pointmatches.")
+    if properties.get("use_SIFT"):
+      params = {"rod": params["rod"]}
     for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       i, j, pointmatches = task.call()
       tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
