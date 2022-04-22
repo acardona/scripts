@@ -209,7 +209,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
     syncPrint("".join(traceback.format_exception()), out="stderr")
 
 
-def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, load, validateOnly=False):
+def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, validateOnly=False):
   """
      filepath: to the image from which SIFT features have been or have to be extracted.
      params: dict of registration parameters, including the key "scale".
@@ -230,7 +230,7 @@ def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, load, validateOnly=
     if features.get(features.size() -1).equals(paramsSIFT):
       if validateOnly:
         return True
-      features.remove(features.size() -1)
+      features.remove(features.size() -1) # removes the Params
       return features
     else:
       # Remove the file: paramsSIFT have changed
@@ -238,13 +238,13 @@ def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, load, validateOnly=
   # Else, extract de novo:
   try:
     # Extract features
-    fp = load(filepath)
+    ip = loadImp(filepath).getProcessor()
     paramsSIFT = paramsSIFT.clone()
-    paramsSIFT.maxOctaveSize = int(max(1024, fp.width * params["scale"]))
+    paramsSIFT.maxOctaveSize = int(max(params.get("SIFT_max_size", 2048), ip.width * params["scale"]))
     paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
     ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
     features = ArrayList() # of Feature instances
-    ijSIFT.extractFeatures(fp, features)
+    ijSIFT.extractFeatures(ip, features)
     features.add(paramsSIFT) # append Params instance at the end for future validation
     serialize(features, path)
     features.remove(features.size() -1) # to return without the Params for immediate use
@@ -264,8 +264,8 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, csvDir, load):
 
   try:
     # Load from CSV files or extract features de novo
-    features1 = ensureSIFTFeatures(filepath1, params, paramsSIFT, csvDir, load)
-    features2 = ensureSIFTFeatures(filepath2, params, paramsSIFT, csvDir, load)
+    features1 = ensureSIFTFeatures(filepath1, params, paramsSIFT, csvDir)
+    features2 = ensureSIFTFeatures(filepath2, params, paramsSIFT, csvDir)
     # Vector of PointMatch instances
     sourceMatches = FloatArray2DSIFT.createMatches(features1,
                                                    features2,
@@ -302,14 +302,13 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
   """ If a pointmatches csv file doesn't exist, will create it. """
   w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(properties["n_threads"]))
   exeload = newFixedThreadPool()
-  loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
   try:
     if params["use_SIFT"]:
       syncPrintQ("use_SIFT is True")
       # Pre-extract SIFT features for all images first
       futures = []
       for filepath in filepaths:
-        futures.append(exeload.submit(Task(ensureSIFTFeatures, filepath, params, paramsSIFT, csvDir, loadFPMem)))
+        futures.append(exeload.submit(Task(ensureSIFTFeatures, filepath, params, paramsSIFT, csvDir)))
       for i, fu in enumerate(futures):
         fu.get()
         if 0 == i % properties["n_threads"]:
@@ -327,6 +326,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
         count += 1
     else:
       # Use blockmatches
+      loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
       count = 1
       for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem)):
         if result: # is False when CSV file already exists
