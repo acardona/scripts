@@ -1,4 +1,5 @@
 from java.io import RandomAccessFile
+from java.io import Serializable, FileOutputStream, ObjectOutputStream, FileInputStream, ObjectInputStream
 from net.imglib2.img.array import ArrayImgs
 from jarray import zeros, array
 from java.nio import ByteBuffer, ByteOrder
@@ -27,7 +28,7 @@ from ij.io import FileSaver, ImageReader, FileInfo
 from ij import ImagePlus, IJ
 from ij.process import ShortProcessor
 from synchronize import make_synchronized
-from util import syncPrint, newFixedThreadPool
+from util import syncPrint, syncPrintQ, newFixedThreadPool
 from ui import showStack, showBDV
 try:
   # Needs 'SiMView' Fiji update site enabled
@@ -811,4 +812,45 @@ class DATSlices(CacheLoader):
       self.dimensions2D = [img.dimension(0), img.dimension(1)]
     return lazyCachedCellImg(self, self.dimensions2D + [len(self.filepaths)], self.dimensions2D + [1], UnsignedShortType, PrimitiveType.SHORT)
 
+
+def serialize(obj, filepath):
+  if not Serializable.isAssignableFrom(obj):
+    syncPrintQ("Object doesn't implement Serializable: " + str(obj))
+    return False
+  fos = None
+  oos = None
+  try:
+    fos = FileOutputStream(filepath)
+    oos = ObjectOutputStream(fos)
+    oos.writeObject(obj)
+    oos.flush()
+    fos.getChannel().sync() # ensure file is written to disk
+    return True
+  except:
+    print sys.exc_info()
+  finally:
+    if oss:
+      oos.close()
+    if fos:
+      fos.close()
+    
+
+def deserialize(filepath):
+  fis = None
+  ois = None
+  obj = None
+  try:
+    fis = FileInputStream(filepath)
+    ois = ObjectInputStream(fis)
+    obj = ois.readObject()
+  except:
+    print sys.exc_info()
+  finally:
+    if fis:
+      fis.close()
+    if ois:
+      ois.close()
+  if obj is None:
+    syncPrintQ("Failed to deserialize object at " + filepath)
+  return obj
 
