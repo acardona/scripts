@@ -817,39 +817,39 @@ def serialize(obj, filepath):
   if not Serializable.isAssignableFrom(obj):
     syncPrintQ("Object doesn't implement Serializable: " + str(obj))
     return False
-  fos = None
-  oos = None
+  f = None
+  o = None
   try:
-    fos = FileOutputStream(filepath)
-    oos = ObjectOutputStream(fos)
-    oos.writeObject(obj)
-    oos.flush()
-    fos.getChannel().sync() # ensure file is written to disk
+    f = FileOutputStream(filepath)
+    o = ObjectOutputStream(f)
+    o.writeObject(obj)
+    o.flush()
+    f.getChannel().sync() # ensure file is written to disk
     return True
   except:
     print sys.exc_info()
   finally:
-    if oss:
-      oos.close()
-    if fos:
-      fos.close()
+    if o:
+      o.close()
+    if f:
+      f.close()
     
 
 def deserialize(filepath):
-  fis = None
-  ois = None
+  f = None
+  o = None
   obj = None
   try:
-    fis = FileInputStream(filepath)
-    ois = ObjectInputStream(fis)
+    f = FileInputStream(filepath)
+    o = ObjectInputStream(f)
     obj = ois.readObject()
   except:
     print sys.exc_info()
   finally:
-    if fis:
-      fis.close()
-    if ois:
-      ois.close()
+    if f:
+      f.close()
+    if o:
+      o.close()
   if obj is None:
     syncPrintQ("Failed to deserialize object at " + filepath)
   return obj
