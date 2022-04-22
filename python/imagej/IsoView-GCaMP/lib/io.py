@@ -814,7 +814,7 @@ class DATSlices(CacheLoader):
 
 
 def serialize(obj, filepath):
-  if not Serializable.isAssignableFrom(obj):
+  if not Serializable.isAssignableFrom(obj.getClass()):
     syncPrintQ("Object doesn't implement Serializable: " + str(obj))
     return False
   f = None
