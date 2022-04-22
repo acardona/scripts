@@ -90,7 +90,7 @@ def setupImageLoader(loader=loadImp):
   loadImp = loader
 
 
-def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeload, load):
+def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, csvDir, exeload, load):
   """
   filepath1: the file path to an image of a section.
   filepath2: the file path to an image of another section.
@@ -163,7 +163,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
       
       if area1 == area2:
         paramsSIFT1 = paramsSIFT.clone()
-        paramsSIFT1.maxOctaveSize = int(max(1024, fp1.width * params["scale"]))
+        paramsSIFT1.maxOctaveSize = int(max(properties.get("SIFT_max_size", 2048), fp1.width * params["scale"]))
         paramsSIFT1.minOctaveSize = int(paramsSIFT1.maxOctaveSize / pow(2, paramsSIFT1.steps))
         paramsSIFT2 = paramsSIFT1
       else:
@@ -291,11 +291,11 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csv
     syncPrint(e)
 
 
-def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem):
+def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, properties, n_adjacent, exeload, properties, loadFPMem):
   for i in xrange(len(filepaths) - n_adjacent):
     for inc in xrange(1, n_adjacent + 1):
       #syncPrintQ("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
-      yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, csvDir, exeload, loadFPMem)
+      yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, properties, csvDir, exeload, loadFPMem)
 
 
 def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties):
@@ -328,7 +328,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       # Use blockmatches
       loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
       count = 1
-      for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem)):
+      for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, properties, n_adjacent, exeload, properties, loadFPMem)):
         if result: # is False when CSV file already exists
           syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
         count += 1
