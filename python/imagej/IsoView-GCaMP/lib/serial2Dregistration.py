@@ -24,7 +24,7 @@ from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
-from java.lang import Double
+from java.lang import Double, System
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
@@ -304,6 +304,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
   loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
   try:
     if params["use_SIFT"]:
+      syncPrintQ("use_SIFT is True")
       # Pre-extract SIFT features for all images first
       futures = []
       for filepath in filepaths:
