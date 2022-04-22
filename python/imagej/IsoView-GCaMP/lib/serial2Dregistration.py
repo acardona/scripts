@@ -318,8 +318,8 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       # Compute pointmatches across adjacent sections
       futures = []
       count = 1
-      for i in xrange(len(filepaths) - n_adjacent):
-        for inc in xrange(1, n_adjacent + 1):
+      for i in xrange(max(1, len(filepaths) - n_adjacent)):
+        for inc in xrange(1, min(n_adjacent + 1, len(filepaths))):
           futures.append(exeload.submit(Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], paramsSIFT, properties, csvDir, loadFPMem)))
       for fu in futures:
         fu.get()
