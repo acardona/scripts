@@ -824,7 +824,7 @@ def serialize(obj, filepath):
     o = ObjectOutputStream(f)
     o.writeObject(obj)
     o.flush()
-    f.getChannel().sync() # ensure file is written to disk
+    f.getFD().sync() # ensure file is written to disk
     return True
   except:
     print sys.exc_info()
