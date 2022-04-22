@@ -313,7 +313,8 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       for i, fu in enumerate(futures):
         fu.get()
         if 0 == i % properties["n_threads"]:
-          syncPrintQ("Completed extracting SIFT features for %i images." % i)
+          syncPrintQ("Completed extracting or validating SIFT features for %i images." % i)
+      syncPrintQ("Completed extracting or validating SIFT features for all images.")
       # Compute pointmatches across adjacent sections
       futures = []
       count = 1
