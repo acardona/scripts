@@ -209,7 +209,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, csvDir, exeloa
     syncPrint("".join(traceback.format_exception()), out="stderr")
 
 
-def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, validateOnly=False):
+def ensureSIFTFeatures(filepath, params, paramsSIFT, properties, csvDir, validateOnly=False):
   """
      filepath: to the image from which SIFT features have been or have to be extracted.
      params: dict of registration parameters, including the key "scale".
@@ -240,7 +240,7 @@ def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, validateOnly=False)
     # Extract features
     ip = loadImp(filepath).getProcessor()
     paramsSIFT = paramsSIFT.clone()
-    paramsSIFT.maxOctaveSize = int(max(params.get("SIFT_max_size", 2048), ip.width * params["scale"]))
+    paramsSIFT.maxOctaveSize = int(max(properties.get("SIFT_max_size", 2048), ip.width * params["scale"]))
     paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
     ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
     features = ArrayList() # of Feature instances
@@ -256,7 +256,7 @@ def ensureSIFTFeatures(filepath, params, paramsSIFT, csvDir, validateOnly=False)
   return features
 
 
-def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, csvDir, load):
+def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csvDir, load):
   # Skip if pointmatches CSV file exists already:
   csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepath2) + ".pointmatches.csv")
   if os.path.exists(csvpath):
@@ -264,8 +264,8 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, csvDir, load):
 
   try:
     # Load from CSV files or extract features de novo
-    features1 = ensureSIFTFeatures(filepath1, params, paramsSIFT, csvDir)
-    features2 = ensureSIFTFeatures(filepath2, params, paramsSIFT, csvDir)
+    features1 = ensureSIFTFeatures(filepath1, params, paramsSIFT, properties, csvDir)
+    features2 = ensureSIFTFeatures(filepath2, params, paramsSIFT, properties, csvDir)
     # Vector of PointMatch instances
     sourceMatches = FloatArray2DSIFT.createMatches(features1,
                                                    features2,
@@ -308,7 +308,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       # Pre-extract SIFT features for all images first
       futures = []
       for filepath in filepaths:
-        futures.append(exeload.submit(Task(ensureSIFTFeatures, filepath, params, paramsSIFT, csvDir)))
+        futures.append(exeload.submit(Task(ensureSIFTFeatures, filepath, params, paramsSIFT, properties, csvDir)))
       for i, fu in enumerate(futures):
         fu.get()
         if 0 == i % properties["n_threads"]:
@@ -319,7 +319,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       count = 1
       for i in xrange(len(filepaths) - n_adjacent):
         for inc in xrange(1, n_adjacent + 1):
-          futures.append(exeload.submit(Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, csvDir, loadFPMem)))
+          futures.append(exeload.submit(Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, properties, csvDir, loadFPMem)))
       for fu in futures:
         fu.get()
         syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
