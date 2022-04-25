@@ -302,6 +302,12 @@ def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeloa
       #syncPrintQ("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
       yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, properties, csvDir, exeload, loadFPMem)
 
+def generateSIFTMatches(filepaths, n_adjacent, params, paramsSIFT, properties, csvDir):
+  paramsRod = {"rod": params["rod"]} # only this parameter is needed for SIFT pointmatches
+  for i in xrange(max(1, len(filepaths) - n_adjacent)):
+    for inc in xrange(1, min(n_adjacent + 1, len(filepaths))):
+      yield Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], paramsRod, paramsSIFT, properties, csvDir)
+
 
 def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties):
   """ If a pointmatches csv file doesn't exist, will create it. """
@@ -311,25 +317,24 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
     if properties.get("use_SIFT", False):
       syncPrintQ("use_SIFT is True")
       # Pre-extract SIFT features for all images first
-      futures = []
-      for filepath in filepaths:
-        futures.append(exeload.submit(Task(ensureSIFTFeatures, filepath, paramsSIFT, properties, csvDir)))
-      for i, fu in enumerate(futures):
-        fu.get()
+      # ensureSIFTFeatures returns the features list so the Future will hold it in memory: can't hold onto them
+      # therefore consume the tasks in chunks:
+      chunk_size = properties["n_threads"] * 2
+      count = 1
+      for result in w.chunkConsume(chunk_size, # tasks to submit before starting to wait for futures
+                                   (Task(ensureSIFTFeatures, filepath, paramsSIFT, properties, csvDir)
+                                    for filepath in filepths)):
+        count += 1
         if 0 == i % properties["n_threads"]:
           syncPrintQ("Completed extracting or validating SIFT features for %i images." % i)
+      w.awaitAll()
       syncPrintQ("Completed extracting or validating SIFT features for all images.")
       # Compute pointmatches across adjacent sections
-      futures = []
       count = 1
-      paramsRod = {"rod": params["rod"]} # only this parameter is needed for SIFT pointmatches
-      for i in xrange(max(1, len(filepaths) - n_adjacent)):
-        for inc in xrange(1, min(n_adjacent + 1, len(filepaths))):
-          futures.append(exeload.submit(Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], paramsRod, paramsSIFT, properties, csvDir)))
-      for fu in futures:
-        fu.get()
-        syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
+      for result in w.chunkConsume(chunk_size,
+                                   generateSIFTMatches(filepaths, n_adjacent, params, paramsSIFT, properties, csvDir)):
         count += 1
+        syncPrintQ("Completed SIFT pointmatches %i/%i" % (count, len(filepaths) * n_adjacent))
     else:
       # Use blockmatches
       loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
