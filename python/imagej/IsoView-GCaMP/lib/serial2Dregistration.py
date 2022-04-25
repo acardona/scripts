@@ -239,11 +239,15 @@ def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateOnly=Fa
   # Else, extract de novo:
   try:
     # Extract features
-    ip = loadImp(filepath).getProcessor()
+    imp = loadImp(filepath)
+    ip = imp.getProcessor()
     paramsSIFT = paramsSIFT.clone()
     ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
     features = ArrayList() # of Feature instances
     ijSIFT.extractFeatures(ip, features)
+    ip = None
+    imp.flush()
+    imp = None
     features.add(paramsSIFT) # append Params instance at the end for future validation
     serialize(features, path)
     features.remove(features.size() -1) # to return without the Params for immediate use
