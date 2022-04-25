@@ -325,7 +325,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
                                    (Task(ensureSIFTFeatures, filepath, paramsSIFT, properties, csvDir)
                                     for filepath in filepaths)):
         count += 1
-        if 0 == i % properties["n_threads"]:
+        if 0 == count % properties["n_threads"]:
           syncPrintQ("Completed extracting or validating SIFT features for %i images." % i)
       w.awaitAll()
       syncPrintQ("Completed extracting or validating SIFT features for all images.")
