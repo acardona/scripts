@@ -226,7 +226,7 @@ def loadFeatures(img_filename, directory, params, validateOnly=False, epsilon=0.
     return None
 
 
-def savePointMatches(img_filename1, img_filename2, pointmatches, directory, params):
+def savePointMatches(img_filename1, img_filename2, pointmatches, directory, params, coords_header=["x1", "y1", "x2", "y2"]):
   filename = basename(img_filename1) + '.' + basename(img_filename2) + ".pointmatches.csv"
   path = os.path.join(directory, filename)
   try:
@@ -237,7 +237,11 @@ def savePointMatches(img_filename1, img_filename2, pointmatches, directory, para
       w.writerow(keys)
       w.writerow(tuple(params[key] for key in keys))
       # PointMatches header
-      w.writerow(PointMatches.csvHeader(next(iter(pointmatches)))) # support both lists and sets
+      if 0 == len(pointmatches):
+        # Can't know whether there are 2 or 3 dimensions per coordinate
+        w.writerow(coords_header)
+      else:
+        w.writerow(PointMatches.csvHeader(next(iter(pointmatches)))) # support both lists and sets
       # One PointMatch per row
       for pm in pointmatches:
         w.writerow(PointMatches.asRow(pm))
