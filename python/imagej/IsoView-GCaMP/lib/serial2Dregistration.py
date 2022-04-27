@@ -269,8 +269,8 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csv
     # Load from CSV files or extract features de novo
     features1 = ensureSIFTFeatures(filepath1, paramsSIFT, properties, csvDir)
     features2 = ensureSIFTFeatures(filepath2, paramsSIFT, properties, csvDir)
-    syncPrintQ("Loaded %i features for %s\n       %i features for %s" % (features1.size(), os.path.basename(filepath1),
-                                                                         features2.size(), os.path.basename(filepath2)))
+    #syncPrintQ("Loaded %i features for %s\n       %i features for %s" % (features1.size(), os.path.basename(filepath1),
+    #                                                                     features2.size(), os.path.basename(filepath2)))
     # Vector of PointMatch instances
     sourceMatches = FloatArray2DSIFT.createMatches(features1,
                                                    features2,
