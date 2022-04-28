@@ -9,7 +9,7 @@ import os, sys, csv, types
 from os.path import basename
 # local lib functions:
 from dogpeaks import getDoGPeaks
-from util import syncPrint, Task, Getter
+from util import syncPrint, Task, Getter, printException
 from features_asm import initNativeClasses
 
 Constellation, PointMatches = initNativeClasses()
@@ -222,7 +222,7 @@ def loadFeatures(img_filename, directory, params, validateOnly=False, epsilon=0.
       return None
   except:
     syncPrint("Could not load features for %s" % img_filename)
-    syncPrint(str(sys.exc_info()))
+    printException()
     return None
 
 
@@ -250,7 +250,7 @@ def savePointMatches(img_filename1, img_filename2, pointmatches, directory, para
       os.fsync(csvfile.fileno())
   except:
     syncPrint("Failed to save pointmatches at %s" % path)
-    syncPrint(str(sys.exc_info()))
+    printException()
     
 
 
@@ -280,7 +280,7 @@ def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.
       return pointmatches
   except:
     syncPrint("Could not load pointmatches for pair %s, %s" % (img1_filename, img2_filename))
-    syncPrint(str(sys.exc_info()))
+    printException()
     return None
 
 
