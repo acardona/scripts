@@ -367,7 +367,8 @@ def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
 
 # When done, optimize tile pose globally
 def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties):
-  ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties)
+  if properties.get("precompute", True):
+    ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties)
   try:
     tiles = [Tile(TranslationModel2D()) for _ in filepaths]
     # FAILS when running in parallel, for mysterious reasons related to jython internals, perhaps syncPrint fails
