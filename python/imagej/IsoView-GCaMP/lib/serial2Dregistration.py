@@ -209,27 +209,28 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
     syncPrint("".join(traceback.format_exception()), out="stderr")
 
 
-def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateOnly=False):
+def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateByFileExists=False):
   """
      filepath: to the image from which SIFT features have been or have to be extracted.
      params: dict of registration parameters, including the key "scale".
      paramsSIFT: FloatArray2DSIFT.Params instance.
      csvDir: directory into which serialized features have been or will be saved.
      load: function to load an image as an ImageProcessor from the filepath.
-     validateOnly: whether to merely check that the Params match from the deserialized features file.
+     validateByFileExists: whether to merely check that the .obj file exists as a quick form of validation.
      
      First check if serialized features exist for the image, and if the Params match.
      Otherwise extract the features and store them serialized.
      Returns the ArrayList of Feature instances.
   """
   path = os.path.join(csvDir, os.path.basename(filepath) + ".SIFT-features.obj")
+  if validateByFileExists:
+    if os.path.exists(path):
+      return True
   # An ArrayList whose last element is a mpicbg.imagefeatures.FloatArray2DSIFT.Param
   # and all other elements are mpicbg.imagefeatures.Feature
   features = deserialize(path) if os.path.exists(path) else None
   if features:
     if features.get(features.size() -1).equals(paramsSIFT):
-      if validateOnly:
-        return True
       features.remove(features.size() -1) # removes the Params
       syncPrintQ("Loaded %i SIFT features for %s" % (features.size(), os.path.basename(filepath)))
       return features
@@ -322,7 +323,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       chunk_size = properties["n_threads"] * 2
       count = 1
       for result in w.chunkConsume(chunk_size, # tasks to submit before starting to wait for futures
-                                   (Task(ensureSIFTFeatures, filepath, paramsSIFT, properties, csvDir)
+                                   (Task(ensureSIFTFeatures, filepath, paramsSIFT, properties, csvDir, validateByFileExists=properties.get("SIFT_validateByFileExists"))
                                     for filepath in filepaths)):
         count += 1
         if 0 == count % chunk_size:
