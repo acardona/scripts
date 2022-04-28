@@ -49,7 +49,7 @@ properties = {
  'img_dimensions': dimensions,
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
- 'n_threads': 32,
+ 'n_threads': 42,
  'invert': True,
  'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': True, # enforce SIFT instead of blockmatching for all sections
