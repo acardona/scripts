@@ -827,7 +827,7 @@ def serialize(obj, filepath):
     f.getFD().sync() # ensure file is written to disk
     return True
   except:
-    print sys.exc_info()
+    syncPrintQ(sys.exc_info())
   finally:
     if o:
       o.close()
@@ -844,7 +844,7 @@ def deserialize(filepath):
     o = ObjectInputStream(f)
     obj = o.readObject()
   except:
-    print sys.exc_info()
+    syncPrintQ(sys.exc_info())
   finally:
     if f:
       f.close()
