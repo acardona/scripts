@@ -272,7 +272,8 @@ def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.
       # First line contains parameter names, second line their values
       if not checkParams(params, reader.next(), reader.next(), epsilon):
         return None
-      reader.next() # skip header with column names
+      if next(reader, None) is None: # skip header with column names
+        return [] # zero pointmatches
       pointmatches = PointMatches.fromRows(reader).pointmatches
       if verbose:
         syncPrint("Loaded %i pointmatches for %s, %s" % (len(pointmatches), img1_filename, img2_filename))
