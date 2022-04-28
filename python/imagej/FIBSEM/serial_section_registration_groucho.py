@@ -54,7 +54,7 @@ properties = {
  'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': True, # enforce SIFT instead of blockmatching for all sections
  'precompute': True, # use True at first, False when features and pointmatches exist already
- 'SIFT_validateByFileExists': True,
+ 'SIFT_validateByFileExists': True, # When True, don't deserialize, only check if the .obj file exists
 }
 
 # Validate file sizes:
