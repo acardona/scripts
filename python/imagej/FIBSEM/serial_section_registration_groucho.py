@@ -53,6 +53,8 @@ properties = {
  'invert': True,
  'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': True, # enforce SIFT instead of blockmatching for all sections
+ 'precompute': True, # use True at first, False when features and pointmatches exist already
+ 'SIFT_validateByFileExists': True,
 }
 
 # Validate file sizes:
