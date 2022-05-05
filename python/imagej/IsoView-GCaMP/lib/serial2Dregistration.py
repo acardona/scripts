@@ -381,9 +381,13 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
       params = {"rod": params["rod"]}
     for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       i, j, pointmatches = task.call()
+      syncPrint("%i, %i : %i" % (i, j, len(pointmatches)))
       tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
     syncPrintQ("Finished loading all pointmatches.")
     return tiles
+  except Exception as e:
+    print i, j
+    print e
   finally:
     #w.destroy()
     pass

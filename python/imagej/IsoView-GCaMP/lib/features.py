@@ -3,13 +3,14 @@ from org.scijava.vecmath import Vector3f
 from mpicbg.models import Point, PointMatch
 from net.imglib2 import KDTree, RealPoint
 from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
+from java.io import RandomAccessFile
 from itertools import imap, izip, product
 from jarray import array
 import os, sys, csv, types
 from os.path import basename
 # local lib functions:
 from dogpeaks import getDoGPeaks
-from util import syncPrint, Task, Getter, printException
+from util import syncPrint, Task, Getter, printException, syncPrintQ
 from features_asm import initNativeClasses
 
 Constellation, PointMatches = initNativeClasses()
@@ -229,11 +230,18 @@ def loadFeatures(img_filename, directory, params, validateOnly=False, epsilon=0.
 def savePointMatches(img_filename1, img_filename2, pointmatches, directory, params, coords_header=["x1", "y1", "x2", "y2"]):
   filename = basename(img_filename1) + '.' + basename(img_filename2) + ".pointmatches.csv"
   path = os.path.join(directory, filename)
+  msg = [str(len(pointmatches))]
+  ra = None
   try:
+    """
     with open(path, 'w') as csvfile:
       w = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
       # First two rows: parameter names and values
       keys = params.keys()
+      msg.append("keys: " + ",".join(map(str, keys)))
+      msg.append("vals: " + ",".join(str(params[key]) for key in keys))
+      #for pm in pointmatches:
+      #  msg.append(", ".join(map(str, PointMatches.asRow(pm))))
       w.writerow(keys)
       w.writerow(tuple(params[key] for key in keys))
       # PointMatches header
@@ -248,12 +256,31 @@ def savePointMatches(img_filename1, img_filename2, pointmatches, directory, para
       # Ensure it's written
       csvfile.flush()
       os.fsync(csvfile.fileno())
+    """
+    # DEBUG write differently, the above FAILS for ~20 out of 130,000 files
+    lines = []
+    keys = params.keys()
+    lines.append(",".join(map(str, keys)))
+    lines.append(",".join(map(str, (params[key] for key in keys))))
+    header = coords_header if 0 == len(pointmatches) \
+                           else PointMatches.csvHeader(next(iter(pointmatches)))
+    lines.append(",".join(header))
+    for pm in pointmatches:
+      p1 = pm.getP1().getW() # a double[] array
+      p2 = pm.getP2().getW() # a double[] array
+      lines.append("%f,%f,%f,%f" % (p1[0], p1[1], p2[0], p2[1]))
+    body = "\n".join(lines)
+    ra = RandomAccessFile(path, 'rw')
+    ra.writeBytes(body)
+    ra.getFD().sync() # ensure it's written
   except:
-    syncPrint("Failed to save pointmatches at %s" % path)
+    syncPrintQ("Failed to save pointmatches at %s\n%s" % (path, "\n".join(msg)))
     printException()
     if os.path.exists(path):
       os.remove(path)
-    
+  finally:
+    if ra is not None:
+      ra.close()
 
 
 def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.00001, verbose=True):
