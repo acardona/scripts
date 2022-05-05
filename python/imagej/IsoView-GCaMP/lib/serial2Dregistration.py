@@ -191,10 +191,10 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
       # Vector of PointMatch instances
       sourceMatches = FloatArray2DSIFT.createMatches(features1,
                                                      features2,
-                                                     1.5, # max_sd
+                                                     params.get("max_sd", 1.5), # max_sd: maximal difference in size (ratio max/min)
                                                      TranslationModel2D(),
-                                                     Double.MAX_VALUE,
-                                                     params["rod"]) # rod: ratio of best vs second best
+                                                     params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
+                                                     params.get("rod", 0.9)) # rod: ratio of best vs second best
 
     # Store pointmatches
     savePointMatches(os.path.basename(filepath1),
@@ -275,10 +275,11 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csv
     # Vector of PointMatch instances
     sourceMatches = FloatArray2DSIFT.createMatches(features1,
                                                    features2,
-                                                   1.5, # max_sd
+                                                   params.get("max_sd", 1.5), # max_sd: maximal difference in size (ratio max/min)
                                                    TranslationModel2D(),
-                                                   Double.MAX_VALUE,
-                                                   params["rod"]) # rod: ratio of best vs second best
+                                                   params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
+                                                   params.get("rod", 0.9)) # rod: ratio of best vs second best
+    
     
     syncPrintQ("Found %i SIFT pointmatches for %s vs %s" % (sourceMatches.size(),
                                                             os.path.basename(filepath1),
