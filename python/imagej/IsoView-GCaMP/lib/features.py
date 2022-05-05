@@ -251,6 +251,8 @@ def savePointMatches(img_filename1, img_filename2, pointmatches, directory, para
   except:
     syncPrint("Failed to save pointmatches at %s" % path)
     printException()
+    if os.path.exists(path):
+      os.remove(path)
     
 
 
