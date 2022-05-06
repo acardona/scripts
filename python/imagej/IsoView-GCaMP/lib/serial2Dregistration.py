@@ -123,29 +123,28 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
     # Don't use blockmatching if the dimensions are different
     use_blockmatching = fp1.getWidth() == fp2.getWidth() and fp1.getHeight() == fp2.getHeight()
 
-    if use_blockmatching and not params["use_SIFT"]:
-      # Fill the sourcePoints
-      mesh = TransformMesh(params["meshResolution"], fp1.width, fp1.height)
-      PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
-      syncPrintQ("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
-      # Run
-      BlockMatching.matchByMaximalPMCCFromPreScaledImages(
-                fp1,
-                fp2,
-                params["scale"], # float
-                params["blockRadius"], # X
-                params["blockRadius"], # Y
-                params["searchRadius"], # X
-                params["searchRadius"], # Y
-                params["minR"], # float
-                params["rod"], # float
-                params["maxCurvature"], # float
-                sourcePoints,
-                sourceMatches)
+    # Fill the sourcePoints
+    mesh = TransformMesh(params["meshResolution"], fp1.width, fp1.height)
+    PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
+    syncPrintQ("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
+    # Run
+    BlockMatching.matchByMaximalPMCCFromPreScaledImages(
+              fp1,
+              fp2,
+              params["scale"], # float
+              params["blockRadius"], # X
+              params["blockRadius"], # Y
+              params["searchRadius"], # X
+              params["searchRadius"], # Y
+              params["minR"], # float
+              params["rod"], # float
+              params["maxCurvature"], # float
+              sourcePoints,
+              sourceMatches)
 
     # At least some should match to accept the translation
     if len(sourceMatches) < max(20, len(sourcePoints) / 5) / 2:
-      if not params["use_SIFT"]: syncPrintQ("Found only %i blockmatching pointmatches (from %i source points)" % (len(sourceMatches), len(sourcePoints)))
+      syncPrintQ("Found only %i blockmatching pointmatches (from %i source points)" % (len(sourceMatches), len(sourcePoints)))
       syncPrintQ("... therefore invoking SIFT pointmatching for:\n  S: " + basename(filepath1) + "\n  T: " + basename(filepath2))
       # Can fail if there is a shift larger than the searchRadius
       # Try SIFT features, which are location independent
@@ -339,6 +338,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
         syncPrintQ("Completed SIFT pointmatches %i/%i" % (count, len(filepaths) * n_adjacent))
     else:
       # Use blockmatches
+      syncPrintQ("using blockmatches")
       loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
       count = 1
       for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem)):
