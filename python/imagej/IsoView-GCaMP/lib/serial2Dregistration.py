@@ -442,15 +442,19 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.cell_dimensions = cell_dimensions # x,y must match dims of interval
     self.interval = interval # when smaller than the image, will crop
     self.cache = SoftMemoize(partial(TranslatedSectionGet.makeCell, self), maxsize=256)
-    self.exe = newFixedThreadPool(-1) # BEWARE native memory leak if not closed
+    self.exe = newFixedThreadPool(-1) if preload is not None else None # BEWARE native memory leak if not closed
     self.preload = preload
 
   def preloadCells(self, index):
     # Submit jobs to concurrently preload cells ahead into the cache, if not there already
-    if self.preload is not None and 0 == index % self.preload:
+    if self.preload is not None and self.preload > 0 and 0 == index % self.preload:
       # e.g. if index=0 and preload=5, will load [1,2,3,4]
       for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
         self.exe.submit(Task(self.cache, i))
+
+  def destroy(self):
+    if self.exe is not None:
+      self.exe.shutdownNow()
 
   def translate(self, dx, dy):
     a = zeros(2, 'l')
@@ -540,7 +544,7 @@ class OnClosing(ImageListener):
     self.cellGet = cellGet
   def imageClosed(self, imp):
     if imp == self.imp:
-      self.cellGet.exe.shutdownNow()
+      self.cellGet.destroy()
   def imageOpened(self, imp):
     pass
   def imageUpdated(self, imp):
@@ -550,7 +554,7 @@ def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, 
   matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
   def loadImg(filepath):
     return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"])
-  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, 5)
+  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
   print cellImg
   comp = showStack(cellImg, title=properties["srcDir"].split('/')[-2], proper=False)
   # Add the SourcePanning KeyListener as the first one
