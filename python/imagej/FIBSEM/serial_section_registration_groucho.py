@@ -28,6 +28,7 @@ from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2 import FinalInterval
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from ij import IJ
+from ij.gui import Roi
 
 
 
@@ -47,16 +48,24 @@ dimensions = [19107, 17321]
 properties = {
  'name': "Groucho",
  'img_dimensions': dimensions,
+ 'crop_roi': Roi(1296, 2448, 17811, 14616), # x, y, width, height - Pre-crop: right after loading
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
  'n_threads': 42,
  'preload': 0, # images to preload ahead of time in the registered virtual stack that opens
  'invert': True,
  'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
- 'use_SIFT': True, # enforce SIFT instead of blockmatching for all sections
+ 'use_SIFT': False, # enforce SIFT instead of blockmatching for all sections
  'precompute': True, # use True at first, False when features and pointmatches exist already
  'SIFT_validateByFileExists': True, # When True, don't deserialize, only check if the .obj file exists
 }
+
+
+roi = properties.get("crop_roi", None)
+if roi:
+  bounds = roi.getBounds()
+  dimensions = [bounds.width, bounds.height]
+
 
 # Validate file sizes:
 # header of 1024 bytes
@@ -80,12 +89,12 @@ filepaths = filepaths2
 
 # Parameters for blockmatching
 params = {
- 'scale': 1.0, # 10%
- 'meshResolution': 16, # 10 x 10 points = 100 point matches maximum
+ 'scale': 0.25, # 10%
+ 'meshResolution': 20, # 10 x 10 points = 100 point matches maximum
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r  # for blockmatching
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 100, # a low value: we expect little translation
+ 'searchRadius': 25, # a low value: we expect little translation
  'blockRadius': 200, # small, yet enough
  'max_id': 50, # maximum distance between features in image space # for SIFT pointmatches
  'max_sd': 1.2, # maximum difference in size between features # for SIFT pointmatches
@@ -104,7 +113,7 @@ paramsSIFT.initialSigma = 1.6 # default 1.6
 
 # Parameters for computing the transformation models
 paramsTileConfiguration = {
-  "n_adjacent": 4, # minimum of 1; Number of adjacent sections to pair up
+  "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 10, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
@@ -125,9 +134,17 @@ syncPrint("Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y
 
 # Adjust image loader as needed:
 if filepaths[0].endswith(".dat"):
-  loader = lambda filepath: readFIBSEMdat(filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
+  def loadFn(filepath):
+    global properties
+    imp = readFIBSEMdat(filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
+    roi = properties.get("crop_roi", None)
+    if roi:
+      ip = imp.getProcessor()
+      ip.setRoi(roi)
+      imp.setProcessor(ip.crop())
+    return imp
   syncPrint("Using io.readFIBSEMdat to read image files.")
-  setupImageLoader(loader)
+  setupImageLoader(loadFn)
 else:
   loader = IJ.loadImage
   syncPrint("Using IJ.loadImage to read image files.")
