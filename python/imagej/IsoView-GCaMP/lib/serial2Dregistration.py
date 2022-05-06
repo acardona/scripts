@@ -346,7 +346,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
           syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
         count += 1
       syncPrintQ("Awaiting all remaining pointmatching tasks to finish.")
-      w.awaitAll()
+    w.awaitAll()
     syncPrintQ("Finished all pointmatching tasks.")
   except:
     print sys.exc_info()
