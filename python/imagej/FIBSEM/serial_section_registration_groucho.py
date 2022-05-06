@@ -50,6 +50,7 @@ properties = {
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
  'n_threads': 42,
+ 'preload': 0, # images to preload ahead of time in the registered virtual stack that opens
  'invert': True,
  'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': True, # enforce SIFT instead of blockmatching for all sections
@@ -82,10 +83,13 @@ params = {
  'scale': 1.0, # 10%
  'meshResolution': 16, # 10 x 10 points = 100 point matches maximum
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
- 'rod': 0.9, # max second best r / best r
+ 'rod': 0.9, # max second best r / best r  # for blockmatching
  'maxCurvature': 1000.0, # default is 10
  'searchRadius': 100, # a low value: we expect little translation
  'blockRadius': 200, # small, yet enough
+ 'max_id': 50, # maximum distance between features in image space # for SIFT pointmatches
+ 'max_sd': 1.2, # maximum difference in size between features # for SIFT pointmatches
+ 
 }
 
 # Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
@@ -100,10 +104,10 @@ paramsSIFT.initialSigma = 1.6 # default 1.6
 
 # Parameters for computing the transformation models
 paramsTileConfiguration = {
-  "n_adjacent": 10, # minimum of 1; Number of adjacent sections to pair up
+  "n_adjacent": 4, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 100, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
+  "maxIterations": 10, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
 }
 
@@ -131,7 +135,7 @@ else:
 
 # Triggers the whole alignment and ends by showing a virtual stack of the aligned sections.
 # Crashware: can be restarted anytime, will resume from where it left off.
-viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+viewAligned(filepaths[7949:8048], csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
             FinalInterval([x0, y0], [x1, y1]))
 
 
