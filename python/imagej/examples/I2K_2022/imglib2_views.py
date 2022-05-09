@@ -17,7 +17,7 @@ img = IL.wrap(imp)
 IL.show(img, "wrapped as an ImgLib2 image")
 
 # Extend it: an infinite view
-extendedView = Views.extendMirrorSingle(img)
+extendedView = Views.extendMirrorSingle(img) # RandomAccessible
 
 # View with a larger canvas
 width = img.dimension(0)  # same as imp.getWidth()
@@ -26,8 +26,8 @@ height = img.dimension(1) # same as imp.getHeight()
 # from half an image beyond 0,0 (to the left and up) to half an image beyond width,height
 imgExtended = Views.interval(extendedView, [-width/2,
                                             -height/2],
-                                           [width + width/2,
-                                            height + height/2])
+                                           [width + width/2 -1,
+                                            height + height/2 -1])   # RandomAccessibleInterval
 
 IL.show(imgExtended, "enlarged canvas with extended mirror symmetry")
 

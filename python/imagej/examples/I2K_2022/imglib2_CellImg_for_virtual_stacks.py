@@ -67,14 +67,14 @@ filepaths = findFilePaths(srcDir, ".tif")
 
 # A Loader that reads 16-bit images
 loader = Loader(filepaths, ShortArray)
-cache_loader = SoftRefLoaderCache().withLoader(loader)
+cache_loader = SoftRefLoaderCache().withLoader(loader)  # SoftReference
 
 # Load the first image via the loader so that it's cached
 # and read the dimensions
-first = cache_loader.get(0)
+first = cache_loader.get(0)  # a Cell that wraps the ShortArray for the image pixels of the slice at index 0
 width = first.dimension(0)
 height = first.dimension(1)
-depth = len(filepaths)
+depth = len(filepaths) # assumption: all files have the same dimensions and pixel type
 
 volume_dimensions = [width, height, depth]
 cell_dimensions = [width, height, 1] # just one image, one stack slice
@@ -88,3 +88,12 @@ img = CachedCellImg(grid, # the data layout
                     ArrayDataAccessFactory.get(PrimitiveType.SHORT, AccessFlags.setOf(AccessFlags.VOLATILE)))
 
 IL.show(img, "Virtual stack: lazy-loading cached CellImg of a whole directory of images")
+
+
+
+
+
+
+
+
+
