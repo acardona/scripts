@@ -30,7 +30,7 @@ elif isinstance(ip, ShortProcessor):
 elif isinstance(ip, FloatProcessor):
   img1 = ArrayImgs.floats(pixels, dimensions)
 else:
-  print "Can't handle image of type:", type(ip).getClassname()
+  print "Can't handle image of type:", type(ip).getName()
 
 
 # An empty image of float[]
