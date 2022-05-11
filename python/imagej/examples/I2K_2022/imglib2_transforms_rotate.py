@@ -20,6 +20,11 @@ imp = IJ.getImage()
 # Access its pixel data as an ImgLib2 RandomAccessibleInterval
 img = IL.wrap(imp)
 
+# Adjust number of dimensions: we want at least 3 so we can use an AffineTransform3D
+# (Could also use an AffineTransform2D but we are being lazy here or general over 2D and 3D)
+if img.numDimensions() < 3:
+  img = Views.addDimension(img, 0, 0)
+
 # View as an infinite image, with value zero beyond the image edges
 imgE = Views.extendZero(img)
 
@@ -84,8 +89,8 @@ transformed = zeros(3, 'f')
 
 for corner in product(*zip(repeat(0), Intervals.maxAsLongArray(img))):
   rotation.apply(corner, transformed)
-bounds = [(min(vmin, int(floor(v))), max(vmax, int(ceil(v))))
-          for (vmin, vmax), v in zip(bounds, transformed)]
+  bounds = [(min(vmin, int(floor(v))), max(vmax, int(ceil(v))))
+            for (vmin, vmax), v in zip(bounds, transformed)]
 
 minC, maxC = map(list, zip(*bounds)) # transpose list of 3 pairs
  # into 2 list of 3 values
