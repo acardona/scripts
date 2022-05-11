@@ -1,3 +1,8 @@
+# 2022 I2K example
+# Albert Cardona 2022
+# Create an ImgLib2 ArrayImg
+
+
 from net.imglib2.img.display.imagej import ImageJFunctions
 from ij import IJ
 from jarray import zeros

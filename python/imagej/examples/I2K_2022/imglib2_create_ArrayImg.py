@@ -1,4 +1,5 @@
 # 2022 I2K example
+# Albert Cardona 2022
 # Create an ImgLib2 ArrayImg
 
 # 1. With ArrayImgs: trivial
