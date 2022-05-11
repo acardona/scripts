@@ -6,6 +6,27 @@ from net.imglib2.img.array import ArrayImgs
 
 img = ArrayImgs.unsignedShorts([512, 512])
 
+
+# Or reusing the pixel array from e.g., an open ImageJ image:
+from net.imglib2.img.array import ArrayImgs
+from ij import IJ
+from ij.process import ShortProcessor
+
+imp = IJ.getImage() # most recently activated ImageJ image window
+ip = imp.getProcessor()
+if isinstance(ip, ShortProcessor):
+  width, height = imp.getWidth(), imp.getHeight()
+  pixelsU16 = ip.getPixels()
+  img = ArrayImgs.unsignedShorts(pixelsU16, [width, height])
+
+# Or creating a new pixel array from scratch
+from net.imglib2.img.array import ArrayImgs
+from jarray import zeros
+
+pixelsU16 = zeros(512 * 512, 'h') # 'h' means short[]
+img = ArrayImgs.unsignedShorts(pixelsU16, [512, 512])
+
+
 # 2. With ArrayImgFactory: unnecessary, use ArrayImgs
 from net.imglib2.img.array import ArrayImgFactory
 from net.imglib2.type.numeric.integer import UnsignedShortType
