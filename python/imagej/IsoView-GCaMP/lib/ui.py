@@ -152,7 +152,11 @@ class SourceNavigation(KeyAdapter):
                   KeyEvent.VK_RIGHT: (1, 0, 0),
                   KeyEvent.VK_LEFT: (-1, 0, 0),
                   KeyEvent.VK_COMMA: (0, 0, -1),
-                  KeyEvent.VK_PERIOD: (0, 0, 1)}
+                  KeyEvent.VK_PERIOD: (0, 0, 1),
+                  KeyEvent.VK_LESS: (0, 0, -1),
+                  KeyEvent.VK_GREATER: (0, 0, 1),
+                  KeyEvent.VK_PAGE_DOWN: (0, 0, -1),
+                  KeyEvent.VK_PAGE_UP: (0, 0, 1)}
     self.shift = shift
     self.alt = alt
     self.imp = imp
