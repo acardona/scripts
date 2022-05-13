@@ -1,7 +1,17 @@
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.view import Views
+from net.imglib2 import FinalInterval
+from net.imglib2.util import ImgUtil
 from bdv.util import BdvFunctions, Bdv
 from ij import ImagePlus, CompositeImage, VirtualStack
+from java.awt.event import KeyAdapter, KeyEvent
+from lib.util import syncPrintQ
+from lib.converter import createConverter, convert
+import sys
+from net.imglib2.img.array import ArrayImgs
+from ij.process import FloatProcessor
+from net.imglib2.type.numeric.real import FloatType
+from ij import IJ
 
 
 def wrap(img, title="", n_channels=1):
@@ -100,8 +110,90 @@ def showAsComposite(images, title="Composite", show=True):
   return comp
 
 
+class ViewFloatProcessor(FloatProcessor):
+  def __init__(self, img3D, interval2D, indexZ):
+    self.img3D = img3D
+    self.interval2D = interval2D
+    self.indexZ = indexZ
+    super(FloatProcessor, self).__init__(interval2D.dimension(0), interval2D.dimension(1))
+    self.updatePixels()
+    
+  def translate(self, dx, dy, dz):
+    # Z within bounds
+    self.indexZ += dz
+    self.indexZ = min(self.img3D.dimension(2) -1, max(0, self.indexZ))
+    # X, Y can be beyond bounds
+    self.interval2D = FinalInterval([self.interval2D.min(0) + dx,
+                                     self.interval2D.min(1) + dy],
+                                    [self.interval2D.max(0) + dx,
+                                     self.interval2D.max(1) + dy])
+    self.updatePixels()
+    return self.interval2D.min(0), self.interval2D.min(1), self.indexZ
+  
+  def updatePixels(self):
+    # Copy interval into pixels
+    view = Views.interval(Views.extendZero(Views.hyperSlice(self.img3D, 2, self.indexZ)), self.interval2D)
+    aimg = ArrayImgs.floats(self.getPixels(), [self.interval2D.dimension(0), self.interval2D.dimension(1)])
+    ImgUtil.copy(view, aimg)
 
 
+class SourceNavigation(KeyAdapter):
+  def __init__(self, translatable, imp, shift=100, alt=10):
+    """
+      translatable: an object that has a "translate" method with 3 coordinates as arguments
+      imp: the ImagePlus to update
+      shift: defaults to 100, when the shift key is down, move by 100 pixels
+      alt: defaults to 10, when the alt key is down, move by 10 pixels
+      If both shift and alt are down, move by shift*alt = 1000 pixels by default.
+    """
+    self.translatable = translatable
+    self.delta = {KeyEvent.VK_UP: (0, -1, 0),
+                  KeyEvent.VK_DOWN: (0, 1, 0),
+                  KeyEvent.VK_RIGHT: (1, 0, 0),
+                  KeyEvent.VK_LEFT: (-1, 0, 0),
+                  KeyEvent.VK_COMMA: (0, 0, -1),
+                  KeyEvent.VK_PERIOD: (0, 0, 1)}
+    self.shift = shift
+    self.alt = alt
+    self.imp = imp
+  def keyPressed(self, event):
+    try:
+      dx, dy, dz = self.delta.get(event.getKeyCode(), (0, 0, 0))
+      if dx + dy + dz == 0:
+        return
+      syncPrintQ("Translating source")
+      if event.isShiftDown():
+        dx *= self.shift
+        dy *= self.shift
+        dz *= self.shift
+      if event.isAltDown():
+        dx *= self.alt
+        dy *= self.alt
+        dz *= self.alt
+      syncPrintQ("... by x=%i, y=%i, z=%i" % (dx, dy, dz))
+      x, y, z = self.translatable.translate(dx, dy, dz)
+      IJ.showStatus("[x=%i y=%i z=%i]" % (x, y, z+1)) # 1-based stack index
+      self.imp.updateAndDraw()
+      event.consume()
+    except:
+      syncPrintQ(str(sys.exc_info()))
+    
+
+def navigate2DROI(img, interval, indexZ=0, title="ROI"):
+  img = convert(img, FloatType)
+  vsp = ViewFloatProcessor(img, interval, indexZ)
+  imp = ImagePlus(title, vsp)
+  imp.show()
+  canvas = imp.getWindow().getCanvas()
+  kls = canvas.getKeyListeners()
+  for kl in kls:
+    canvas.removeKeyListener(kl)
+  canvas.addKeyListener(SourceNavigation(vsp, imp))
+  for kl in kls:
+    canvas.addKeyListener(kl)
+  return imp
+
+   
 
 
 
