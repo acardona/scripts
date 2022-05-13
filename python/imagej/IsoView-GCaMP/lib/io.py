@@ -52,6 +52,7 @@ try:
     Class.forName("com.sun.tools.javac.Main")
   except:
     print "*** tools.jar not in the classpath ***"
+    Weaver = None
 except:
   print "*** fiji.scripting.Weaver NOT installed ***"
   Weaver = None
