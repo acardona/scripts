@@ -5,9 +5,8 @@ from net.imglib2.util import ImgUtil
 from bdv.util import BdvFunctions, Bdv
 from ij import ImagePlus, CompositeImage, VirtualStack
 from java.awt.event import KeyAdapter, KeyEvent
-from lib.util import syncPrintQ
+from lib.util import syncPrintQ, printException
 from lib.converter import createConverter, convert
-import sys
 from net.imglib2.img.array import ArrayImgs
 from ij.process import FloatProcessor
 from net.imglib2.type.numeric.real import FloatType
@@ -111,6 +110,11 @@ def showAsComposite(images, title="Composite", show=True):
 
 
 class ViewFloatProcessor(FloatProcessor):
+  """
+  A 2D FloatProcessor whose float[] pixel array is populated from the pixels within
+  an interval on a source 3D RandomAccessibleInterval at a specied indexZ (the section index).
+  The interval and indexZ are editable via the translate method.
+  """
   def __init__(self, img3D, interval2D, indexZ):
     self.img3D = img3D
     self.interval2D = interval2D
@@ -160,6 +164,7 @@ class SourceNavigation(KeyAdapter):
     self.shift = shift
     self.alt = alt
     self.imp = imp
+  
   def keyPressed(self, event):
     try:
       dx, dy, dz = self.delta.get(event.getKeyCode(), (0, 0, 0))
@@ -180,15 +185,27 @@ class SourceNavigation(KeyAdapter):
       self.imp.updateAndDraw()
       event.consume()
     except:
-      syncPrintQ(str(sys.exc_info()))
+      printException()
     
 
 def navigate2DROI(img, interval, indexZ=0, title="ROI"):
+  """
+     Use a FloatProcessor to visualize a 2D slice of a 3D image of any pixel type.
+     Internally, uses a ViewFloatProcessor with an editable Interval.
+     Here, a SourceNavigation (a KeyListener) enables editing the Interval
+     and therefore the FloatProcessor merely shows that interval of the source img.
+     
+     img: the source 3D RandomAccessibleInterval.
+     interval: the initial interval of img to view. Must be smaller than 2 GB.
+     indexZ: the initial Z index to show.
+     title: the name to give the ImagePlus.
+  """
   img = convert(img, FloatType)
   vsp = ViewFloatProcessor(img, interval, indexZ)
   imp = ImagePlus(title, vsp)
   imp.show()
   canvas = imp.getWindow().getCanvas()
+  # Place the SourceNavigation KeyListener at the top of the list of KeyListener instances
   kls = canvas.getKeyListeners()
   for kl in kls:
     canvas.removeKeyListener(kl)
