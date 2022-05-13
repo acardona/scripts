@@ -339,7 +339,7 @@ def samplerConvert(rai, converter):
   return m.invoke(None, rai, converter)
 
 
-def convert(rai, converter, toType):
+def convert2(rai, converter, toType):
   """
     rai: an instance of RandomAccessibleInterval
     converter: as created with e.g. createConverter
@@ -350,6 +350,14 @@ def convert(rai, converter, toType):
   m = Converters.getDeclaredMethod("convert", [RandomAccessibleInterval, Converter, ImgLib2Type])
   return m.invoke(None, rai, converter, toType.newInstance())
 
+
+def convert(rai, toType):
+  """
+    rai: an instance of RandomAccessibleInterval
+    toType: class of the target Type
+  """
+  return convert2(rai, createConverter(type(rai.randomAccess().get()), toType), toType)
+  
 
 def makeCompositeToRealConverter(reducer_class=Math,
                                  reducer_method="max",
