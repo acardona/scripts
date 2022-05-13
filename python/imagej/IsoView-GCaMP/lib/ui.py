@@ -112,7 +112,7 @@ def showAsComposite(images, title="Composite", show=True):
 class ViewFloatProcessor(FloatProcessor):
   """
   A 2D FloatProcessor whose float[] pixel array is populated from the pixels within
-  an interval on a source 3D RandomAccessibleInterval at a specied indexZ (the section index).
+  an interval on a source 3D RandomAccessibleInterval at a specified indexZ (the section index).
   The interval and indexZ are editable via the translate method.
   """
   def __init__(self, img3D, interval2D, indexZ):
