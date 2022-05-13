@@ -34,7 +34,7 @@ from ij.gui import Roi
 
 srcDir = "/net/fibserver1/raw/Groucho/dats/" # MUST have an ending slash
 tgtDir = "/net/ark/raw/fibsem/pygmy-squid/2021-12_popeye/Popeye2/amphioxus/"
-#tgtDirN5 = "/net/ark/raw/fibsem/pygmy-squid/2021-12_popeye/Popeye2/amphioxus/"
+tgtDirN5 = "/net/ark/raw/fibsem/pygmy-squid/2021-12_popeye/Popeye2/amphioxus/"
 csvDir = os.path.join(tgtDir, "csvs")
 
 # Recursive search into srcDir for files ending in InLens_raw.tif
@@ -51,7 +51,7 @@ properties = {
  'crop_roi': Roi(1296, 2448, 17811, 14616), # x, y, width, height - Pre-crop: right after loading
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
- 'n_threads': 42,
+ 'n_threads': 60,
  'preload': 0, # images to preload ahead of time in the registered virtual stack that opens
  'invert': True,
  'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
@@ -116,7 +116,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 10, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
+  "maxIterations": 1000, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
 }
 
@@ -144,7 +144,8 @@ if filepaths[0].endswith(".dat"):
       imp.setProcessor(ip.crop())
     return imp
   syncPrint("Using io.readFIBSEMdat to read image files.")
-  setupImageLoader(loadFn)
+  loader = loadFn
+  setupImageLoader(loader)
 else:
   loader = IJ.loadImage
   syncPrint("Using IJ.loadImage to read image files.")
@@ -152,19 +153,22 @@ else:
 
 # Triggers the whole alignment and ends by showing a virtual stack of the aligned sections.
 # Crashware: can be restarted anytime, will resume from where it left off.
-viewAligned(filepaths[7949:8048], csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-            FinalInterval([x0, y0], [x1, y1]))
+#viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+#            FinalInterval([x0, y0], [x1, y1]))
 
 
 # When the alignment is good enough, then export as N5 by swapping "False" for "True" below:
 
-if False:
+if True:
   # Write the whole volume in N5 format
   name = properties["name"] # srcDir.split('/')[-2]
   exportDir = os.path.join(tgtDirN5, "n5")
   # Export ROI:
   # x=864 y=264 width=15312 h=17424
   interval = FinalInterval([0, 0], [dimensions[0] -1, dimensions[1] -1])
+
+  # Ignore ROI: export the whole volume
+  loader = lambda filepath: readFIBSEMdat(filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
 
   export8bitN5(filepaths,
                loader,
@@ -177,5 +181,5 @@ if False:
                invert=True,
                CLAHE_params=properties["CLAHE_params"],
                n5_threads=properties["n_threads"],
-               block_size=[384, 384, 32]) # ~4 MB per block
+               block_size=[256, 256, 64]) # ~4 MB per block
 
