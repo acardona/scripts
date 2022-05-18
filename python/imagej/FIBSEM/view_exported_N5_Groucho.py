@@ -7,8 +7,8 @@ from lib.io import readN5
 from lib.ui import showStack, wrap, navigate2DROI
 from java.awt import Rectangle
 
-name = "Groucho"
-img3D = readN5("/home/albert/ark/raw/fibsem/pygmy-squid/2021-12_popeye/Popeye2/amphioxus/n5", name, show=None)
+name = "s0"
+img3D = readN5("/home/albert/ark/raw/fibsem/amphioxus/groucho/n5", name, show=None)
 #fov = Views.interval(img3D, FinalInterval([4096, 4096, 0], [8192 -1, 8192 -1, 13770 -1]))
 fov = img3D # whole
 
@@ -38,5 +38,5 @@ impN = navigate2DROI(img3D,
                      FinalInterval([x, y], # min coords
                                    [x + width - 1, # max coords
                                     y + height -1]),
-                     indexZ=8030) # section shown
+                     indexZ=9718) # section shown
 

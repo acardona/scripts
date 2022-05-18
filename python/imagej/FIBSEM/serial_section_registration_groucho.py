@@ -19,10 +19,11 @@
 # 5. Export volume for CATMAID as N5.
 
 import os, sys
+#sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.io import findFilePaths, readFIBSEMdat
 from lib.util import numCPUs, syncPrint
-from lib.serial2Dregistration import setupImageLoader, viewAligned, export8bitN5
+from lib.serial2Dregistration import setupImageLoader, viewAligned, export8bitN5, qualityControl
 from lib.registration import loadMatrices
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2 import FinalInterval
@@ -33,8 +34,8 @@ from ij.gui import Roi
 
 
 srcDir = "/net/fibserver1/raw/Groucho/dats/" # MUST have an ending slash
-tgtDir = "/net/ark/raw/fibsem/pygmy-squid/2021-12_popeye/Popeye2/amphioxus/"
-tgtDirN5 = "/net/ark/raw/fibsem/pygmy-squid/2021-12_popeye/Popeye2/amphioxus/"
+tgtDir = "/net/ark/raw/fibsem/amphioxus/groucho/"
+tgtDirN5 = "/net/zstore1/fibsem_data/groucho/"
 csvDir = os.path.join(tgtDir, "csvs")
 
 # Recursive search into srcDir for files ending in InLens_raw.tif
@@ -44,6 +45,7 @@ filepaths = findFilePaths(srcDir, ".dat")
 # (While the script an cope with images of different dimensions for registration,
 # the visualization and export would need minor adjustments to cope.)
 dimensions = [19107, 17321]
+original_dimensions = dimensions
 
 properties = {
  'name': "Groucho",
@@ -58,6 +60,9 @@ properties = {
  'use_SIFT': False, # enforce SIFT instead of blockmatching for all sections
  'precompute': True, # use True at first, False when features and pointmatches exist already
  'SIFT_validateByFileExists': True, # When True, don't deserialize, only check if the .obj file exists
+ 'bad_sections': {6404: -1,
+                  8913: -1,
+                  9719: -1}, # 0-based section indices for keys, and relative index for the value
 }
 
 
@@ -70,7 +75,7 @@ if roi:
 # Validate file sizes:
 # header of 1024 bytes
 # two 16-bit channel images of width * height
-expected_size = 1024 + dimensions[0] * dimensions[1] * 2 * 2
+expected_size = 1024 + original_dimensions[0] * original_dimensions[1] * 2 * 2
 # BUT NO: there is a trailer, in addition to a header, of unknow size
 #expected_size = 1053794601
 expected_size = 1323814805
@@ -132,10 +137,22 @@ y1 = dimensions[1] -1 # Y coordinate of the last pixel to show
 syncPrint("Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y0 + 1))
 
 
+# CORRECTION after having exported once with 3 artifactual images:
+# 6404: high mag
+# 8913: high mag
+# 9719: corrupted content
+
+# Cope with artifactual images: replace their filepaths with that of another section
+to_replace = {filepaths[index]: filepaths[index + inc]
+              for index, inc in properties.get("bad_sections", {}).iteritems()}
+
 # Adjust image loader as needed:
 if filepaths[0].endswith(".dat"):
   def loadFn(filepath):
-    global properties
+    global properties, to_replace
+    
+    filepath = to_replace.get(filepath, filepath)
+    
     imp = readFIBSEMdat(filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
     roi = properties.get("crop_roi", None)
     if roi:
@@ -147,19 +164,35 @@ if filepaths[0].endswith(".dat"):
   loader = loadFn
   setupImageLoader(loader)
 else:
+  # TODO doesn't handle ROI, to_replace, etc.
   loader = IJ.loadImage
   syncPrint("Using IJ.loadImage to read image files.")
 
 
 # Triggers the whole alignment and ends by showing a virtual stack of the aligned sections.
 # Crashware: can be restarted anytime, will resume from where it left off.
-#viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-#            FinalInterval([x0, y0], [x1, y1]))
+if False:
+  viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+              FinalInterval([x0, y0], [x1, y1]))
+
+
+
+if False:
+  # Open a sortable table with 3 columns: the image filepath indices and the number of pointmatches
+  qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguration)
+
 
 
 # When the alignment is good enough, then export as N5 by swapping "False" for "True" below:
 
-if True:
+
+
+if False:
+
+  # Ignore ROI: export the whole volume
+  dimensions = original_dimensions
+  properties["crop_roi"] = None
+
   # Write the whole volume in N5 format
   name = properties["name"] # srcDir.split('/')[-2]
   exportDir = os.path.join(tgtDirN5, "n5")
@@ -167,8 +200,6 @@ if True:
   # x=864 y=264 width=15312 h=17424
   interval = FinalInterval([0, 0], [dimensions[0] -1, dimensions[1] -1])
 
-  # Ignore ROI: export the whole volume
-  loader = lambda filepath: readFIBSEMdat(filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
 
   export8bitN5(filepaths,
                loader,
