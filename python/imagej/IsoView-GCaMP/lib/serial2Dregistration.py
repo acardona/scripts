@@ -47,7 +47,7 @@ from functools import partial
 from java.util.concurrent import Executors, TimeUnit
 # From lib
 from io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
-from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ
+from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException
 from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures
 from registration import loadMatrices, saveMatrices
 from ui import showStack, wrap
@@ -204,8 +204,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
 
     return True
   except:
-    syncPrint(sys.exc_info())
-    syncPrint("".join(traceback.format_exception()), out="stderr")
+    printException()
 
 
 def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateByFileExists=False):
@@ -253,9 +252,7 @@ def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateByFileE
     features.remove(features.size() -1) # to return without the Params for immediate use
     syncPrintQ("Extracted %i SIFT features for %s" % (features.size(), os.path.basename(filepath)))
   except:
-    e = sys.exc_info()
-    System.out.println("".join(traceback.format_exception(e[0], e[1], e[2])))
-    syncPrint(e)
+    printException()
   return features
 
 
@@ -292,9 +289,7 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csv
                      params)
     return True
   except:
-    e = sys.exc_info()
-    System.out.println("".join(traceback.format_exception(e[0], e[1], e[2])))
-    syncPrint(e)
+    printException()
 
 
 def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem):
@@ -349,7 +344,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
     w.awaitAll()
     syncPrintQ("Finished all pointmatching tasks.")
   except:
-    print sys.exc_info()
+    printException()
   finally:
     exeload.shutdown()
     w.destroy()
