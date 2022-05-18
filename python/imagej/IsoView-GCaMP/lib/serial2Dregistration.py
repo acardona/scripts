@@ -51,7 +51,7 @@ from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, Par
 from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures
 from registration import loadMatrices, saveMatrices
 from ui import showStack, wrap
-from converter import convert
+from converter import convert2
 from pixels import autoAdjust
 from java.awt import Dimension
 from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
@@ -629,7 +629,7 @@ def export8bitN5(filepaths,
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
     imgA = RealViews.transform(imgI, affine)
     imgT = Views.zeroMin(Views.interval(imgA, img))
-    imgMinMax = convert(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType)
+    imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType)
     aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
     ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg)
     img = imgI = imgA = imgT = imgMinMax = None
