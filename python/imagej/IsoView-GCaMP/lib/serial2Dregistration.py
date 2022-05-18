@@ -23,12 +23,12 @@ from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
-from java.util import ArrayList
-from java.lang import Double, System
+from java.util import ArrayList, Comparator
+from java.lang import Double, System, String, Number
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
-from ij import IJ, ImageListener, ImagePlus
+from ij import IJ, ImageListener, ImagePlus, WindowManager
 from net.imglib2.img.io.proxyaccess import ShortAccessProxy
 from net.imglib2.img.cell import LazyCellImg, Cell, CellGrid
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
@@ -53,6 +53,9 @@ from registration import loadMatrices, saveMatrices
 from ui import showStack, wrap
 from converter import convert
 from pixels import autoAdjust
+from java.awt import Dimension
+from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
+from javax.swing.table import AbstractTableModel, TableRowSorter
 
 
 def loadImp(filepath):
@@ -702,3 +705,115 @@ def export8bitN5(filepaths,
   finally:
     preloader.shutdown()
     exe_preloader.shutdown()
+    
+
+
+
+class TableData(AbstractTableModel):
+  def __init__(self, column_names, rows):
+    self.column_names = column_names
+    self.rows = rows
+  def getColumnName(self, col):
+    return self.column_names[col]
+  def getColumnClass(self, col): # for e.g. proper numerical sorting  
+    return Number
+  def getRowCount(self): 
+    return len(self.rows)  
+  def getColumnCount(self):  
+    return len(self.column_names) 
+  def getValueAt(self, row, col):
+    return self.rows[row][col]
+  def isCellEditable(self, row, col):
+    # Activated on double click
+    print "clicked at:", self.rows[row][col]
+    return False # none editable 
+  def setValueAt(self, value, row, col):  
+    pass # none editable
+
+
+def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguration):
+
+  rows = []
+  
+  """
+  for task in loadPointMatchesTasks(filepaths, csvDir, params, paramsTileConfiguration["n_adjacent"]):
+    i, j, pointmatches = task.call() # pointmatches is a list
+    rows.append([i, j, len(pointmatches)])
+    syncPrintQ("Counting pointmatches for sections %i::%i = %i" % (i, j, len(pointmatches)))
+  """
+
+  # Same, in parallel:
+  w = ParallelTasks("loadPointMatches")
+  for i, j, pointmatches in w.chunkConsume(properties["n_threads"],
+                                           loadPointMatchesTasks(filepaths, csvDir, params, paramsTileConfiguration["n_adjacent"])):
+    rows.append([i, j, len(pointmatches)])
+    syncPrintQ("Counting pointmatches for sections %i::%i = %i" % (i, j, len(pointmatches)))
+  w.awaitAll()
+  w.destroy()
+  
+  table_data = TableData(["section i", "section j", "n_pointmatches"], rows)
+  
+  table = JTable(table_data)
+  table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)  
+  #table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
+  sorter = TableRowSorter(table_data)
+  sorter.setComparator(0, Comparator.naturalOrder())
+  sorter.setComparator(1, Comparator.naturalOrder())
+  sorter.setComparator(2, Comparator.naturalOrder())
+  table.setRowSorter(sorter)
+  
+  frame = JFrame("Number of pointmatches")
+  jsp = JScrollPane(table)
+  jsp.setMinimumSize(Dimension(400, 500))
+  frame.getContentPane().add(jsp)
+  
+  def show():
+    frame.pack()
+    frame.setVisible(True)
+    
+  SwingUtilities.invokeLater(show)
+  
+  img_title = properties["srcDir"].split('/')[-2]
+  imp = WindowManager.getImage(img_title)
+
+  
+ 
+  
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
