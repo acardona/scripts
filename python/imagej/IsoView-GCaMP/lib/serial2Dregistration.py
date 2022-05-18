@@ -41,10 +41,14 @@ from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2 import FinalInterval
 from net.imglib2.type.PrimitiveType import BYTE
 from net.imglib2.converter import RealUnsignedByteConverter
+from net.imglib2.loops import LoopBuilder
 from java.awt.event import KeyAdapter, KeyEvent
 from jarray import zeros, array
 from functools import partial
 from java.util.concurrent import Executors, TimeUnit
+from java.awt import Dimension
+from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
+from javax.swing.table import AbstractTableModel, TableRowSorter
 # From lib
 from io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException
@@ -53,9 +57,8 @@ from registration import loadMatrices, saveMatrices
 from ui import showStack, wrap
 from converter import convert2
 from pixels import autoAdjust
-from java.awt import Dimension
-from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
-from javax.swing.table import AbstractTableModel, TableRowSorter
+from loop import createBiConsumerTypeSet
+
 
 
 def loadImp(filepath):
@@ -624,15 +627,23 @@ def export8bitN5(filepaths,
     img = ArrayImgs.unsignedShorts(sp.getPixels(), [sp.getWidth(), sp.getHeight()])
     sp = None
     imp = None
+    # Must use linear interpolation for subpixel precision
     affine = AffineTransform2D()
     affine.set(matrices[index])
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
     imgA = RealViews.transform(imgI, affine)
     imgT = Views.zeroMin(Views.interval(imgA, img))
+    # Convert to 8-bit
     imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType)
     aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
-    ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg)
-    img = imgI = imgA = imgT = imgMinMax = None
+    # ImgUtil copies multi-threaded, which is not appropriate here as there are many other images being copied too
+    #ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg)
+    
+    # Single-threaded copy
+    copier = createBiConsumerTypeSet(UnsignedByteType)
+    LoopBuilder.setImages(ImgView.wrap(imgMinMax, aimg.factory()), aimg).forEachPixel(copier)
+    
+    img = imgI = imgA = imgMinMax = imgT = None
     return aimg
     
 
