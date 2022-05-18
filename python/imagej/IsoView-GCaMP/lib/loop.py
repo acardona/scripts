@@ -1,11 +1,15 @@
-from org.objectweb.asm import ClassWriter, Opcodes, Label
+from org.objectweb.asm import ClassWriter, Opcodes
 from java.lang import ClassLoader
-from lib.asm import CustomClassLoader
+from lib.asm import CustomClassLoader, initClass, initMethod, initMethodObj
+from java.util.function import BiConsumer
 
 def defineBiConsumerTypeSet(imglib2Type, classname=None):
   """ 
       A class to use in e.g. an ImgLib2 LoopBuilder.setImages(img1, img2).forEachPixel(<instance of this BiConsumer class>)
-      where both image are of the same Type.
+      where both image are of the same Type, and the value of one has to be set as the value of the other, like this:
+        type1.set(type2)
+        
+      In java, this would be written as: LoopBuilder.setImages(img1, img2).forEachPixel( (type1, type2) -> type1.set(type2) );
   """
   typeClassname = imglib2Type.getName().replace(".", "/")
   
@@ -23,9 +27,6 @@ def defineBiConsumerTypeSet(imglib2Type, classname=None):
   # Constructor
   methodVisitor = classWriter.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", None, None)
   methodVisitor.visitCode()
-  label0 = Label()
-  methodVisitor.visitLabel(label0)
-  methodVisitor.visitLineNumber(5, label0)
   methodVisitor.visitVarInsn(Opcodes.ALOAD, 0)
   methodVisitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", False)
   methodVisitor.visitInsn(Opcodes.RETURN)
@@ -35,25 +36,16 @@ def defineBiConsumerTypeSet(imglib2Type, classname=None):
   # BiConsumer.accept method implementation with body Type.set(Type)
   methodVisitor = classWriter.visitMethod(Opcodes.ACC_PUBLIC, "accept", "(L%s;L%s;)V" % (typeClassname, typeClassname), "(TT;TT;)V", None)
   methodVisitor.visitCode()
-  label0 = Label()
-  methodVisitor.visitLabel(label0)
-  methodVisitor.visitLineNumber(8, label0)
   methodVisitor.visitVarInsn(Opcodes.ALOAD, 2)
   methodVisitor.visitVarInsn(Opcodes.ALOAD, 1)
   methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, typeClassname, "set", "(L%s;)V" % typeClassname, False)
-  label1 = Label()
-  methodVisitor.visitLabel(label1)
-  methodVisitor.visitLineNumber(9, label1)
   methodVisitor.visitInsn(Opcodes.RETURN)
   methodVisitor.visitMaxs(2, 3)
   methodVisitor.visitEnd()
 
-  # BiConsumer.accept method with Object,Object arguments
+  # BiConsumer.accept method with Object,Object arguments: to provide a bridge between the BiConsumer.accept method and the class accept method
   methodVisitor = classWriter.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC, "accept", "(Ljava/lang/Object;Ljava/lang/Object;)V", None, None)
   methodVisitor.visitCode()
-  label0 = Label()
-  methodVisitor.visitLabel(label0)
-  methodVisitor.visitLineNumber(5, label0)
   methodVisitor.visitVarInsn(Opcodes.ALOAD, 0)
   methodVisitor.visitVarInsn(Opcodes.ALOAD, 1)
   methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, typeClassname)
@@ -68,7 +60,6 @@ def defineBiConsumerTypeSet(imglib2Type, classname=None):
   
   loader = CustomClassLoader()
   biconsumerClass = loader.defineClass(classname, classWriter.toByteArray())
-  print biconsumerClass
   return biconsumerClass
 
 
@@ -90,4 +81,44 @@ def createBiConsumerTypeSet(*args, **kwargs):
   LoopBuilder.setImages(img1, img2).multiThreaded().forEachPixel(copier)
   """
   return defineBiConsumerTypeSet(*args, **kwargs).newInstance()
+
+
+
+def defineBiConsumerTypeSet2(imglib2Type, classname=None):
+  """ Exactly the same as defineBiConsumerTypeSet but using lib.asm library functions to cut to the chase. """
+  if classname is None:
+    classname = "asm/loop/BiConsumer_%s_set" % imglib2Type.getSimpleName()
+  
+  cw = initClass(classname,
+                 class_parameters=[("T", imglib2Type)],
+                 interfaces=[BiConsumer],
+                 interfaces_parameters={BiConsumer: ["T", "T"]})
+  
+  mv = initMethod(cw,
+                  "accept",
+                  argument_classes=[imglib2Type, imglib2Type])
+  mv.visitCode()
+  # implement t2.set(t1)
+  mv.visitVarInsn(Opcodes.ALOAD, 2) # load second argument first
+  mv.visitVarInsn(Opcodes.ALOAD, 1) # then load the first argument
+  # Use the first loaded object as the object onto which to invoke "set", and the second loaded object as its argument, so t2.set(t1)
+  typeClassname = imglib2Type.getName().replace(".", "/")
+  mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, typeClassname, "set", "(L%s;)V" % typeClassname, False)
+  mv.visitInsn(Opcodes.RETURN)
+  mv.visitMaxs(2, 3)
+  mv.visitEnd()
+  
+  # The "accept" method was from an interface, so add a bridge method that checks casts
+  initMethodObj(cw, classname, "accept", argument_classes=[imglib2Type, imglib2Type])
+  
+  cw.visitEnd()
+  
+  loader = CustomClassLoader()
+  biconsumerClass = loader.defineClass(classname, cw.toByteArray())
+  return biconsumerClass
+
+
+def createBiConsumerTypeSet2(*args, **kwargs):
+  return defineBiConsumerTypeSet2(*args, **kwargs).newInstance()
+
 
