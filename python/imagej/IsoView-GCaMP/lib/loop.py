@@ -84,7 +84,9 @@ def createBiConsumerTypeSet(*args, **kwargs):
 
 
 
-def defineBiConsumerTypeSet2(imglib2Type, classname=None):
+def defineBiConsumerTypeSet2(imglib2Type,
+                             classname=None,
+                             return_type="V"):  # can be a class too
   """ Exactly the same as defineBiConsumerTypeSet but using lib.asm library functions to cut to the chase. """
   if classname is None:
     classname = "asm/loop/BiConsumer_%s_set" % imglib2Type.getSimpleName()
@@ -96,7 +98,8 @@ def defineBiConsumerTypeSet2(imglib2Type, classname=None):
   
   mv = initMethod(cw,
                   "accept",
-                  argument_classes=[imglib2Type, imglib2Type])
+                  argument_classes=[imglib2Type, imglib2Type],
+                  return_type=return_type)
   mv.visitCode()
   # implement t2.set(t1)
   mv.visitVarInsn(Opcodes.ALOAD, 2) # load second argument first
@@ -109,7 +112,7 @@ def defineBiConsumerTypeSet2(imglib2Type, classname=None):
   mv.visitEnd()
   
   # The "accept" method was from an interface, so add a bridge method that checks casts
-  initMethodObj(cw, classname, "accept", argument_classes=[imglib2Type, imglib2Type])
+  initMethodObj(cw, classname, "accept", argument_classes=[imglib2Type, imglib2Type], return_type=return_type)
   
   cw.visitEnd()
   
@@ -122,3 +125,50 @@ def createBiConsumerTypeSet2(*args, **kwargs):
   return defineBiConsumerTypeSet2(*args, **kwargs).newInstance()
 
 
+def binaryLambda(objClass,
+                method_name,
+                argClass,
+                interface=BiConsumer,
+                interface_method="accept",
+                classname=None,
+                return_type="V"):  # can be a class too
+  """
+     Define a interface<O, A> with an interface_method with body O.method_name(A).
+     For example, a BiConsumer with an "accept" method that takes two arguments an has arg1.method_name(arg2) as body.
+  """
+  if classname is None:
+    classname = "asm/loop/%s_%s_%s_%s" % (interface.getSimpleName(),
+                                          objClass.getSimpleName(),
+                                          method_name,
+                                          argClass.getSimpleName())
+  
+  cw = initClass(classname,
+                 class_parameters=[("O", objClass), ("A", argClass)],
+                 interfaces=[interface],
+                 interfaces_parameters={interface: ["O", "A"]})
+  
+  mv = initMethod(cw,
+                  interface_method,
+                  argument_classes=[objClass, argClass],
+                  return_type=return_type)
+  mv.visitCode()
+  # implement Obj.method_name(Arg)
+  mv.visitVarInsn(Opcodes.ALOAD, 1) # The first argument of the interface_method
+  mv.visitVarInsn(Opcodes.ALOAD, 2) # The second argument of the interface_method
+  # Use the first loaded object as the object onto which to invoke method_name
+  # and the second loaded object as its argument, so Obj.method_name(Arg) 
+  mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
+                     objClass.getName().replace(".", "/"),
+                     method_name,
+                     "(L%s;)V" % argClass.getName().replace(".", "/"),
+                     False)
+  mv.visitInsn(Opcodes.RETURN)
+  mv.visitMaxs(2, 3)
+  mv.visitEnd()
+  
+  # The interface_method was from an interface, so add a bridge method that checks casts
+  initMethodObj(cw, classname, interface_method, argument_classes=[objClass, argClass], return_type=return_type)
+  
+  cw.visitEnd()
+  
+  return CustomClassLoader().defineClass(classname, cw.toByteArray())
