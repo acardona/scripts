@@ -179,13 +179,13 @@ def binaryLambda(objClass,
 def nthLambda(objClass,
               method_name,
               argClasses, # a list, can be empty, max 14 elements
-              interface, # the interface with at least one generic type
+              interface, # the interface with at least one generic type for objClass
               interface_method, # with as many arguments as argClasses
               classname=None,
               return_type="V", # can be a class too
               as_instance=True): # return as an instance when True, as a class when False
   """
-     Define a interface<O, A1, A2, ...> with an interface_method with body O.method_name(A1, A2, ...).
+     Define an interface<O, A1, A2, ...> with an interface_method with body O.method_name(A1, A2, ...).
      For example, a BiConsumer with an "accept(O arg1, A1 arg2)" method that takes two arguments an has arg1.method_name(arg2) as body.
      
      objClass: the class of the object onto which to invoke the method of name method_name with arguments of class as in argClasses.
@@ -202,6 +202,10 @@ def nthLambda(objClass,
                                           objClass.getSimpleName(),
                                           method_name,
                                           "_".join(argClass.getSimpleName() for argClass in argClasses))
+  
+  if len(argClasses) > 14:
+    print "ERROR: nthLambda can't have more han 13 argClasses."
+    return None
   
   parameters = [("O", objClass)] + zip("ABCDEFGHIJKLMN", argClasses)
   cw = initClass(classname,
