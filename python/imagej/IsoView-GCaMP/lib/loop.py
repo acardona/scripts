@@ -225,7 +225,7 @@ def nthLambda(objClass,
                      "(%s)V" % "".join("L%s;" % argClass.getName().replace(".", "/") for argClass in argClasses),
                      False)
   mv.visitInsn(Opcodes.RETURN)
-  mv.visitMaxs(2, 3)
+  mv.visitMaxs(1 + len(argClasses), 2 + len(argClasses))
   mv.visitEnd()
   
   # The interface_method was from an interface, so add a bridge method that checks casts
