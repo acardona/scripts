@@ -1,7 +1,7 @@
 from org.objectweb.asm import ClassWriter, Opcodes, Type, Label
 from java.lang import Object, Class, Math
 from net.imglib2.converter.readwrite import SamplerConverter
-from net.imglib2 import Sampler, RandomAccessibleInterval, InterableInterval
+from net.imglib2 import Sampler, RandomAccessibleInterval, IterableInterval
 from net.imglib2.converter import Converter, Converters
 from net.imglib2.type import Type as ImgLib2Type # must alias
 from itertools import imap, repeat
