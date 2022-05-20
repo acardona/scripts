@@ -11,6 +11,10 @@ from net.imglib2.img.array import ArrayImgs
 from ij.process import FloatProcessor
 from net.imglib2.type.numeric.real import FloatType
 from ij import IJ
+from java.lang import Number
+from java.awt import Dimension
+from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
+from javax.swing.table import AbstractTableModel, TableRowSorter
 
 
 def wrap(img, title="", n_channels=1):
@@ -216,10 +220,86 @@ def navigate2DROI(img, interval, indexZ=0, title="ROI"):
 
    
 
+class DataTable(AbstractTableModel):
+  """ Assumes all rows contain numbers. """
+  def __init__(self, rows, column_names=None, dataType=Number, onCellClickFn=None, onRowClickFn=None):
+    """
+       rows: a list of lists of numbers.
+       column_names: optional, one string per column.
+       dataType: defaults to Number, can be a list of one class per column.
+       onCellClickFn: a function that will be run when a cell is clicked, with 3 arguments: row index, column index, and the cell value.
+       onRowClickFn: a function that will be run when a cell is clicked, with the entire row of values provided as arguments.
+    """
+    self.column_names = column_names if column_names is not None else map(str, xrange(1, len(rows[0]) + 1))
+    self.rows = rows
+    try:
+      # Check if dataType is iterable, like a list
+      iter(dataType)
+      self.dataType = dataType
+    except:
+      # Not iterable: a Number, String, etc. so all columns have the same
+      self.dataType = [dataType for _ in xrange(len(rows[0])]
+    self.onCellClickFn = onCellClickFn
+    self.onRowClickFn = onRowClickFn
+  def getColumnName(self, col):
+    return self.column_names[col]
+  def getColumnClass(self, col): # for e.g. proper numerical sorting
+    return self.dataType[col]
+  def getRowCount(self):
+    return len(self.rows)
+  def getColumnCount(self):
+    return len(self.column_names)
+  def getValueAt(self, row, col):
+    return self.rows[row][col]
+  def isCellEditable(self, row, col):
+    # Activated on click
+    if self.onCellClickFn:
+      self.onCellClickFn(row, col, self.rows[row][col])
+    if self.onRowClickFn:
+      self.onRowClickFn(*self.rows[row])
+    return False # none editable
+  def setValueAt(self, value, row, col):
+    pass # none editable
 
 
+def showTable(rows, title="Table", column_names=None, dataType=Number, width=400, height=500, showTable=True,
+              windowClosing=None, onCellClickFn=None, onRowClickFn=None):
+  """
+     rows: list of lists of numbers.
+     title: for the JFrame
+     column_names: list of strings, or None
+     width: defaults to 400 px
+     height: defaults to 500 px
+     showTable: whether to show the JFrame.
+     windowClosing: an optional function to execute when the table's JFrame is closed.
+     onClickCellFn: an optional function to execute when a table's cell is clicked, and receiving 3 args: row index, col index, cell value.
+     onRowCellFn: an optinal function to execute when a table's row is clicked, and receiving as args the whole row.
+     
+     return: a tuple with the JTable and the JFrame
+  """
+  table_data = DataTable(rows, column_names=column_names)
+  table = JTable(table_data)
+  table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+  #table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
+  sorter = TableRowSorter(table_data)
+  sorter.setComparator(0, Comparator.naturalOrder())
+  sorter.setComparator(1, Comparator.naturalOrder())
+  sorter.setComparator(2, Comparator.naturalOrder())
+  table.setRowSorter(sorter)
+  
+  frame = JFrame(title) if windowClosing is None else JFrame(title, windowClosing=windowClosing)
+  jsp = JScrollPane(table)
+  jsp.setMinimumSize(Dimension(width, height))
+  frame.getContentPane().add(jsp)
+  
+  def show():
+    frame.pack()
+    frame.setVisible(True)
+    
+  if showTable:
+    SwingUtilities.invokeLater(show)
 
-
+  return table, frame
 
 
 
