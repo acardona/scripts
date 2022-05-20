@@ -634,14 +634,14 @@ def export8bitN5(filepaths,
     imgA = RealViews.transform(imgI, affine)
     imgT = Views.zeroMin(Views.interval(imgA, img))
     # Convert to 8-bit
-    imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType)
+    imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=False) # use IterableInterval
     aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
     # ImgUtil copies multi-threaded, which is not appropriate here as there are many other images being copied too
     #ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg)
     
     # Single-threaded copy
     copier = createBiConsumerTypeSet(UnsignedByteType)
-    LoopBuilder.setImages(ImgView.wrap(imgMinMax, aimg.factory()), aimg).forEachPixel(copier)
+    LoopBuilder.setImages(imgMinMax, aimg).forEachPixel(copier)
     
     img = imgI = imgA = imgMinMax = imgT = None
     return aimg
@@ -650,7 +650,7 @@ def export8bitN5(filepaths,
   blockRadius, n_bins, slope = CLAHE_params
 
   # A CacheLoader that interprets the list of filepaths as a 3D volume: a stack of 2D slices
-  loader = SectionCellLoader(filepaths, 
+  loader = SectionCellLoader(filepaths,
                              asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
                                                 interval, invert, blockRadius, n_bins, slope, matrices),
                              loadFn=loadFn)
