@@ -16,6 +16,7 @@ from java.awt import Dimension
 from java.util import Comparator
 from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
 from javax.swing.table import AbstractTableModel, TableRowSorter
+from java.awt.event import WindowAdapter
 
 
 def wrap(img, title="", n_channels=1):
@@ -219,7 +220,13 @@ def navigate2DROI(img, interval, indexZ=0, title="ROI"):
     canvas.addKeyListener(kl)
   return imp
 
-   
+
+class ExecutorCloser(WindowAdapter):
+  def __init__(self, exe):
+    self.exe = exe
+  def windowClosing(event):
+    self.exe.shutdownNow()
+    
 
 class DataTable(AbstractTableModel):
   """ Assumes all rows contain numbers. """
