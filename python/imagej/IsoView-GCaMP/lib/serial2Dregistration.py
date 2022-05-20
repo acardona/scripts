@@ -23,7 +23,7 @@ from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
-from java.util import ArrayList, Comparator
+from java.util import ArrayList
 from java.lang import Double, System
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
@@ -51,7 +51,7 @@ from io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellI
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException
 from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures
 from registration import loadMatrices, saveMatrices
-from ui import showStack, wrap, showTable
+from ui import showStack, wrap, showTable, ExecutorCloser
 from converter import convert2
 from pixels import autoAdjust
 from loop import createBiConsumerTypeSet
@@ -554,7 +554,7 @@ def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, 
     return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"])
   cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
   print cellImg
-  comp = showStack(cellImg, title=properties["srcDir"].split('/')[-2], proper=False)
+  comp = showStack(cellImg, title=properties["srcDir"].split('/')[-2], proper=True)
   # Add the SourcePanning KeyListener as the first one
   canvas = comp.getWindow().getCanvas()
   kls = canvas.getKeyListeners()
@@ -716,7 +716,7 @@ def export8bitN5(filepaths,
 
 
 
-def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguration):
+def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguration, imp=None):
   """
      Show a 3-column table with the indices of all compared pairs of sections and their pointmatches.
   """
@@ -739,25 +739,32 @@ def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguratio
   w.awaitAll()
   w.destroy()
   
-  img_title = properties["srcDir"].split('/')[-2]
-  imp = WindowManager.getImage(img_title)
-  destroy = None
-  setStackSlice = None
+  if imp is None:
+    img_title = properties["srcDir"].split('/')[-2]
+    imp = WindowManager.getImage(img_title)
+    destroy = None
+    setStackSlice = None
+    
+  print imp
   
   if imp:
     section_index = imp.getSlice()
     
     def run():
-      if imp.getSlice() != section_index
+      global imp, section_index
+      if imp.getSlice() != section_index:
         imp.setSlice(section_index)
   
     exe = Executors.newSingleThreadScheduledExecutor()
     exe.scheduleWithFixedDelay(run, 0, 500, TimeUnit.MILLISECONDS)
     
-    destroy = lambda event: exe.shutdownNow()
+    def destroy(window_event):
+      global exe
+      exe.shutdownNow()
   
     def setStackSlice(row, col, value):
       global section_index
+      print "setStackSlice:", row, col, value, type(value)
       if 2 == col: # it's the number of pointmatches
         return
       section_index = value + 1
@@ -767,8 +774,8 @@ def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguratio
   table, frame = showTable(rows,
                            column_names=["section i", "section j", "n_pointmatches"],
                            title="Number of pointmatches",
-                           onCellClickFn=setStackSlice,
-                           windowClosing=destroy)
+                           onCellClickFn=setStackSlice)
+  frame.addWindowListener(ExecutorCloser(exe))
 
   return table, frame
  
