@@ -171,15 +171,11 @@ else:
 
 # Triggers the whole alignment and ends by showing a virtual stack of the aligned sections.
 # Crashware: can be restarted anytime, will resume from where it left off.
-if False:
-  viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-              FinalInterval([x0, y0], [x1, y1]))
-
-
-
-if False:
+if True:
+  imp = viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+                    FinalInterval([x0, y0], [x1, y1]))
   # Open a sortable table with 3 columns: the image filepath indices and the number of pointmatches
-  qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguration)
+  qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguration, imp=imp)
 
 
 
