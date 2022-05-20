@@ -224,7 +224,7 @@ def navigate2DROI(img, interval, indexZ=0, title="ROI"):
 class ExecutorCloser(WindowAdapter):
   def __init__(self, exe):
     self.exe = exe
-  def windowClosing(event):
+  def windowClosing(self, event):
     self.exe.shutdownNow()
     
 
