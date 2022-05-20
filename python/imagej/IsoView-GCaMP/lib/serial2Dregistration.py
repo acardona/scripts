@@ -24,7 +24,7 @@ from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
-from java.lang import Double, System
+from java.lang import Double, System, Runnable
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
@@ -716,6 +716,19 @@ def export8bitN5(filepaths,
 
 
 
+class SetStackSlice(Runnable):
+  def __init__(self, imp):
+    self.imp = imp
+    self.stack_slice = imp.getSlice()
+  def setFromTableCell(self, rowIndex, colIndex, value):
+    if 2 == colIndex:
+      return # ignore number of pointmatches
+    self.stack_slice = value + 1 # stack slices are 1-based
+  def run(self):
+    if self.imp.getSlice() != self.section_index:
+      self.imp.setSlice(self.section_index)
+
+
 def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguration, imp=None):
   """
      Show a 3-column table with the indices of all compared pairs of sections and their pointmatches.
@@ -744,37 +757,20 @@ def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguratio
     imp = WindowManager.getImage(img_title)
     destroy = None
     setStackSlice = None
-    
+  
   print imp
   
   if imp:
-    section_index = imp.getSlice()
-    
-    def run():
-      global imp, section_index
-      if imp.getSlice() != section_index:
-        imp.setSlice(section_index)
-  
+    ob = SetStackSlice(imp)
     exe = Executors.newSingleThreadScheduledExecutor()
-    exe.scheduleWithFixedDelay(run, 0, 500, TimeUnit.MILLISECONDS)
-    
-    def destroy(window_event):
-      global exe
-      exe.shutdownNow()
-  
-    def setStackSlice(row, col, value):
-      global section_index
-      print "setStackSlice:", row, col, value, type(value)
-      if 2 == col: # it's the number of pointmatches
-        return
-      section_index = value + 1
+    exe.scheduleWithFixedDelay(ob, 0, 500, TimeUnit.MILLISECONDS)
   else:
     print "image titled %s is not open." % img_title
   
   table, frame = showTable(rows,
                            column_names=["section i", "section j", "n_pointmatches"],
                            title="Number of pointmatches",
-                           onCellClickFn=setStackSlice)
+                           onCellClickFn=ob.setFromTableCell)
   frame.addWindowListener(ExecutorCloser(exe))
 
   return table, frame
