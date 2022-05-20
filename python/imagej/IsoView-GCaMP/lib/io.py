@@ -326,7 +326,7 @@ class DATLoader(CacheLoader):
 
 class SectionCellLoader(CacheLoader):
   """
-  A CacheLoader that can load Cell instances using ImageJ's I/O library. 
+  A CacheLoader that can load Cell instances using ImageJ's I/O library or any loader function provided. 
   Cells only tile in the last dimension, e.g.:
     * a series of sections (one per file) for a 3D volume;
     * a series of 3D volumes (one per file) for a 4D volume.
@@ -346,7 +346,7 @@ class SectionCellLoader(CacheLoader):
     dims = Intervals.dimensionsAsLongArray(img)
     return Cell(list(dims) + [1], # cell dimensions
                 [0] * img.numDimensions() + [index], # position in the grid: 0, 0, 0, Z-index
-                img.update(None)) # get the underlying LongAccess
+                img.update(None)) # get the underlying DataAccess
 
 
 def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType):
