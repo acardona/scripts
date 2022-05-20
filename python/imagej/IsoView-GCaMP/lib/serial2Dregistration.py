@@ -24,7 +24,7 @@ from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList, Comparator
-from java.lang import Double, System, String, Number
+from java.lang import Double, System
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
@@ -46,15 +46,12 @@ from java.awt.event import KeyAdapter, KeyEvent
 from jarray import zeros, array
 from functools import partial
 from java.util.concurrent import Executors, TimeUnit
-from java.awt import Dimension
-from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
-from javax.swing.table import AbstractTableModel, TableRowSorter
 # From lib
 from io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException
 from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures
 from registration import loadMatrices, saveMatrices
-from ui import showStack, wrap
+from ui import showStack, wrap, showTable
 from converter import convert2
 from pixels import autoAdjust
 from loop import createBiConsumerTypeSet
@@ -716,33 +713,13 @@ def export8bitN5(filepaths,
   finally:
     preloader.shutdown()
     exe_preloader.shutdown()
-    
 
-
-
-class TableData(AbstractTableModel):
-  def __init__(self, column_names, rows):
-    self.column_names = column_names
-    self.rows = rows
-  def getColumnName(self, col):
-    return self.column_names[col]
-  def getColumnClass(self, col): # for e.g. proper numerical sorting  
-    return Number
-  def getRowCount(self): 
-    return len(self.rows)  
-  def getColumnCount(self):  
-    return len(self.column_names) 
-  def getValueAt(self, row, col):
-    return self.rows[row][col]
-  def isCellEditable(self, row, col):
-    # Activated on double click
-    print "clicked at:", self.rows[row][col]
-    return False # none editable 
-  def setValueAt(self, value, row, col):  
-    pass # none editable
 
 
 def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguration):
+  """
+     Show a 3-column table with the indices of all compared pairs of sections and their pointmatches.
+  """
 
   rows = []
   
@@ -762,32 +739,38 @@ def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguratio
   w.awaitAll()
   w.destroy()
   
-  table_data = TableData(["section i", "section j", "n_pointmatches"], rows)
-  
-  table = JTable(table_data)
-  table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)  
-  #table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
-  sorter = TableRowSorter(table_data)
-  sorter.setComparator(0, Comparator.naturalOrder())
-  sorter.setComparator(1, Comparator.naturalOrder())
-  sorter.setComparator(2, Comparator.naturalOrder())
-  table.setRowSorter(sorter)
-  
-  frame = JFrame("Number of pointmatches")
-  jsp = JScrollPane(table)
-  jsp.setMinimumSize(Dimension(400, 500))
-  frame.getContentPane().add(jsp)
-  
-  def show():
-    frame.pack()
-    frame.setVisible(True)
-    
-  SwingUtilities.invokeLater(show)
-  
   img_title = properties["srcDir"].split('/')[-2]
   imp = WindowManager.getImage(img_title)
-
+  destroy = None
+  setStackSlice = None
   
+  if imp:
+    section_index = imp.getSlice()
+    
+    def run():
+      if imp.getSlice() != section_index
+        imp.setSlice(section_index)
+  
+    exe = Executors.newSingleThreadScheduledExecutor()
+    exe.scheduleWithFixedDelay(run, 0, 500, TimeUnit.MILLISECONDS)
+    
+    destroy = lambda event: exe.shutdownNow()
+  
+    def setStackSlice(row, col, value):
+      global section_index
+      if 2 == col: # it's the number of pointmatches
+        return
+      section_index = value + 1
+  else:
+    print "image titled %s is not open." % img_title
+  
+  table, frame = showTable(rows,
+                           column_names=["section i", "section j", "n_pointmatches"],
+                           title="Number of pointmatches",
+                           onCellClickFn=setStackSlice,
+                           windowClosing=destroy)
+
+  return table, frame
  
   
     
