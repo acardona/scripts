@@ -1,7 +1,7 @@
 from org.objectweb.asm import ClassWriter, Opcodes, Type, Label
 from java.lang import Object, Class, Math
 from net.imglib2.converter.readwrite import SamplerConverter
-from net.imglib2 import Sampler, RandomAccessibleInterval
+from net.imglib2 import Sampler, RandomAccessibleInterval, InterableInterval
 from net.imglib2.converter import Converter, Converters
 from net.imglib2.type import Type as ImgLib2Type # must alias
 from itertools import imap, repeat
@@ -342,24 +342,26 @@ def samplerConvert(rai, converter):
   return m.invoke(None, rai, converter)
 
 
-def convert2(rai, converter, toType):
+def convert2(rai, converter, toType, randomAccessible=True):
   """
     rai: an instance of RandomAccessibleInterval
     converter: as created with e.g. createConverter
     toType: class of the target Type
+    randomAccessible: when True (default) use RandomAccessibleInterval, otherwise use IterableInterval
   """
   # Grab method through reflection. Otherwise we get one that returns an IterableInterval
   # which is not compatible with ImageJFunctions.wrap methods.
-  m = Converters.getDeclaredMethod("convert", [RandomAccessibleInterval, Converter, ImgLib2Type])
+  m = Converters.getDeclaredMethod("convert", [RandomAccessibleInterval if randomAccessible else IterableInterval, Converter, ImgLib2Type])
   return m.invoke(None, rai, converter, toType.newInstance())
 
 
-def convert(rai, toType):
+def convert(rai, toType, randomAccessible=True):
   """
     rai: an instance of RandomAccessibleInterval
     toType: class of the target Type
+    randomAccessible: when True (default) use RandomAccessibleInterval, otherwise use IterableInterval
   """
-  return convert2(rai, createConverter(type(rai.randomAccess().get()), toType), toType)
+  return convert2(rai, createConverter(type(rai.randomAccess().get()), toType), toType, randomAccessible=randomAccessible)
   
 
 def makeCompositeToRealConverter(reducer_class=Math,
