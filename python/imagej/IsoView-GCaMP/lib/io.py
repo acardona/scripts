@@ -199,27 +199,30 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     ra.read(bytes)
     # Parse as 16-bit array
     sb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer()
-    shorts = zeros(width * height * numChannels, 'h')
-    sb.get(shorts)
-    # Attempt to help releasing memory
     bytes = None
-    sb = None
-    # Deinterleave channels and convert to unsigned short
-    # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
-    # With Weaver: fast
-    channels = wd.deinterleave(shorts, numChannels, channel_index)
-    if toUnsigned:
-      for s in channels:
-        wd.toUnsigned(s)
-    # With python array sampling: very slow, and not just from iterating whole array once per channel
-    #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
-    #channels = [shorts[i::numChannels] for i in seq]
-    if asImagePlus:
-      return [ImagePlus(str(i), ShortProcessor(width, height, s, None)) for i, s in enumerate(channels)]
-    else:
-      return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
   finally:
     ra.close()
+  #
+  shorts = zeros(width * height * numChannels, 'h')
+  sb.get(shorts)
+  sb = None
+  # Deinterleave channels and convert to unsigned short
+  # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
+  # With Weaver: fast
+  channels = wd.deinterleave(shorts, numChannels, channel_index)
+  shorts = None
+  #
+  if toUnsigned:
+    for s in channels:
+      wd.toUnsigned(s)
+  # With python array sampling: very slow, and not just from iterating whole array once per channel
+  #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
+  #channels = [shorts[i::numChannels] for i in seq]
+  if asImagePlus:
+    return [ImagePlus(str(i), ShortProcessor(width, height, s, None)) for i, s in enumerate(channels)]
+  else:
+    return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
+
 
 if KLB:
   __klb__ = KLB.newInstance()
