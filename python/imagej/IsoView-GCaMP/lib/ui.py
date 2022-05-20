@@ -13,6 +13,7 @@ from net.imglib2.type.numeric.real import FloatType
 from ij import IJ
 from java.lang import Number
 from java.awt import Dimension
+from java.util import Comparator
 from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
 from javax.swing.table import AbstractTableModel, TableRowSorter
 
@@ -238,7 +239,7 @@ class DataTable(AbstractTableModel):
       self.dataType = dataType
     except:
       # Not iterable: a Number, String, etc. so all columns have the same
-      self.dataType = [dataType for _ in xrange(len(rows[0])]
+      self.dataType = [dataType for _ in xrange(len(rows[0]))]
     self.onCellClickFn = onCellClickFn
     self.onRowClickFn = onRowClickFn
   def getColumnName(self, col):
