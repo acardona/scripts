@@ -278,7 +278,7 @@ def showTable(rows, title="Table", column_names=None, dataType=Number, width=400
      
      return: a tuple with the JTable and the JFrame
   """
-  table_data = DataTable(rows, column_names=column_names)
+  table_data = DataTable(rows, column_names=column_names, onCellClickFn=onCellClickFn, onRowClickFn=onRowClickFn)
   table = JTable(table_data)
   table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
   #table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
