@@ -218,9 +218,12 @@ def defineConverter(fromType,
       toType: the net.imglib2.Type to see.
       classname: optional, will be made up if not defined.
       fromMethod: the method for reading the value from the fromType.
-                  Defaults to getRealFloat form the RealType interface. 
+                  Defaults to getRealFloat form the RealType interface.
+      fromMethodReturnType: the return type of the method, e.g., "F" for native float or e.g., UnsignedByteType for class.
       toMethod: the method for setting the value to the toType.
-                Defaults to setReal from the RealType interface. """
+                Defaults to setReal from the RealType interface.
+      toMethodReturnType: like fromMethodReturnType.
+  """
 
   if "" == classname:
     classname = "asm/converters/%sTo%sConverter" % (fromType.getSimpleName(), toType.getSimpleName())
@@ -241,7 +244,7 @@ def defineConverter(fromType,
   cw = ClassWriter(ClassWriter.COMPUTE_FRAMES)
   cw.visit(Opcodes.V1_8,                      # java version
            Opcodes.ACC_PUBLIC,                # public class
-           classname,                        # package and class name
+           classname,                         # package and class name
            class_signature,                   # signature (None means not generic)
            class_object,                      # superclass
            [Type.getInternalName(Converter)]) # array of interfaces
