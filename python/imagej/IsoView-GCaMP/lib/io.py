@@ -30,6 +30,7 @@ from ij.process import ShortProcessor
 from synchronize import make_synchronized
 from util import syncPrint, syncPrintQ, newFixedThreadPool
 from ui import showStack, showBDV
+from io_asm import DAT_handler
 try:
   # Needs 'SiMView' Fiji update site enabled
   from org.janelia.simview.klb import KLB
@@ -44,19 +45,7 @@ except:
 from com.google.gson import GsonBuilder
 from math import ceil
 from itertools import imap
-try:
-  from fiji.scripting import Weaver
-  # Check if the tools.jar is in the classpath
-  try:
-    from java.lang import Class
-    Class.forName("com.sun.tools.javac.Main")
-  except:
-    print "*** tools.jar not in the classpath ***"
-    Weaver = None
-except:
-  print "*** fiji.scripting.Weaver NOT installed ***"
-  Weaver = None
-  print sys.exc_info()
+
 
 
 def findFilePaths(srcDir, extension):
@@ -125,45 +114,6 @@ def readUnsignedBytes(path, dimensions, header=0):
     ra.close()
 
 
-# An inlined java method for deinterleaving a short[] array
-# such as from .dat FIBSEM files where channels are stored
-# spatially array-adjacent, i.e. for 2 channels, 2 consecutive shorts.
-if Weaver:
-  wd = Weaver.method("""
-static public final void toUnsigned(final short[] signed) {
-  short min = 32767; // max possible signed short value
-  for (int i=0; i<signed.length; ++i) {
-    if (signed[i] < min) min = signed[i];
-  }
-  if (min < 0) {
-    for (int i=0; i<signed.length; ++i) {
-      signed[i] -= min;
-    }
-  }
-}
-
-static public final short[][] deinterleave(final short[] source,
-                                           final int numChannels,
-                                           final int channel_index) {
-  if (channel_index >= 0) {
-    // Read a single channel
-    final short[] shorts = new short[source.length / numChannels];
-    for (int i=channel_index, k=0; i<source.length; ++k, i+=numChannels) {
-      shorts[k] = source[i];
-    }
-    return new short[][]{shorts};
-  }
-  final short[][] channels = new short[numChannels][source.length / numChannels];
-  for (int i=0, k=0; i<source.length; ++k) {
-    for (int c=0; c<numChannels; ++c, ++i) {
-      channels[c][k] = source[i];
-    }
-  }
-  return channels;
-}
-""", [], False) # no imports, and don't show code
-
-
 def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, asImagePlus=False, toUnsigned=True):
   """ Read a file from Shan Xu's FIBSEM software, where two or more channels are interleaved.
       Assumes channels are stored in 16-bit.
@@ -209,12 +159,12 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
   # Deinterleave channels and convert to unsigned short
   # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
   # With Weaver: fast
-  channels = wd.deinterleave(shorts, numChannels, channel_index)
+  channels = DAT_handler.deinterleave(shorts, numChannels, channel_index)
   shorts = None
   #
   if toUnsigned:
     for s in channels:
-      wd.toUnsigned(s)
+      DAT_handler.toUnsigned(s)
   # With python array sampling: very slow, and not just from iterating whole array once per channel
   #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
   #channels = [shorts[i::numChannels] for i in seq]
