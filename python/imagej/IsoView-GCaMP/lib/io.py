@@ -158,7 +158,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
   sb = None
   # Deinterleave channels and convert to unsigned short
   # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
-  # With Weaver: fast
+  # With ASM: fast
   channels = DAT_handler.deinterleave(shorts, numChannels, channel_index)
   shorts = None
   #
