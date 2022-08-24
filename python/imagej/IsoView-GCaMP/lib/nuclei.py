@@ -4,12 +4,14 @@ from lib.synthetic import virtualPointsRAI
 from lib.ui import showStack
 from lib.util import newFixedThreadPool, Task
 from lib.io import writeZip, ImageJLoader
+from lib.converter import makeCompositeToRealConverter
 from net.imglib2 import KDTree, FinalInterval
 from net.imglib2.neighborsearch import RadiusNeighborSearchOnKDTree
 from net.imglib2.view import Views
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.util import ImgUtil, Intervals
 from net.imglib2.algorithm.math.ImgMath import compute, add, sub, maximum
+from java.lang import Math
 
 
 def doGPeaks(img, params):
@@ -151,11 +153,13 @@ def maxProjectLastDimension(img, strategy="1by1", chunk_size=0):
         return Views.hyperSlice(img, last_dimension, index)
 
       # The first n_threads mergeMax:
+      n = img.dimension(last_dimension)
       futures = [exe.submit(Task(mergeMax, hyperSlice(i*2), hyperSlice(i*2 +1), imgTs[i]))
-                 for i in xrange(n_threads)]
+                 for i in xrange(min(n_threads, (n if 0 == n % 2 else n-1) -1 ))]
       # As soon as one finishes, merge it with the next available hyperSlice
       next = n_threads
       while len(futures) > 0: # i.e. not empty
+        print len(futures)
         imgT = futures.pop(0).get()
         if next < img.dimension(last_dimension):
           futures.append(exe.submit(Task(mergeMax, imgT, hyperSlice(next), imgT)))
@@ -192,7 +196,7 @@ def maxProjectLastDimension(img, strategy="1by1", chunk_size=0):
         futures = [exe.submit(Task(projectMax, img, minCS + [offset], maxCS + [min(offset + chunk_size, img.dimension(last_dimension)) -1]))
                    for offset in xrange(0, img.dimension(last_dimension), chunk_size)]
         
-        return reduce(lambda f1, f2: compute(maximum(f1.get(), f2.get())).into(f1.get(), futures))
+        return reduce(lambda f1, f2: compute(maximum(f1.get(), f2.get())).into(f1.get()), futures).get()
       finally:
         exe.shutdownNow()
     else:
