@@ -616,8 +616,9 @@ def export8bitN5(filepaths,
     
     if invert:
       sp.invert()
-    
-    CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None) # far less memory requirements than NormalizeLocalContrast, and faster.
+
+    if blockRadius and n_bins and slope:
+      CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None) # far less memory requirements than NormalizeLocalContrast, and faster.
     minimum, maximum = autoAdjust(sp)
 
     # Transform and convert image to 8-bit, mapping to display range
@@ -644,6 +645,7 @@ def export8bitN5(filepaths,
     return aimg
     
 
+  CLAHE_params = CLAHE_params if CLAHE_params else [None, None, None]
   blockRadius, n_bins, slope = CLAHE_params
 
   # A CacheLoader that interprets the list of filepaths as a 3D volume: a stack of 2D slices
