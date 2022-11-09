@@ -42,6 +42,7 @@ from net.imglib2 import FinalInterval
 from net.imglib2.type.PrimitiveType import BYTE
 from net.imglib2.converter import RealUnsignedByteConverter
 from net.imglib2.loops import LoopBuilder
+from net.imglib2.algorithm.math import ImgMath
 from java.awt.event import KeyAdapter, KeyEvent
 from jarray import zeros, array
 from functools import partial
@@ -632,14 +633,15 @@ def export8bitN5(filepaths,
     imgA = RealViews.transform(imgI, affine)
     imgT = Views.zeroMin(Views.interval(imgA, img))
     # Convert to 8-bit
-    imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=False) # use IterableInterval
+    imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
     aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
     # ImgUtil copies multi-threaded, which is not appropriate here as there are many other images being copied too
     #ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg)
     
     # Single-threaded copy
-    copier = createBiConsumerTypeSet(UnsignedByteType)
-    LoopBuilder.setImages(imgMinMax, aimg).forEachPixel(copier)
+    #copier = createBiConsumerTypeSet(UnsignedByteType)
+    #LoopBuilder.setImages(imgMinMax, aimg).forEachPixel(copier)
+    ImgMath.compute(imgMinMax).into(aimg)
     
     img = imgI = imgA = imgMinMax = imgT = None
     return aimg
