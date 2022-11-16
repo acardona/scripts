@@ -38,6 +38,7 @@ maxCoords = [13724, 11455, 5120]
 view = Views.interval(img, minCoords, maxCoords)
 imp = showStack(Views.zeroMin(view), title="octo_AL_crop")
 
+"""
 
 # To write the subvolume as N5, do:
 targetN5dir = "/home/albert/Desktop/t2/"
@@ -46,3 +47,4 @@ block_size = [256, 256, 256]
 gzip_compression_level = 0 # from 0 (none) to 9 (max), often 4 is a good trade off in speed vs amount of de/compression
 writeN5(view, targetN5dir, name_subvolume, block_size, gzip_compression_level=gzip_compression_level)
 
+"""
