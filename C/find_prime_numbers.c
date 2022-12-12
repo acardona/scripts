@@ -1,3 +1,6 @@
+// Albert Cardona ca. 2007, rewritten in 2022
+// See also https://albert.rierol.net/doodle_programming.html#1
+
 #include <stdio.h>
 #include <stdlib.h>
 
