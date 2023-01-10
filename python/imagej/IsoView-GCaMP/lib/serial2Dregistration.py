@@ -39,8 +39,8 @@ from net.imglib2.util import ImgUtil, Intervals
 from net.imglib2.realtransform import RealViews, AffineTransform2D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2 import FinalInterval
-from net.imglib2.type.PrimitiveType import BYTE
-from net.imglib2.converter import RealUnsignedByteConverter
+from net.imglib2.type.PrimitiveType import BYTE, SHORT
+from net.imglib2.converter import RealUnsignedByteConverter, RealUnsignedShortConverter
 from net.imglib2.loops import LoopBuilder
 from net.imglib2.algorithm.math import ImgMath
 from java.awt.event import KeyAdapter, KeyEvent
@@ -101,7 +101,6 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
   params: dictionary of parameters necessary for BlockMatching.
   exeload: an ExecutorService for parallel loading of image files.
   load: a function that knows how to load the image from the filepath.
-
   return False if the CSV file already exists, True if it has to be computed.
   """
 
@@ -582,7 +581,6 @@ def export8bitN5(filepaths,
                  block_size=[128,128,128]):
   """
   Export into an N5 volume, in parallel, in 8-bit.
-
   filepaths: the ordered list of filepaths, one per serial section.
   loadFn: a function to load a filepath into an ImagePlus.
   name: name to assign to the N5 volume.
@@ -625,6 +623,7 @@ def export8bitN5(filepaths,
     # Transform and convert image to 8-bit, mapping to display range
     img = ArrayImgs.unsignedShorts(sp.getPixels(), [sp.getWidth(), sp.getHeight()])
     sp = None
+    
     imp = None
     # Must use linear interpolation for subpixel precision
     affine = AffineTransform2D()
@@ -632,18 +631,25 @@ def export8bitN5(filepaths,
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
     imgA = RealViews.transform(imgI, affine)
     imgT = Views.zeroMin(Views.interval(imgA, img))
+    
     # Convert to 8-bit
-    imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
-    aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
+    #imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
+    #imgMinMax = convert2(imgT, RealUnsignedShortConverter(minimum, maximum), UnsignedShortType, randomAccessible=True) # use IterableInterval
+
+    aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img))
+    #aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
+    
     # ImgUtil copies multi-threaded, which is not appropriate here as there are many other images being copied too
     #ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg)
     
     # Single-threaded copy
     #copier = createBiConsumerTypeSet(UnsignedByteType)
     #LoopBuilder.setImages(imgMinMax, aimg).forEachPixel(copier)
-    ImgMath.compute(imgMinMax).into(aimg)
-    
+    #ImgMath.compute(imgMinMax).into(aimg)
+    ImgMath.compute(imgT).into(aimg)
+
     img = imgI = imgA = imgMinMax = imgT = None
+
     return aimg
     
 
@@ -660,8 +666,8 @@ def export8bitN5(filepaths,
   # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,
   # and preload sections ahead for the whole blockSize[2] dimension.
 
-
-  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE)
+  #cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE)
+  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedShortType, SHORT)  
 
   exe_preloader = newFixedThreadPool(n_threads=min(block_size[2], n5_threads if n5_threads > 0 else numCPUs()), name="preloader")
 
@@ -778,43 +784,3 @@ def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguratio
   frame.addWindowListener(ExecutorCloser(exe))
 
   return table, frame
- 
-  
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
