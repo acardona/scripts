@@ -15,7 +15,7 @@
 # 2. Register each section to its adjacent, 2nd adjacent, 3rd adjacent ...
 # 3. Jointly optimize the pose of every section.
 
-import os, sys, traceback
+import os, sys, traceback, csv
 from os.path import basename
 from mpicbg.ij.blockmatching import BlockMatching
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration
@@ -25,7 +25,7 @@ from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/maste
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
 from java.lang import Double, System, Runnable
-from net.imglib2.type.numeric.integer import UnsignedShortType
+from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
 from ij import IJ, ImageListener, ImagePlus, WindowManager
@@ -33,13 +33,12 @@ from net.imglib2.img.io.proxyaccess import ShortAccessProxy
 from net.imglib2.img.cell import LazyCellImg, Cell, CellGrid
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.img.array import ArrayImgs
-from net.imglib2.img import ImgView
-from net.imglib2.type.numeric.integer import UnsignedByteType
+from net.imglib2.img import ImgView 
 from net.imglib2.util import ImgUtil, Intervals
 from net.imglib2.realtransform import RealViews, AffineTransform2D
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2 import FinalInterval
-from net.imglib2.type.PrimitiveType import BYTE
+from net.imglib2.type.PrimitiveType import BYTE, SHORT
 from net.imglib2.converter import RealUnsignedByteConverter
 from net.imglib2.loops import LoopBuilder
 from net.imglib2.algorithm.math import ImgMath
@@ -568,20 +567,47 @@ def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, 
   return comp
 
 
-def export8bitN5(filepaths,
-                 loadFn,
-                 img_dimensions,
-                 matrices,
-                 name,
-                 exportDir,
-                 interval,
-                 gzip_compression=6,
-                 invert=True,
-                 CLAHE_params=[400, 256, 3.0],
-                 n5_threads=0, # 0 means as many as CPU cores
-                 block_size=[128,128,128]):
+def computeMaxInterval(matrices_csvpath):
+  if os.path.exists(matrices_csvpath):
+    with open(matrices_csvpath, 'r') as csvfile:
+      reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+      # First line contains parameter names, second line their values
+      headerParams = reader.next(), reader.next()
+      # skip header with column names
+      headerColumnNames = reader.next()
+      # Find the lowest coordinate and the highest coordinate
+      minX, minY, maxX, maxY = 0, 0, 0, 0
+      maxZ = -1
+      for row in reader:
+        values = map(float, row)
+        minX = min(minX, values[2])
+        minY = min(minY, values[5])
+        maxX = max(maxX, values[2])
+        maxY = max(maxY, values[5])
+        maxZ += 1
+      return FinalInterval([int(minX), int(minY), 0], [int(maxX+0.5), int(maxY+0.5), maxZ])
+  else:
+    print "File does not exist: ", matrices_csvpath
+
+
+def export8bitN5(*args):
+  return exportN5(*(args + [True]))
+
+def exportN5(filepaths,
+            loadFn,
+            img_dimensions,
+            matrices,
+            name,
+            exportDir,
+            interval,
+            gzip_compression=6,
+            invert=True,
+            CLAHE_params=[400, 256, 3.0],
+            n5_threads=0, # 0 means as many as CPU cores
+            block_size=[128,128,128],
+            as8bit=False):
   """
-  Export into an N5 volume, in parallel, in 8-bit.
+  Export into an N5 volume, in parallel, in 8-bit or 16-bit
 
   filepaths: the ordered list of filepaths, one per serial section.
   loadFn: a function to load a filepath into an ImagePlus.
@@ -594,6 +620,7 @@ def export8bitN5(filepaths,
   CLAHE_params: defaults to [400, 256, 3.0]. If not None, the a list of the 3 parameters needed for a CLAHE filter to apply to each image.
   n5_threads: defaults to 0, meaning as many as CPU cores.
   block_size: defaults to 128x128x128 px. A list of 3 integer numbers, the dimensions of each individual block.
+  as8bit: defaults to False.
   """
 
   dims = Intervals.dimensionsAsLongArray(interval)
@@ -604,7 +631,7 @@ def export8bitN5(filepaths,
                      dims[1],
                      1]
 
-  def asNormalizedUnsignedByteArrayImg(interval, invert, blockRadius, n_bins, slope, matrices, index, imp):
+  def asNormalizedUnsignedArrayImg(as8bit, interval, invert, blockRadius, n_bins, slope, matrices, index, imp):
     sp = imp.getProcessor() # ShortProcessor
     # Crop to interval if needed
     x = interval.min(0)
@@ -618,13 +645,12 @@ def export8bitN5(filepaths,
     if invert:
       sp.invert()
 
+    # Normalize: with Contrast Limited Adaptive Histogram Equalization
     if blockRadius and n_bins and slope:
       CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None) # far less memory requirements than NormalizeLocalContrast, and faster.
-    minimum, maximum = autoAdjust(sp)
-
-    # Transform and convert image to 8-bit, mapping to display range
+ 
+    # Transform
     img = ArrayImgs.unsignedShorts(sp.getPixels(), [sp.getWidth(), sp.getHeight()])
-    sp = None
     imp = None
     # Must use linear interpolation for subpixel precision
     affine = AffineTransform2D()
@@ -632,23 +658,30 @@ def export8bitN5(filepaths,
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
     imgA = RealViews.transform(imgI, affine)
     imgT = Views.zeroMin(Views.interval(imgA, img))
-    # Convert to 8-bit
-    imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
-    aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
+    
+    # Convert to 8-bit, mapping to display range
+    if as8bit:
+      minimum, maximum = autoAdjust(sp)
+      imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
+      aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
+    else:
+      imgMinMax = imgT
+      aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img))
+    
     # ImgUtil copies multi-threaded, which is not appropriate here as there are many other images being copied too
     #ImgUtil.copy(ImgView.wrap(imgMinMax, aimg.factory()), aimg)
     
     # Single-threaded copy
     #copier = createBiConsumerTypeSet(UnsignedByteType)
     #LoopBuilder.setImages(imgMinMax, aimg).forEachPixel(copier)
+
+    # Use my own copier, which actually works
     ImgMath.compute(imgMinMax).into(aimg)
     
-    img = imgI = imgA = imgMinMax = imgT = None
+    img = imgI = imgA = imgMinMax = imgT = sp = None
     return aimg
-    
-
-  CLAHE_params = CLAHE_params if CLAHE_params else [None, None, None]
-  blockRadius, n_bins, slope = CLAHE_params
+  
+  blockRadius, n_bins, slope = CLAHE_params if CLAHE_params else [None, None, None]
 
   # A CacheLoader that interprets the list of filepaths as a 3D volume: a stack of 2D slices
   loader = SectionCellLoader(filepaths,
@@ -656,14 +689,17 @@ def export8bitN5(filepaths,
                                                 interval, invert, blockRadius, n_bins, slope, matrices),
                              loadFn=loadFn)
 
+  t = UnsignedByteType if as8bit else UnsignedShortType
+  nt = BYTE if as8bit else SHORT
+    
+  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, t, nt)
+
+  exe_preloader = newFixedThreadPool(n_threads=min(block_size[2], n5_threads if n5_threads > 0 else numCPUs()), name="preloader")
+
+
   # How to preload block_size[2] files at a time? Or at least as many as numCPUs()?
   # One possibility is to query the SoftRefLoaderCache.map for its entries, using a ScheduledExecutorService,
   # and preload sections ahead for the whole blockSize[2] dimension.
-
-
-  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, UnsignedByteType, BYTE)
-
-  exe_preloader = newFixedThreadPool(n_threads=min(block_size[2], n5_threads if n5_threads > 0 else numCPUs()), name="preloader")
 
   def preload(cachedCellImg, loader, block_size, filepaths, exe):
     """
@@ -717,7 +753,6 @@ def export8bitN5(filepaths,
   finally:
     preloader.shutdown()
     exe_preloader.shutdown()
-
 
 
 class SetStackSlice(Runnable):
