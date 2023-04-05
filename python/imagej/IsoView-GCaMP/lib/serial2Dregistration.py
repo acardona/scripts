@@ -476,7 +476,7 @@ class TranslatedSectionGet(LazyCellImg.Get):
     affine.set(self.matrices[index])
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
     imgA = RealViews.transform(imgI, affine)
-    imgT = Views.zeroMin(Views.interval(imgA, self.interval))  # FAILING HERE: the zeroMin
+    imgT = Views.zeroMin(Views.interval(imgA, self.interval))
     aimg = img.factory().create(self.interval)
     ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),
                  aimg)
