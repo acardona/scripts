@@ -21,6 +21,7 @@ sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from mpicbg.models import TranslationModel2D
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from net.imglib2.type.numeric.integer import UnsignedShortType
+from net.imglib2 import FinalInterval
 from lib.util import syncPrint
 from lib.io import findFilePaths, readFIBSEMdat
 from lib.registration import loadMatrices
@@ -48,6 +49,7 @@ properties = {
  'n_threads': 32,
  'invert': True,
  'CLAHE_params': None, # [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
+ 'preload': 5,
 }
 
 # Parameters for blockmatching
@@ -103,8 +105,10 @@ else:
 print "Filepaths found:", len(filepaths)
 
 # Use the whole interval
-interval = computeMaxInterval(os.path.join(csvDir, "matrices.csv"), dimensions, limit=12554) # NOTE limit is unnecesary here, the -10000 displacement is in the first set for some reason.
-print "Interval", interval
+interval3D = computeMaxInterval(os.path.join(csvDir, "matrices.csv"), dimensions, limit=12554) # NOTE limit is unnecesary here, the -10000 displacement is in the first set for some reason.
+print "Interval", interval3D
+# Use only 2 dimensions
+interval = FinalInterval([interval3D.min(0), interval3D.min(1)], [interval3D.max(0), interval3D.max(1)])
 
 # Run the alignment
 matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
