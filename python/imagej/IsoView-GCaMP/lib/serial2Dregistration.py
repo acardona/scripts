@@ -66,8 +66,6 @@ def loadImp(filepath):
 def loadUnsignedShort(filepath, invert=True, CLAHE_params=None):
   """ Returns an ImgLib2 ArrayImg """
   imp = loadImp(filepath)
-  print "loadedUnsignedShort filepath:", filepath
-  print "loadedUnsignedShort imp:", imp
   if invert:
     imp.getProcessor().invert()
   if CLAHE_params is not None:
@@ -469,16 +467,12 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.cache.clear()
 
   def get(self, index):
-    img = self.cache(index)
-    print "TranslatedSectionGet.get: ", img
     return self.cache(index) # ENORMOUS Thread contention in accessing every pixel
 
   def makeCell(self, index):
     self.preloadCells(index) # preload others in the background
     img = self.loadImg(self.filepaths[index])
-    print "makeCell img:", img
     affine = AffineTransform2D()
-    print "makeCell matrix:", self.matrices[index]
     affine.set(self.matrices[index])
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
     imgA = RealViews.transform(imgI, affine)
