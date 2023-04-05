@@ -47,7 +47,7 @@ from jarray import zeros, array
 from functools import partial
 from java.util.concurrent import Executors, TimeUnit
 # From lib
-from io import readUnsignedShorts, read2DImageROI, ImageJLoader, lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
+from io import lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException
 from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures
 from registration import loadMatrices, saveMatrices
@@ -66,6 +66,8 @@ def loadImp(filepath):
 def loadUnsignedShort(filepath, invert=True, CLAHE_params=None):
   """ Returns an ImgLib2 ArrayImg """
   imp = loadImp(filepath)
+  print "loadedUnsignedShort filepath:", filepath
+  print "loadedUnsignedShort imp:", imp
   if invert:
     imp.getProcessor().invert()
   if CLAHE_params is not None:
@@ -467,16 +469,20 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.cache.clear()
 
   def get(self, index):
+    img = self.cache(index)
+    print "TranslatedSectionGet.get: ", img
     return self.cache(index) # ENORMOUS Thread contention in accessing every pixel
 
   def makeCell(self, index):
     self.preloadCells(index) # preload others in the background
     img = self.loadImg(self.filepaths[index])
+    print "makeCell img:", img
     affine = AffineTransform2D()
+    print "makeCell matrix:", self.matrices[index]
     affine.set(self.matrices[index])
     imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
     imgA = RealViews.transform(imgI, affine)
-    imgT = Views.zeroMin(Views.interval(imgA, self.interval))
+    imgT = Views.zeroMin(Views.interval(imgA, self.interval))  # FAILING HERE: the zeroMin
     aimg = img.factory().create(self.interval)
     ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),
                  aimg)
@@ -548,6 +554,23 @@ class OnClosing(ImageListener):
   def imageUpdated(self, imp):
     pass
 
+def viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval):
+  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
+  def loadImg(filepath):
+    return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"])
+  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
+  print "viewAlignedPlain, cellImg:", cellImg
+  print "viewAlignedPlain:", cellImg.getCellGrid()
+  print "viewAlignedPlain:", cellImg.getCells()
+  print "viewAlignedPlain, properties::name : ", properties.get("name", "")
+  ra = cellImg.randomAccess()
+  ra.setPosition([0, 0, 0])
+  print "RandomAccess at 0,0,0: ", ra.get()
+  imp = IL.wrap(cellImg, properties.get("name", ""))
+  imp.show()
+  return cellImg
+
+
 def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval):
   matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
   def loadImg(filepath):
@@ -567,7 +590,12 @@ def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, 
   return comp
 
 
-def computeMaxInterval(matrices_csvpath):
+def computeMaxInterval(matrices_csvpath, dimensions, limit=None):
+  """
+     matrices_csvpath: the file path to the matrices.csv file.
+     dimensions: the dimensions of the images, assumes all images have the same dimensions.
+     limit: defaults to None; if it's integer, stop parsing X,Y at that many sections.
+  """
   if os.path.exists(matrices_csvpath):
     with open(matrices_csvpath, 'r') as csvfile:
       reader = csv.reader(csvfile, delimiter=',', quotechar='"')
@@ -579,13 +607,14 @@ def computeMaxInterval(matrices_csvpath):
       minX, minY, maxX, maxY = 0, 0, 0, 0
       maxZ = -1
       for row in reader:
-        values = map(float, row)
-        minX = min(minX, values[2])
-        minY = min(minY, values[5])
-        maxX = max(maxX, values[2])
-        maxY = max(maxY, values[5])
+        if not limit or maxZ <= limit:
+          values = map(float, row)
+          minX = min(minX, values[2])
+          minY = min(minY, values[5])
+          maxX = max(maxX, values[2])
+          maxY = max(maxY, values[5])
         maxZ += 1
-      return FinalInterval([int(minX), int(minY), 0], [int(maxX+0.5), int(maxY+0.5), maxZ])
+      return FinalInterval([int(minX), int(minY), 0], [int(dimensions[0]+ maxX + 0.5), int(dimensions[1] + maxY + 0.5), maxZ])
   else:
     print "File does not exist: ", matrices_csvpath
 
