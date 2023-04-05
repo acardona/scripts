@@ -24,7 +24,7 @@ from net.imglib2.type.numeric.integer import UnsignedShortType
 from lib.util import syncPrint
 from lib.io import findFilePaths, readFIBSEMdat
 from lib.registration import loadMatrices
-from lib.serial2Dregistration import setupImageLoader, align, viewAligned, exportN5, computeMaxInterval
+from lib.serial2Dregistration import setupImageLoader, align, viewAligned, viewAlignedPlain, exportN5, computeMaxInterval
 from ij import IJ
 
 
@@ -100,15 +100,24 @@ else:
 
 
 
+print "Filepaths found:", len(filepaths)
+
 # Use the whole interval
-interval = computeMaxInterval(os.path.join(csvDir, "matrices.csv"))
-#syncPrint("View interval: ")
+interval = computeMaxInterval(os.path.join(csvDir, "matrices.csv"), dimensions, limit=12554) # NOTE limit is unnecesary here, the -10000 displacement is in the first set for some reason.
+print "Interval", interval
 
 # Run the alignment
 matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
 
+
+#for i, m in enumerate(matrices):
+#  print m
+
+
+
+
 # Visualize the result of the alignment with a VirtualStack
-viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, interval)
+img = viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, interval)
 
 
 
