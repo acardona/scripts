@@ -24,7 +24,11 @@ def transform(img, matrix, interval):
 
 matrix = array([1.0, 0.0, 0.0, 0.0, 1.0, 0.0], 'd')
 
-interval = FinalInterval([0, 0, 0], [20000, 20000, 34742])
+# FAILS: it's 3D
+#interval = FinalInterval([0, 0, 0], [20000, 20000, 34742])
+
+# Works: a 2D interval
+interval = FinalInterval([0, 0], [20000, 20000])
 
 imp = IJ.openImage("https://imagej.nih.gov/ij/images/AuPbSn40.jpg");
 img = IL.wrap(imp)
