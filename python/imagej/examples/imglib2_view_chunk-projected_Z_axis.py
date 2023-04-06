@@ -29,5 +29,7 @@ imgChunkProjected = Views.stack([project(chunk).view() for chunk in chunks])
 impCP = IL.show(imgChunkProjected, "Chunk-projected every " + str(inc))
 
 
+# Another approach would use Converters.collapse(Views.interval ... on z axis)
+# and Converters.compose with a function to run the projecting function on the vector for each pixel.
 
 
