@@ -6,7 +6,7 @@ from java.lang.reflect.Array import newInstance as newArray
 from java.lang import Double
 from ij import IJ, ImagePlus, ImageStack
 from mpicbg.ij.blockmatching import BlockMatching
-from ij.process import ImageProcessor, FloatProcessor
+from ij.process import ImageProcessor, ShortProcessor
 from jitk.spline import ThinPlateR2LogRSplineKernelTransform 
 
 
@@ -113,7 +113,7 @@ def transformImage(imp, transform):
   """
   width, height = imp.getWidth(), imp.getHeight()
   ip = imp.getProcessor()
-  fpT = FloatProcessor(width, height)
+  spT = ShortProcessor(width, height)
   ip.setInterpolate(True)
   ip.setInterpolationMethod(ImageProcessor.BILINEAR) # can also use BICUBIC
   position = zeros(2, 'd') # double array
@@ -124,23 +124,28 @@ def transformImage(imp, transform):
       position[1] = y
       transform.applyInPlace(position)
       # ImageProcessor.putPixel does array boundary checks
-      fpT.putPixel(x, y, ip.getPixelInterpolated(int(position[0]), int(position[1])))
+      spT.putPixel(x, y, ip.getPixelInterpolated(int(position[0]), int(position[1])))
   
-  return ImagePlus("transformed with " + type(transform).getSimpleName(), fpT)
+  return ImagePlus("transformed with " + type(transform).getSimpleName(), spT)
 
 
 
 # Test:
 
 # Two 16-bit images, the first original and the second deformed by hand non-linearly
-imp1 = IJ.openImage("/home/albert/Desktop/t2/blockmatching_test/08apr22a_gb27932_D4b_12x12_1_00005gr_01767ex.mrc.tif")
-imp2 = IJ.openImage("/home/albert/Desktop/t2/blockmatching_test/08apr22a_gb27932_D4b_12x12_1_00005gr_01767ex_deformed.mrc.tif")
+#imp1 = IJ.openImage("/home/albert/Desktop/t2/blockmatching_test/08apr22a_gb27932_D4b_12x12_1_00005gr_01767ex.mrc.tif")
+#imp2 = IJ.openImage("/home/albert/Desktop/t2/blockmatching_test/08apr22a_gb27932_D4b_12x12_1_00005gr_01767ex_deformed.mrc.tif")
+
+# Using a reproducibly deformed image, generated buy the script "example_generate_elastically_deformed_image.py"
+imp12 = IJ.getImage()
+imp1 = ImagePlus("original", imp12.getStack().getProcessor(1))
+imp2 = ImagePlus("deformed", imp12.getStack().getProcessor(2))
 
 # Parameters
 scale = 1.0 # float; between 0 and 1; to speed up if images are very large.
 meshResolution = 20 # integer; number of points on the side of the grid, e.g., 10 means 10x10 = 100 points.
 blockRadius = 40 # integer; size of the side of a square block used for cross-correlation.
-searchRadius = 40 # integer; maximum distance from each grid point to run cross-correlations at.
+searchRadius = 15 # integer; maximum distance from each grid point to run cross-correlations at.
 minR = 0.1 # float; minimum cross-correlation regression value to accept, discard otherwise. It's the PMCC (Pearson product-moment correlation coefficient)
 rod = 0.9 # float; ratio of best to second-best cross-correlation scores; discard if lower.
 maxCurvature = 1000 # integer; default is 10, we use 1000 for TEM image tile registration.
@@ -156,7 +161,7 @@ impT.show()
 
 stack = ImageStack() # of ShortProcessor
 stack.addSlice("imp1", imp1.getProcessor())
-stack.addSlice("impT", impT.getProcessor().convertToShort(True))
+stack.addSlice("impT", impT.getProcessor())
 stack.addSlice("imp2", imp2.getProcessor())
 impTstack = ImagePlus("imp1 + tranformed imp2 + original imp2", stack)
 impTstack.show()
