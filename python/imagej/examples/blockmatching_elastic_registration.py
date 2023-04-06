@@ -8,6 +8,7 @@ from ij import IJ, ImagePlus, ImageStack
 from mpicbg.ij.blockmatching import BlockMatching
 from ij.process import ImageProcessor, ShortProcessor
 from jitk.spline import ThinPlateR2LogRSplineKernelTransform 
+from mpicbg.ij import ThinPlateSplineMapping
 
 
 # Extract blockmatches between two images
@@ -129,6 +130,12 @@ def transformImage(imp, transform):
   return ImagePlus("transformed with " + type(transform).getSimpleName(), spT)
 
 
+def transformImageFast(imp, thin_plate_spline_transform):
+  impTarget = ImagePlus("transformed", imp.getProcessor().createProcessor(imp.getWidth(), imp.getHeight()))
+  mapping = ThinPlateSplineMapping(thin_plate_spline_transform)
+  mapping.mapInterpolated(imp.getProcessor(), impTarget.getProcessor())
+  return impTarget
+
 
 # Test:
 
@@ -143,7 +150,7 @@ imp2 = ImagePlus("deformed", imp12.getStack().getProcessor(2))
 
 # Parameters
 scale = 1.0 # float; between 0 and 1; to speed up if images are very large.
-meshResolution = 20 # integer; number of points on the side of the grid, e.g., 10 means 10x10 = 100 points.
+meshResolution = 40 # integer; number of points on the side of the grid, e.g., 10 means 10x10 = 100 points.
 blockRadius = 40 # integer; size of the side of a square block used for cross-correlation.
 searchRadius = 15 # integer; maximum distance from each grid point to run cross-correlations at.
 minR = 0.1 # float; minimum cross-correlation regression value to accept, discard otherwise. It's the PMCC (Pearson product-moment correlation coefficient)
@@ -156,7 +163,7 @@ showDisplacementVectors(imp2, pointmatches)
 
 
 thin_plate_spline = computeElasticTransform(pointmatches)
-impT = transformImage(imp2, thin_plate_spline)
+impT = transformImageFast(imp2, thin_plate_spline)
 impT.show()
 
 stack = ImageStack() # of ShortProcessor
