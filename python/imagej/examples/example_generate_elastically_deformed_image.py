@@ -8,6 +8,8 @@ from ij.gui import Overlay, Line, Arrow
 from java.lang.reflect.Array import newInstance as newArray
 from java.lang import Double
 from ij.process import ShortProcessor
+from mpicbg.ij import ThinPlateSplineMapping
+from mpicbg.ij import TransformMapping
 # Create an image for testing blockmatching-based thin-plate spline elastic non-linear registration.
 # The approach: define a grid of pointmatches that don't move, and then move only a few of them,
 # so as to create local deformations.
@@ -69,6 +71,7 @@ def transformImage(imp, transform):
   """
   imp: the ImagePlus to transform.
   transform: the transformation model, such as a thin-plate spline of class ThinPlateR2LogRSplineKernelTransform
+  returns an ImagePlus
   """
   width, height = imp.getWidth(), imp.getHeight()
   ip = imp.getProcessor()
@@ -86,6 +89,29 @@ def transformImage(imp, transform):
       spT.putPixel(x, y, ip.getPixelInterpolated(int(position[0]), int(position[1])))
   
   return ImagePlus("transformed with " + type(transform).getSimpleName(), spT)
+
+
+def transformImageFaster(imp, transform):
+  """
+  imp: the ImagePlus to transform.
+  transform: the transformation model, such as a thin-plate spline of class ThinPlateR2LogRSplineKernelTransform
+  
+  returns an ImagePlus.
+  
+  Runs entirely in java, avoiding jython's slow looping.
+  """
+  # Create an ImageProcessor of the same kind
+  ipT = imp.getProcessor().createProcessor(imp.getWidth(), imp.getHeight())
+  
+  if isinstance(transform, ThinPlateR2LogRSplineKernelTransform):
+    # Somehow, mapInterpolated actually does an inverse transform
+    ThinPlateSplineMapping(transform).mapInterpolated(imp.getProcessor(), ipT) # bilinear
+  else:
+    # Inverse because the transform was computed from source to target,
+    # but here we want to pull source into target
+    TransformMapping(transform).mapInverseInterpolated(imp.getProcessor(), ipT) # bilinear
+  
+  return ImagePlus("transformed with " + type(transform).getSimpleName(), ipT)
 
 
 def createOverlayDisplacementVectors(pointmatches):
