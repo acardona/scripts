@@ -112,6 +112,7 @@ def transformImage(imp, transform):
   imp: the ImagePlus to transform.
   transform: the transformation model from the image to transform to the reference image.
   """
+  # Pixel by pixel method. To delegate entirely to java libraries, see: TransformMapping and TransformMeshMapping
   width, height = imp.getWidth(), imp.getHeight()
   ip = imp.getProcessor()
   spT = ShortProcessor(width, height)
@@ -150,9 +151,9 @@ imp2 = ImagePlus("deformed", imp12.getStack().getProcessor(2))
 
 # Parameters
 scale = 1.0 # float; between 0 and 1; to speed up if images are very large.
-meshResolution = 40 # integer; number of points on the side of the grid, e.g., 10 means 10x10 = 100 points.
-blockRadius = 40 # integer; size of the side of a square block used for cross-correlation.
-searchRadius = 15 # integer; maximum distance from each grid point to run cross-correlations at.
+meshResolution = 20 # integer; number of points on the side of the grid, e.g., 10 means 10x10 = 100 points.
+blockRadius = 100 # integer; size of the side of a square block used for cross-correlation.
+searchRadius = 20 # integer; maximum distance from each grid point to run cross-correlations at.
 minR = 0.1 # float; minimum cross-correlation regression value to accept, discard otherwise. It's the PMCC (Pearson product-moment correlation coefficient)
 rod = 0.9 # float; ratio of best to second-best cross-correlation scores; discard if lower.
 maxCurvature = 1000 # integer; default is 10, we use 1000 for TEM image tile registration.
