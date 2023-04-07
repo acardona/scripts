@@ -127,7 +127,7 @@ def transformImage(imp, transform):
       position[1] = y
       transform.applyInPlace(position)
       # ImageProcessor.putPixel does array boundary checks
-      spT.putPixel(x, y, ip.getPixelInterpolated(int(position[0]), int(position[1])))
+      spT.putPixel(x, y, ip.getPixelInterpolated(position[0], position[1]))
   
   return ImagePlus("transformed with " + type(transform).getSimpleName(), spT)
 
