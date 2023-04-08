@@ -7,10 +7,10 @@ from java.lang import Double
 from ij import IJ, ImagePlus, ImageStack
 from mpicbg.ij.blockmatching import BlockMatching
 from ij.process import ImageProcessor, ShortProcessor
-from jitk.spline import ThinPlateR2LogRSplineKernelTransform 
+from jitk.spline import ThinPlateR2LogRSplineKernelTransform
 from mpicbg.ij import ThinPlateSplineMapping
 from ij.plugin.filter import GaussianBlur
-
+import xStripes_Filter # from xlib_.jar
 
 # Extract blockmatches between two images
 # and then estimate an elastic transformation
@@ -151,7 +151,8 @@ imp2o = IJ.openImage("/home/albert/Desktop/t2/20230407 Alexandra Pacureanu X-ray
 
 # Filter to remove position-invariant vertical and horizontal stripes
 filters = {"gaussian": False,
-           "bandpass": True}
+           "bandpass": True,
+           "stripes": False}
 
 # Pre-filter, option 1: bandpass
 if filters["bandpass"]:
@@ -170,6 +171,23 @@ elif filters["gaussian"]:
   gb.blurFloat(imp1.getProcessor(), sigma, sigma, 0.0002)
   gb.blurFloat(imp2.getProcessor(), sigma, sigma, 0.0002)
 
+# Pre-filtr, option 3: with Xlib "Stripes Filter" followed by a Gaussian blur with small sigma
+elif filters["stripes"]:
+  imp1 = ImagePlus(imp1o.getTitle(), imp1o.getProcessor().convertToFloat())
+  imp2 = ImagePlus(imp2o.getTitle(), imp2o.getProcessor().convertToFloat())
+  gb = GaussianBlur()
+  sigma = 5.0
+  for imp in [imp1, imp2]:
+    # Doesn't work because it opens a new image, doesn't modify the image in place.
+    #IJ.run(imp, "Stripes Filter", "filter=Wavelet-FFT direction=Both types=Daubechies wavelet=DB15 border=[Symmetrical mirroring] image=don't decomposition=0:5 damping=5 large=100000000 small=1 tolerance=1 half=5 offset=1");
+    # Second attempt: doesn't work either, also opens a new image.
+    # AWAITING feedback from Beat Münch, the author of the xlib_.jar library.
+    sf = xStripes_Filter()
+    sf.setup("filter=Wavelet-FFT direction=Both types=Daubechies wavelet=DB15 border=[Symmetrical mirroring] image=don't decomposition=0:5 damping=5 large=100000000 small=1 tolerance=1 half=5 offset=1", imp)
+    sf.run(imp.getProcessor())
+    gb.blurFloat(imp.getProcessor(), sigma, sigma, 0.0002)
+
+
 # Parameters
 scale = 1.0 # float; between 0 and 1; to speed up if images are very large.
 meshResolution = 20 # integer; number of points on the side of the grid, e.g., 10 means 10x10 = 100 points.
@@ -187,9 +205,10 @@ thin_plate_spline = computeElasticTransform(pointmatches)
 impT = transformImageFast(imp2o, thin_plate_spline)
 
 stack = ImageStack() # of ShortProcessor
-stack.addSlice("imp1", imp1o.getProcessor())
-stack.addSlice("impT", impT.getProcessor())
-stack.addSlice("imp2", imp2o.getProcessor())
+stack.addSlice("imp1", imp1o.getProcessor()) # The first image, intact
+stack.addSlice("impT", impT.getProcessor())  # The second image, transformed
+stack.addSlice("imp2", imp2o.getProcessor()) # The second image again, intact, for comparison
+
 impTstack = ImagePlus("imp1 + tranformed imp2 + original imp2", stack)
 impTstack.show()
 

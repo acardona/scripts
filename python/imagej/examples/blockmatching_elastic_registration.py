@@ -7,7 +7,7 @@ from java.lang import Double
 from ij import IJ, ImagePlus, ImageStack
 from mpicbg.ij.blockmatching import BlockMatching
 from ij.process import ImageProcessor, ShortProcessor
-from jitk.spline import ThinPlateR2LogRSplineKernelTransform 
+from jitk.spline import ThinPlateR2LogRSplineKernelTransform
 from mpicbg.ij import ThinPlateSplineMapping
 
 
@@ -132,6 +132,14 @@ def transformImage(imp, transform):
 
 
 def transformImageFast(imp, thin_plate_spline_transform):
+  """
+  imp: the ImagePlus to transform
+  thin_plate_spline_transform: an instance of ThinPlateR2LogRSplineKernelTransform
+  
+  This method is specific of ThinPlateR2LogRSplineKernelTransform because
+  it uses a dedicated class for execution, named ThinPlateSplineMapping.
+  By avoiding the heavy overhead of looping over all pixels with jython, execution is considerably faster.
+  """
   impTarget = ImagePlus("transformed", imp.getProcessor().createProcessor(imp.getWidth(), imp.getHeight()))
   mapping = ThinPlateSplineMapping(thin_plate_spline_transform)
   mapping.mapInterpolated(imp.getProcessor(), impTarget.getProcessor())
@@ -151,9 +159,9 @@ imp2 = ImagePlus("deformed", imp12.getStack().getProcessor(2))
 
 # Parameters
 scale = 1.0 # float; between 0 and 1; to speed up if images are very large.
-meshResolution = 20 # integer; number of points on the side of the grid, e.g., 10 means 10x10 = 100 points.
-blockRadius = 100 # integer; size of the side of a square block used for cross-correlation.
-searchRadius = 20 # integer; maximum distance from each grid point to run cross-correlations at.
+meshResolution = 50 # integer; number of points on the side of the grid, e.g., 10 means 10x10 = 100 points.
+blockRadius = 40 # integer; size of the side of a square block used for cross-correlation.
+searchRadius = 35 # integer; maximum distance from each grid point to run cross-correlations at.
 minR = 0.1 # float; minimum cross-correlation regression value to accept, discard otherwise. It's the PMCC (Pearson product-moment correlation coefficient)
 rod = 0.9 # float; ratio of best to second-best cross-correlation scores; discard if lower.
 maxCurvature = 1000 # integer; default is 10, we use 1000 for TEM image tile registration.
@@ -168,9 +176,9 @@ impT = transformImageFast(imp2, thin_plate_spline)
 impT.show()
 
 stack = ImageStack() # of ShortProcessor
-stack.addSlice("imp1", imp1.getProcessor())
-stack.addSlice("impT", impT.getProcessor())
-stack.addSlice("imp2", imp2.getProcessor())
+stack.addSlice("imp1", imp1.getProcessor()) # The first image, intact
+stack.addSlice("impT", impT.getProcessor()) # The second image, transformed
+stack.addSlice("imp2", imp2.getProcessor()) # The second image again, intact, for comparison
 impTstack = ImagePlus("imp1 + tranformed imp2 + original imp2", stack)
 impTstack.show()
 
