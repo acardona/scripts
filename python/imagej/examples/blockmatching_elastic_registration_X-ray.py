@@ -6,11 +6,20 @@ from java.lang.reflect.Array import newInstance as newArray
 from java.lang import Double
 from ij import IJ, ImagePlus, ImageStack
 from mpicbg.ij.blockmatching import BlockMatching
-from ij.process import ImageProcessor, ShortProcessor
+from ij.process import ImageProcessor, ShortProcessor, FloatProcessor
 from jitk.spline import ThinPlateR2LogRSplineKernelTransform
 from mpicbg.ij import ThinPlateSplineMapping
+from xjava.filter import xStripes
 from ij.plugin.filter import GaussianBlur
-import xStripes_Filter # from xlib_.jar
+from net.imglib2.img.basictypeaccess.array import FloatArray, IntArray
+from net.imglib2.algorithm.math import ImgMath
+from net.imglib2.img.array import ArrayImgs
+try:
+  import xStripes_Filter # from xlib_.jar
+except:
+  msg = "Please install xlib_.jar\nDownload from https://drive.switch.ch/index.php/s/WOVSIPMky2JsXsp"
+  print msg
+  IJ.error(msg)
 
 # Extract blockmatches between two images
 # and then estimate an elastic transformation
@@ -151,8 +160,58 @@ imp2o = IJ.openImage("/home/albert/Desktop/t2/20230407 Alexandra Pacureanu X-ray
 
 # Filter to remove position-invariant vertical and horizontal stripes
 filters = {"gaussian": False,
-           "bandpass": True,
-           "stripes": False}
+           "bandpass": False,
+           "stripes": True}
+
+
+def filterStripes(imp):
+  """
+  imp: an ImagePlus with a FloatProcessor
+  
+  Run the xlib_.jar xStripes plugin from the API
+  
+  Return a new ImagePlus with a FloatProcessor
+  """
+  width = imp.getWidth()
+  height = imp.getHeight()
+  floats = imp.getProcessor().getPixels()
+  intPixels = zeros(width * height, 'i') # in integers
+  # Copy pixels into int[], fast
+  ba = ArrayImgs.floats(FloatArray(floats), [width, height])
+  bi = ArrayImgs.unsignedInts(IntArray(intPixels), [width, height])
+  ImgMath.compute(ImgMath.img(ba)).into(bi)
+
+  # Parameters for the xStripes plugin
+  numBits = 32 # float
+  numBands = 1 # means: single-channel image, not e.g., RGB with 3 bands
+  waveletTyp = "db15"
+  decId = [0, 1, 2, 3, 4, 5] # decomposition 0:5
+  filtWid = 5.0 # filter width (the damping coefficient defining the width of the Fourier filter)
+  filtTyp = 'f' # f: FFT; a: subtract average; 'z': set to zero 
+  wavBord = "sym" # symmetrical mirroring of the edges
+  horVer = 2 # 0: filter horizontal stripes; 1: filter vertical stripes; 2: filter both
+  normConstr = 'c' # 'c': constraint output values to numBits; 'n': normalize; ' ': do nothing
+  doDispl = False # don't show results
+
+  # Run xStripes wavelet-based filtering
+  ints = xStripes.waveletFilt(width, height,
+                              intPixels,
+                              numBits,
+                              numBands,
+                              waveletTyp, decId,
+                              filtWid, filtTyp,
+                              wavBord, horVer,
+                              normConstr, doDispl)
+  
+  # Transfer ints back to floats
+  floatsFiltered = zeros(width * height, 'f')
+  bfa = ArrayImgs.floats(FloatArray(floatsFiltered), [width, height])
+  bfi = ArrayImgs.unsignedInts(IntArray(ints), [width, height])
+  ImgMath.compute(ImgMath.img(bfi)).into(bfa)
+
+  impFiltered = ImagePlus("filtered", FloatProcessor(width, height, floatsFiltered, None))
+  return impFiltered
+
 
 # Pre-filter, option 1: bandpass
 if filters["bandpass"]:
@@ -180,12 +239,11 @@ elif filters["stripes"]:
   for imp in [imp1, imp2]:
     # Doesn't work because it opens a new image, doesn't modify the image in place.
     #IJ.run(imp, "Stripes Filter", "filter=Wavelet-FFT direction=Both types=Daubechies wavelet=DB15 border=[Symmetrical mirroring] image=don't decomposition=0:5 damping=5 large=100000000 small=1 tolerance=1 half=5 offset=1");
-    # Second attempt: doesn't work either, also opens a new image.
-    # AWAITING feedback from Beat Münch, the author of the xlib_.jar library.
-    sf = xStripes_Filter()
-    sf.setup("filter=Wavelet-FFT direction=Both types=Daubechies wavelet=DB15 border=[Symmetrical mirroring] image=don't decomposition=0:5 damping=5 large=100000000 small=1 tolerance=1 half=5 offset=1", imp)
-    sf.run(imp.getProcessor())
-    gb.blurFloat(imp.getProcessor(), sigma, sigma, 0.0002)
+    # Second attempt:
+    # Thanks to feedback from Beat Münch, the author of the xlib_.jar library.
+    impFiltered = filterStripes(imp)
+    gb.blurFloat(impFiltered.getProcessor(), sigma, sigma, 0.0002)
+    imp.setProcessor(impFiltered.getProcessor())
 
 
 # Parameters
