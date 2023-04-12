@@ -92,9 +92,9 @@ def computeLinearTransform(
   
 
 def computeElasticTransform(pointmatches):
+  # Format pointmatches into two separate lists
   sourcePoints = newArray(Double.TYPE, [2, pointmatches.size()]) # 2D double array
-  targetPoints = newArray(Double.TYPE, [2, pointmatches.size()]) # 2D double array
-  
+  targetPoints = newArray(Double.TYPE, [2, pointmatches.size()]) # 2D double array  
   for i, pointmatch in enumerate(pointmatches):
     srcPt = pointmatch.getP1().getL()
     tgtPt = pointmatch.getP2().getW()
