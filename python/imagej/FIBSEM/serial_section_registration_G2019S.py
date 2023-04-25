@@ -20,8 +20,8 @@
 
 import os, sys
 #sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
-#sys.path.append("/lmb/home/pgg/ParkinsonConnectomics/scripts/python/imagej/IsoView-GCaMP/")
-sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
+sys.path.append("/lmb/home/pgg/ParkinsonConnectomics/scripts/python/imagej/IsoView-GCaMP/")
+#sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.io import findFilePaths, readFIBSEMdat
 from lib.util import numCPUs, syncPrint
 from lib.serial2Dregistration import setupImageLoader, viewAligned, export8bitN5, qualityControl
@@ -36,7 +36,7 @@ from ij.gui import Roi
 
 srcDir = "/net/zstore1/fibsem_data/G2019S/dats/" # MUST have an ending slash
 tgtDir = "/net/zstore1/fibsem_data/G2019S/registration/"
-tgtDirN5 = "/net/zstore1/fibsem_data/G2019S/registration/"
+tgtDirN5 = "/net/zstore1/fibsem_data/G2019S/registration/uint8_noCLAHE/"
 csvDir = os.path.join(tgtDir, "csvs")
 
 # Recursive search into srcDir for files ending in InLens_raw.tif
@@ -51,13 +51,13 @@ original_dimensions = dimensions
 properties = {
  'name': "G2019S",
  'img_dimensions': dimensions,
- #'crop_roi': Roi(1296, 2448, 17811, 14616), # x, y, width, height - Pre-crop: right after loading
+ 'crop_roi': Roi(2448, 1488, 16944, 20400), # x, y, width, height - Pre-crop: right after loading
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
  'n_threads': 50,
  'preload': 0, # images to preload ahead of time in the registered virtual stack that opens
  'invert': True,
- 'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
+ 'CLAHE_params': None,#[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': False, # enforce SIFT instead of blockmatching for all sections
  #'precompute': False, # use True at first, False when features and pointmatches exist already
  'SIFT_validateByFileExists': True, # When True, don't deserialize, only check if the .obj file exists
@@ -173,7 +173,7 @@ else:
 
 # Triggers the whole alignment and ends by showing a virtual stack of the aligned sections.
 # Crashware: can be restarted anytime, will resume from where it left off.
-if True:
+if False:
   imp = viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
                     FinalInterval([x0, y0], [x1, y1]))
   # Open a sortable table with 3 columns: the image filepath indices and the number of pointmatches
@@ -206,9 +206,15 @@ if True:
                name,
                exportDir,
                interval,
-               gzip_compression=0, # Don't use compression: less than 5% gain, at considerable processing cost
-               invert=True,
-               CLAHE_params=None, #properties["CLAHE_params"],
-               n5_threads=properties["n_threads"],
-               block_size=[256, 256, 64]) # ~4 MB per block
+               #gzip_compression=
+               0, # Don't use compression: less than 5% gain, at considerable processing cost
+               #invert=
+               True,
+               #CLAHE_params=
+               properties["CLAHE_params"],
+               #n5_threads=
+               properties["n_threads"],
+               #block_size=
+               [256, 256, 64],
+               True)# ~4 MB per block
 
