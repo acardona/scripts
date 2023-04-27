@@ -34,9 +34,9 @@ from ij.gui import Roi
 
 
 
-srcDir = "/net/zstore1/fibsem_data/G2019S/dats/" # MUST have an ending slash
-tgtDir = "/net/zstore1/fibsem_data/G2019S/registration/"
-tgtDirN5 = "/net/zstore1/fibsem_data/G2019S/registration/uint8_noCLAHE/"
+srcDir = "/net/zstore1/fibsem_data/G2019S/Tremont/dats/" # MUST have an ending slash
+tgtDir = "/net/zstore1/fibsem_data/G2019S/Tremont/registration/"
+tgtDirN5 = "/net/zstore1/fibsem_data/G2019S/Tremont/registration/uint8_noCLAHE/"
 csvDir = os.path.join(tgtDir, "csvs")
 
 # Recursive search into srcDir for files ending in InLens_raw.tif
@@ -49,9 +49,9 @@ dimensions = [21250, 23750]
 original_dimensions = dimensions
 
 properties = {
- 'name': "G2019S",
+ 'name': "Tremont",
  'img_dimensions': dimensions,
- 'crop_roi': Roi(2448, 1488, 16944, 20400), # x, y, width, height - Pre-crop: right after loading
+ #'crop_roi': Roi(2448, 1488, 16944, 20400), # x, y, width, height - Pre-crop: right after loading
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
  'n_threads': 50,
@@ -61,6 +61,15 @@ properties = {
  'use_SIFT': False, # enforce SIFT instead of blockmatching for all sections
  #'precompute': False, # use True at first, False when features and pointmatches exist already
  'SIFT_validateByFileExists': True, # When True, don't deserialize, only check if the .obj file exists
+ 'bad_sections': {59: -1,
+ 				  60: -1,
+ 				  242: -1,
+ 				  442: -1,
+ 				  443: -1,
+ 				  444: -1,
+ 				  446: -1,
+ 				  1464: -1
+ 				 }
  #'bad_sections': {6404: -1,
    #               8913: -1,
    #               9719: -1}, # 0-based section indices for keys, and relative index for the value
@@ -132,10 +141,13 @@ paramsTileConfiguration = {
 
 # Dimensions of the ROI to show once the registration completes.
 # Default: show all. Adjust to show only a cropped area.
+
 x0 = 0 # X coordinate of the first pixel to show
 y0 = 0 # Y coordinate of the first pixel to show
 x1 = dimensions[0] -1 # X coordinate of the last pixel to show
 y1 = dimensions[1] -1 # Y coordinate of the last pixel to show
+
+
 syncPrint("Crop to: x=%i y=%i width=%i height=%i" % (x0, y0, x1 - x0 + 1, y1 - y0 + 1))
 
 
@@ -173,7 +185,7 @@ else:
 
 # Triggers the whole alignment and ends by showing a virtual stack of the aligned sections.
 # Crashware: can be restarted anytime, will resume from where it left off.
-if False:
+if True:
   imp = viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
                     FinalInterval([x0, y0], [x1, y1]))
   # Open a sortable table with 3 columns: the image filepath indices and the number of pointmatches
@@ -185,7 +197,7 @@ if False:
 
 
 
-if True:
+if False:
 
   # Ignore ROI: export the whole volume
   dimensions = original_dimensions
@@ -196,7 +208,8 @@ if True:
   exportDir = os.path.join(tgtDirN5, "n5")
   # Export ROI:
   # x=864 y=264 width=15312 h=17424
-  interval = FinalInterval([0, 0], [dimensions[0] -1, dimensions[1] -1])
+  # interval = FinalInterval([0, 0], [dimensions[0] -1, dimensions[1] -1])
+  interval = FinalInterval([2448, 1488], [2448 + 16944, 1488 + 20400])
 
 
   export8bitN5(filepaths,
