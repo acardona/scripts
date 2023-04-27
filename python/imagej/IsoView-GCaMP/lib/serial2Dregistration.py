@@ -685,7 +685,7 @@ def exportN5(filepaths,
     # Convert to 8-bit, mapping to display range
     if as8bit:
       minimum, maximum = autoAdjust(sp)
-      syncPrintQ("Image -> " + str(index) + " ; minimum pixel value: " + str(minimum) + " ; maximum pixel value: " + str(maximum))
+      # syncPrint("Image -> " + str(index) + " ; minimum pixel value: " + str(minimum) + " ; maximum pixel value: " + str(maximum))
       imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
       aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
     else:
