@@ -614,7 +614,7 @@ def computeMaxInterval(matrices_csvpath, dimensions, limit=None):
 
 
 def export8bitN5(*args):
-  return exportN5(*(args + [True]))
+  return exportN5(*args) 
 
 def exportN5(filepaths,
             loadFn,
@@ -690,6 +690,7 @@ def exportN5(filepaths,
         minimum, maximum = autoAdjust(spCrop)
       else:
         minimum, maximum = autoAdjust(sp)
+      # syncPrint("Image -> " + str(index) + " ; minimum pixel value: " + str(minimum) + " ; maximum pixel value: " + str(maximum))
       imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
       aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
     else:
@@ -713,8 +714,7 @@ def exportN5(filepaths,
 
   # A CacheLoader that interprets the list of filepaths as a 3D volume: a stack of 2D slices
   loader = SectionCellLoader(filepaths,
-                             asArrayImg=partial(asNormalizedUnsignedByteArrayImg,
-                                                interval, invert, blockRadius, n_bins, slope, matrices),
+                             asArrayImg=partial(asNormalizedUnsignedArrayImg, as8bit,interval, invert, blockRadius, n_bins, slope, matrices),
                              loadFn=loadFn)
 
   t = UnsignedByteType if as8bit else UnsignedShortType
