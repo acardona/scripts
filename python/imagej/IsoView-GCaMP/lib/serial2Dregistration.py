@@ -613,8 +613,9 @@ def computeMaxInterval(matrices_csvpath, dimensions, limit=None):
     print "File does not exist: ", matrices_csvpath
 
 
-def export8bitN5(*args):
-  return exportN5(*args) 
+def export8bitN5(*args, **kwargs):
+  kwargs["as8bit"] = True
+  return exportN5(*args, **kwargs)
 
 def exportN5(filepaths,
             loadFn,
@@ -628,7 +629,8 @@ def exportN5(filepaths,
             CLAHE_params=[400, 256, 3.0],
             n5_threads=0, # 0 means as many as CPU cores
             block_size=[128,128,128],
-            as8bit=False):
+            as8bit=False,
+            display_range_crop_roi=None): # an ROI to measure min and max from the histogram
   """
   Export into an N5 volume, in parallel, in 8-bit or 16-bit
 
@@ -654,7 +656,7 @@ def exportN5(filepaths,
                      dims[1],
                      1]
 
-  def asNormalizedUnsignedArrayImg(as8bit, interval, invert, blockRadius, n_bins, slope, matrices, index, imp, crop_roi=None):
+  def asNormalizedUnsignedArrayImg(as8bit, interval, invert, blockRadius, n_bins, slope, matrices, index, imp, display_range_crop_roi):
     sp = imp.getProcessor() # ShortProcessor
     # Crop to interval if needed
     x = interval.min(0)
@@ -684,8 +686,8 @@ def exportN5(filepaths,
     
     # Convert to 8-bit, mapping to display range
     if as8bit:
-      if crop_roi:
-        sp.setRoi(crop_roi)
+      if display_range_crop_roi:
+        sp.setRoi(display_range_crop_roi)
         spCrop = sp.crop() # returns a new ImageProcessor
         minimum, maximum = autoAdjust(spCrop)
       else:
@@ -714,7 +716,7 @@ def exportN5(filepaths,
 
   # A CacheLoader that interprets the list of filepaths as a 3D volume: a stack of 2D slices
   loader = SectionCellLoader(filepaths,
-                             asArrayImg=partial(asNormalizedUnsignedArrayImg, as8bit,interval, invert, blockRadius, n_bins, slope, matrices),
+                             asArrayImg=partial(asNormalizedUnsignedArrayImg, as8bit,interval, invert, blockRadius, n_bins, slope, matrices, display_range_crop_roi),
                              loadFn=loadFn)
 
   t = UnsignedByteType if as8bit else UnsignedShortType

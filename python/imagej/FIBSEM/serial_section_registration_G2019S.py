@@ -51,7 +51,7 @@ original_dimensions = dimensions
 properties = {
  'name': "Tremont",
  'img_dimensions': dimensions,
- #'crop_roi': Roi(2448, 1488, 16944, 20400), # x, y, width, height - Pre-crop: right after loading
+ 'crop_roi': None # Roi(2448, 1488, 16944, 20400), # x, y, width, height - Pre-crop: right after loading
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
  'n_threads': 50,
@@ -201,16 +201,18 @@ if False:
 
   # Ignore ROI: export the whole volume
   dimensions = original_dimensions
-  properties["crop_roi"] = None
 
   # Write the whole volume in N5 format
   name = properties["name"] # srcDir.split('/')[-2]
   exportDir = os.path.join(tgtDirN5, "n5")
-  # Export ROI:
+  # Export ROI: (this should be the properties["crop_roi"] above if any.)
   # x=864 y=264 width=15312 h=17424
   # interval = FinalInterval([0, 0], [dimensions[0] -1, dimensions[1] -1])
   interval = FinalInterval([2448, 1488], [2448 + 16944, 1488 + 20400])
 
+  # An ROI from which to measure the display range min and max, useful for mapping to 8-bit
+  dr_roi = None # None means use the whole image
+                # Otherwise, use like: x,y,width,height  Roi(0, 0, dimensions[0], dimensions[1])
 
   export8bitN5(filepaths,
                loader,
@@ -219,15 +221,10 @@ if False:
                name,
                exportDir,
                interval,
-               #gzip_compression=
-               0, # Don't use compression: less than 5% gain, at considerable processing cost
-               #invert=
-               True,
-               #CLAHE_params=
-               properties["CLAHE_params"],
-               #n5_threads=
-               properties["n_threads"],
-               #block_size=
-               [256, 256, 64],
-               True)# ~4 MB per block
+               gzip_compression=0, # Don't use compression: less than 5% gain, at considerable processing cost
+               invert=True,
+               CLAHE_params=properties["CLAHE_params"],
+               n5_threads=properties["n_threads"],
+               block_size=[256, 256, 64], # ~4 MB per block
+               display_range_crop_roi=dr_roi)
 
