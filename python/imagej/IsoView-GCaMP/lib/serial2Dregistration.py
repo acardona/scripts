@@ -654,7 +654,7 @@ def exportN5(filepaths,
                      dims[1],
                      1]
 
-  def asNormalizedUnsignedArrayImg(as8bit, interval, invert, blockRadius, n_bins, slope, matrices, index, imp):
+  def asNormalizedUnsignedArrayImg(as8bit, interval, invert, blockRadius, n_bins, slope, matrices, index, imp, crop_roi=None):
     sp = imp.getProcessor() # ShortProcessor
     # Crop to interval if needed
     x = interval.min(0)
@@ -684,7 +684,12 @@ def exportN5(filepaths,
     
     # Convert to 8-bit, mapping to display range
     if as8bit:
-      minimum, maximum = autoAdjust(sp)
+      if crop_roi:
+        sp.setRoi(crop_roi)
+        spCrop = sp.crop() # returns a new ImageProcessor
+        minimum, maximum = autoAdjust(spCrop)
+      else:
+        minimum, maximum = autoAdjust(sp)
       imgMinMax = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
       aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
     else:
