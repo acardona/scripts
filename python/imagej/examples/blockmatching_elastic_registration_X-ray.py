@@ -9,13 +9,12 @@ from mpicbg.ij.blockmatching import BlockMatching
 from ij.process import ImageProcessor, ShortProcessor, FloatProcessor
 from jitk.spline import ThinPlateR2LogRSplineKernelTransform
 from mpicbg.ij import ThinPlateSplineMapping
-from xjava.filter import xStripes
 from ij.plugin.filter import GaussianBlur
 from net.imglib2.img.basictypeaccess.array import FloatArray, IntArray
 from net.imglib2.algorithm.math import ImgMath
 from net.imglib2.img.array import ArrayImgs
 try:
-  import xStripes_Filter # from xlib_.jar
+  from xjava.filter import xStripes
 except:
   msg = "Please install xlib_.jar\nDownload from https://drive.switch.ch/index.php/s/WOVSIPMky2JsXsp"
   print msg
