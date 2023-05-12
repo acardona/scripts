@@ -3,13 +3,14 @@
 # A script to register FIBSEM serial sections.
 # ASSUMES there is only one single image per section.
 # ASSUMES all images have the same dimensions and pixel type.
-# 
+#
 # This program is similar to the plugin Register Virtual Stack Slices
 # but uses more efficient and densely distributed features,
 # and also matches sections beyond the direct adjacent for best stability
 # as demonstrated for elastic registration in Saalfeld et al. 2012 Nat Methods.
-# 
-# The program also offers functions to export for CATMAID as N5 format (not multiresolution,
+#
+# The program also offers functions to export for CATMAID as N5 format (not mult
+iresolution,
 # the multiresolution pyramid can be generated later with a different software).
 #
 # 1. Extract blockmatching features for every section.
@@ -24,7 +25,8 @@ sys.path.append("/lmb/home/pgg/ParkinsonConnectomics/scripts/python/imagej/IsoVi
 #sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.io import findFilePaths, readFIBSEMdat
 from lib.util import numCPUs, syncPrint
-from lib.serial2Dregistration import setupImageLoader, viewAligned, export8bitN5, qualityControl
+from lib.serial2Dregistration import setupImageLoader, viewAligned, export8bitN5
+, qualityControl
 from lib.registration import loadMatrices
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2 import FinalInterval
@@ -51,29 +53,34 @@ original_dimensions = dimensions
 properties = {
  'name': "Tremont",
  'img_dimensions': dimensions,
- 'crop_roi': None # Roi(2448, 1488, 16944, 20400), # x, y, width, height - Pre-crop: right after loading
+ #'crop_roi': Roi(2448, 1488, 16944, 20400), # x, y, width, height - Pre-crop: right after loading
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
  'n_threads': 50,
  'preload': 0, # images to preload ahead of time in the registered virtual stack that opens
  'invert': True,
- 'CLAHE_params': None,#[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
+ 'CLAHE_params': None,#[200, 256, 3.0], # For viewAligned. Use None to disable.Blockradius, nBins, slope.
  'use_SIFT': False, # enforce SIFT instead of blockmatching for all sections
  #'precompute': False, # use True at first, False when features and pointmatches exist already
  'SIFT_validateByFileExists': True, # When True, don't deserialize, only check if the .obj file exists
- 'bad_sections': {59: -1,
- 				  60: -1,
- 				  242: -1,
- 				  442: -1,
- 				  443: -1,
- 				  444: -1,
- 				  446: -1,
- 				  1464: -1
- 				 }
+ 'bad_sections': {58: -1,#58 is the image 59. Image 59 would be swapped by Image 59 (-1) -> Image 58
+                                  59: +1,
+                                  241: -1,
+                                  242: -2,
+                                  243: +1,
+                                  441: -1,
+                                  442: -2,
+                                  443: +1,
+                                  1461: -1,
+                                  1462: -2,
+                                  1463: -3,
+                                  1464: +3,
+                                  1465: +2,
+                                  1466: +1
+                                 }
  #'bad_sections': {6404: -1,
    #               8913: -1,
-   #               9719: -1}, # 0-based section indices for keys, and relative index for the value
-}
+   #               9719: -1}, # 0-based section indices for keys, and relative index for the value}
 
 
 roi = properties.get("crop_roi", None)
@@ -114,10 +121,11 @@ params = {
  'blockRadius': 200, # small, yet enough
  'max_id': 50, # maximum distance between features in image space # for SIFT pointmatches
  'max_sd': 1.2, # maximum difference in size between features # for SIFT pointmatches
- 
+
 }
 
-# Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
+# Parameters for SIFT features, in case blockmatching fails due to large transla
+tion or image dimension mistmatch
 paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
@@ -164,9 +172,9 @@ to_replace = {filepaths[index]: filepaths[index + inc]
 if filepaths[0].endswith(".dat"):
   def loadFn(filepath):
     global properties, to_replace
-    
+
     filepath = to_replace.get(filepath, filepath)
-    
+
     imp = readFIBSEMdat(filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
     roi = properties.get("crop_roi", None)
     if roi:
@@ -185,7 +193,7 @@ else:
 
 # Triggers the whole alignment and ends by showing a virtual stack of the aligned sections.
 # Crashware: can be restarted anytime, will resume from where it left off.
-if True:
+if False:
   imp = viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
                     FinalInterval([x0, y0], [x1, y1]))
   # Open a sortable table with 3 columns: the image filepath indices and the number of pointmatches
@@ -195,36 +203,36 @@ if True:
 
 # When the alignment is good enough, then export as N5 by swapping "False" for "True" below:
 
-
-
-if False:
+if True:
 
   # Ignore ROI: export the whole volume
   dimensions = original_dimensions
+  properties["crop_roi"] = None
 
   # Write the whole volume in N5 format
   name = properties["name"] # srcDir.split('/')[-2]
   exportDir = os.path.join(tgtDirN5, "n5")
-  # Export ROI: (this should be the properties["crop_roi"] above if any.)
+  # Export ROI:
   # x=864 y=264 width=15312 h=17424
   # interval = FinalInterval([0, 0], [dimensions[0] -1, dimensions[1] -1])
   interval = FinalInterval([2448, 1488], [2448 + 16944, 1488 + 20400])
 
-  # An ROI from which to measure the display range min and max, useful for mapping to 8-bit
-  dr_roi = None # None means use the whole image
-                # Otherwise, use like: x,y,width,height  Roi(0, 0, dimensions[0], dimensions[1])
 
   export8bitN5(filepaths,
                loader,
                dimensions,
-               loadMatrices("matrices", csvDir), # expects matrices.csv file to exist already
+               loadMatrices("matrices", csvDir), # expects matrices.csv file toexist already
                name,
                exportDir,
                interval,
-               gzip_compression=0, # Don't use compression: less than 5% gain, at considerable processing cost
-               invert=True,
-               CLAHE_params=properties["CLAHE_params"],
-               n5_threads=properties["n_threads"],
-               block_size=[256, 256, 64], # ~4 MB per block
-               display_range_crop_roi=dr_roi)
-
+               #gzip_compression=
+               0, # Don't use compression: less than 5% gain, at considerable processing cost
+               #invert=
+               True,
+               #CLAHE_params=
+               properties["CLAHE_params"],
+               #n5_threads=
+               properties["n_threads"],
+               #block_size=
+               [256, 256, 64],
+               True)# ~4 MB per block
