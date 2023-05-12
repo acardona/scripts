@@ -1,4 +1,5 @@
 from __future__ import print_function
+import sys, traceback
 from synchronize import make_synchronized
 from java.util.concurrent import Callable, Future, Executors, ThreadFactory, TimeUnit
 from java.util.concurrent.atomic import AtomicInteger
@@ -44,6 +45,12 @@ def syncPrintQ(msg):
 def syncPrint(msg):
   """ Synchronized access to python's built-in print function. """
   print(msg)
+  
+
+def printException(e=None, printFn=syncPrintQ):
+  e = sys.exc_info() if e is None else e
+  printFn("".join(traceback.format_exception(e[0], e[1], e[2])))
+  
 
 class Getter(Future):
   """ A simulated Future that is ready to deliver its result.

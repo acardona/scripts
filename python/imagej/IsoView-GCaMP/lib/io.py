@@ -1,4 +1,5 @@
 from java.io import RandomAccessFile
+from java.io import Serializable, FileOutputStream, ObjectOutputStream, FileInputStream, ObjectInputStream
 from net.imglib2.img.array import ArrayImgs
 from jarray import zeros, array
 from java.nio import ByteBuffer, ByteOrder
@@ -27,8 +28,9 @@ from ij.io import FileSaver, ImageReader, FileInfo
 from ij import ImagePlus, IJ
 from ij.process import ShortProcessor
 from synchronize import make_synchronized
-from util import syncPrint, newFixedThreadPool
+from util import syncPrint, syncPrintQ, newFixedThreadPool
 from ui import showStack, showBDV
+from io_asm import DAT_handler
 try:
   # Needs 'SiMView' Fiji update site enabled
   from org.janelia.simview.klb import KLB
@@ -43,19 +45,7 @@ except:
 from com.google.gson import GsonBuilder
 from math import ceil
 from itertools import imap
-try:
-  from fiji.scripting import Weaver
-  """ TODO isn't working, even when tools.jar is present
-  # Check if the tools.jar is in the classpath
-  try:
-    Class.forName("com.sun.tools.javac.Main")
-  except:
-    print "*** tools.jar not in the classpath ***"
-  """
-except:
-  print "*** fiji.scripting.Weaver NOT installed ***"
-  Weaver = None
-  print sys.exc_info()
+
 
 
 def findFilePaths(srcDir, extension):
@@ -124,45 +114,6 @@ def readUnsignedBytes(path, dimensions, header=0):
     ra.close()
 
 
-# An inlined java method for deinterleaving a short[] array
-# such as from .dat FIBSEM files where channels are stored
-# spatially array-adjacent, i.e. for 2 channels, 2 consecutive shorts.
-if Weaver:
-  wd = Weaver.method("""
-static public final void toUnsigned(final short[] signed) {
-  short min = 32767; // max possible signed short value
-  for (int i=0; i<signed.length; ++i) {
-    if (signed[i] < min) min = signed[i];
-  }
-  if (min < 0) {
-    for (int i=0; i<signed.length; ++i) {
-      signed[i] -= min;
-    }
-  }
-}
-
-static public final short[][] deinterleave(final short[] source,
-                                           final int numChannels,
-                                           final int channel_index) {
-  if (channel_index >= 0) {
-    // Read a single channel
-    final short[] shorts = new short[source.length / numChannels];
-    for (int i=channel_index, k=0; i<source.length; ++k, i+=numChannels) {
-      shorts[k] = source[i];
-    }
-    return new short[][]{shorts};
-  }
-  final short[][] channels = new short[numChannels][source.length / numChannels];
-  for (int i=0, k=0; i<source.length; ++k) {
-    for (int c=0; c<numChannels; ++c, ++i) {
-      channels[c][k] = source[i];
-    }
-  }
-  return channels;
-}
-""", [], False) # no imports, and don't show code
-
-
 def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, asImagePlus=False, toUnsigned=True):
   """ Read a file from Shan Xu's FIBSEM software, where two or more channels are interleaved.
       Assumes channels are stored in 16-bit.
@@ -198,27 +149,30 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     ra.read(bytes)
     # Parse as 16-bit array
     sb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer()
-    shorts = zeros(width * height * numChannels, 'h')
-    sb.get(shorts)
-    # Attempt to help releasing memory
     bytes = None
-    sb = None
-    # Deinterleave channels and convert to unsigned short
-    # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
-    # With Weaver: fast
-    channels = wd.deinterleave(shorts, numChannels, channel_index)
-    if toUnsigned:
-      for s in channels:
-        wd.toUnsigned(s)
-    # With python array sampling: very slow, and not just from iterating whole array once per channel
-    #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
-    #channels = [shorts[i::numChannels] for i in seq]
-    if asImagePlus:
-      return [ImagePlus(str(i), ShortProcessor(width, height, s, None)) for i, s in enumerate(channels)]
-    else:
-      return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
   finally:
     ra.close()
+  #
+  shorts = zeros(width * height * numChannels, 'h')
+  sb.get(shorts)
+  sb = None
+  # Deinterleave channels and convert to unsigned short
+  # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
+  # With ASM: fast
+  channels = DAT_handler.deinterleave(shorts, numChannels, channel_index)
+  shorts = None
+  #
+  if toUnsigned:
+    for s in channels:
+      DAT_handler.toUnsigned(s)
+  # With python array sampling: very slow, and not just from iterating whole array once per channel
+  #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
+  #channels = [shorts[i::numChannels] for i in seq]
+  if asImagePlus:
+    return [ImagePlus(str(i), ShortProcessor(width, height, s, None)) for i, s in enumerate(channels)]
+  else:
+    return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
+
 
 if KLB:
   __klb__ = KLB.newInstance()
@@ -312,9 +266,20 @@ class BinaryLoader(CacheLoader):
     return self.get(path)
 
 
+class DATLoader(CacheLoader):
+  """ Read .dat FIBSEM files from Shan Xu's software using io.readFIBSEMdat """
+  def __init__(self, channel_index=0, asImagePlus=False):
+    self.channel_index = channel_index
+    self.asImagePlus = asImagePlus
+  def get(self, path):
+    return readFIBSEMdat(path, channel_index=self.channel_index, asImagePlus=self.asImagePlus)[0]
+  def load(self, path):
+    return self.get(path)
+
+
 class SectionCellLoader(CacheLoader):
   """
-  A CacheLoader that can load Cell instances using ImageJ's I/O library. 
+  A CacheLoader that can load Cell instances using ImageJ's I/O library or any loader function provided. 
   Cells only tile in the last dimension, e.g.:
     * a series of sections (one per file) for a 3D volume;
     * a series of 3D volumes (one per file) for a 4D volume.
@@ -334,7 +299,7 @@ class SectionCellLoader(CacheLoader):
     dims = Intervals.dimensionsAsLongArray(img)
     return Cell(list(dims) + [1], # cell dimensions
                 [0] * img.numDimensions() + [index], # position in the grid: 0, 0, 0, Z-index
-                img.update(None)) # get the underlying LongAccess
+                img.update(None)) # get the underlying DataAccess
 
 
 def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType):
@@ -775,4 +740,71 @@ class TIFFSlices(CacheLoader):
     access, primitiveType, pixelType = self.types[self.IFDs[0]["bitDepth"]]
     return lazyCachedCellImg(self, self.cell_dimensions[:-1] + [len(self.IFDs)],
                              self.cell_dimensions, pixelType, primitiveType)
+
+
+class DATSlices(CacheLoader):
+  """ Load a series of 2D .dat files as an ImgLib2 cached lazy Img.
+      filepaths: list of full filepaths, one per 2D image.
+      channel_index: defaults to 0; the channel to load from the .dat, which can contain more than one.
+      filterFn: defaults to None; a function that takes a RandomAccessibleInterval as argument and
+                returns another or the same. Invoked upon loading the filepath. """
+  def __init__(self, filepaths, channel_index=0, filterFn=None):
+    self.filepaths = filepaths
+    self.loader = DATLoader(channel_index=channel_index)
+    self.filterFn = filterFn
+    self.dimensions2D = None
+
+  def get(self, index):
+    img = self.loader.load(self.filepaths[index])
+    if self.filterFn:
+      img = self.filterFn(img)
+    return Cell([img.dimension(0), img.dimension(1), 1], [0, 0, index], img.update(None))
+
+  def asLazyCachedCellImg(self):
+    if self.dimensions2D is None:
+      img = self.get(0)
+      self.dimensions2D = [img.dimension(0), img.dimension(1)]
+    return lazyCachedCellImg(self, self.dimensions2D + [len(self.filepaths)], self.dimensions2D + [1], UnsignedShortType, PrimitiveType.SHORT)
+
+
+def serialize(obj, filepath):
+  if not Serializable.isAssignableFrom(obj.getClass()):
+    syncPrintQ("Object doesn't implement Serializable: " + str(obj))
+    return False
+  f = None
+  o = None
+  try:
+    f = FileOutputStream(filepath)
+    o = ObjectOutputStream(f)
+    o.writeObject(obj)
+    o.flush()
+    f.getFD().sync() # ensure file is written to disk
+    return True
+  except:
+    syncPrintQ(sys.exc_info())
+  finally:
+    if o:
+      o.close()
+    if f:
+      f.close()
+    
+
+def deserialize(filepath):
+  f = None
+  o = None
+  obj = None
+  try:
+    f = FileInputStream(filepath)
+    o = ObjectInputStream(f)
+    obj = o.readObject()
+  except:
+    syncPrintQ(sys.exc_info())
+  finally:
+    if f:
+      f.close()
+    if o:
+      o.close()
+  if obj is None:
+    syncPrintQ("Failed to deserialize object at " + filepath)
+  return obj
 

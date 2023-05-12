@@ -187,6 +187,35 @@ def initMethod(cw,
   return method
 
 
+def initMethodObj(cw,
+                  classname,
+                  name,
+                  argument_classes=[],
+                  return_type="V",
+                  exceptions=[]):
+  """ For interface method implementations to work: takes Object as argument,
+      then invokes the properly typed method which must exist.
+  """
+  descriptorObj = "(" + "".join("L%s;" % "java/lang/Object" for _ in argument_classes) + ")" + makeReturnType(return_type)
+  methodVisitor = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC,
+                                 name,
+                                 descriptorObj,
+                                 None, # signature is None for bridge methods
+                                 map(Type.getInternalName, exceptions))
+  methodVisitor.visitCode()
+  methodVisitor.visitVarInsn(Opcodes.ALOAD, 0) # load "this" into the stack
+  descriptor = "("
+  for i, argClass in enumerate(argument_classes):
+    methodVisitor.visitVarInsn(Opcodes.ALOAD, i + 1) # load each argument, in order, into the stack
+    argClassname = argClass.getName().replace(".", "/")
+    descriptor += "L%s;" % argClassname
+    methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, argClassname)
+  descriptor += ")" + makeReturnType(return_type)
+  methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, classname, name, descriptor, False)
+  methodVisitor.visitInsn(Opcodes.RETURN)
+  methodVisitor.visitMaxs(len(argument_classes) + 1, len(argument_classes) + 1)
+  methodVisitor.visitEnd()
+
 
 class CustomClassLoader(ClassLoader):
   def defineClass(self, name, bytes):
