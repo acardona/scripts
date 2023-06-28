@@ -9,8 +9,7 @@
 # and also matches sections beyond the direct adjacent for best stability
 # as demonstrated for elastic registration in Saalfeld et al. 2012 Nat Methods.
 #
-# The program also offers functions to export for CATMAID as N5 format (not mult
-iresolution,
+# The program also offers functions to export for CATMAID as N5 format (not multiresolution,
 # the multiresolution pyramid can be generated later with a different software).
 #
 # 1. Extract blockmatching features for every section.
@@ -21,12 +20,11 @@ iresolution,
 
 import os, sys
 #sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
-sys.path.append("/lmb/home/pgg/ParkinsonConnectomics/scripts/python/imagej/IsoView-GCaMP/")
-#sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
+#sys.path.append("/lmb/home/pgg/ParkinsonConnectomics/scripts/python/imagej/IsoView-GCaMP/")
+sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.io import findFilePaths, readFIBSEMdat
 from lib.util import numCPUs, syncPrint
-from lib.serial2Dregistration import setupImageLoader, viewAligned, export8bitN5
-, qualityControl
+from lib.serial2Dregistration import setupImageLoader, viewAligned, export8bitN5, qualityControl
 from lib.registration import loadMatrices
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2 import FinalInterval
@@ -37,8 +35,8 @@ from ij.gui import Roi
 
 
 srcDir = "/net/zstore1/fibsem_data/G2019S/Tremont/dats/" # MUST have an ending slash
-tgtDir = "/net/zstore1/fibsem_data/G2019S/Tremont/registration/"
-tgtDirN5 = "/net/zstore1/fibsem_data/G2019S/Tremont/registration/uint8_noCLAHE/"
+tgtDir = "/net/zstore1/fibsem_data/G2019S/Tremont/registration-2023-06-28/"
+tgtDirN5 = "/net/zstore1/fibsem_data/G2019S/Tremont/registration-2023-06-28/n5/"
 csvDir = os.path.join(tgtDir, "csvs")
 
 # Recursive search into srcDir for files ending in InLens_raw.tif
@@ -59,11 +57,11 @@ properties = {
  'n_threads': 50,
  'preload': 0, # images to preload ahead of time in the registered virtual stack that opens
  'invert': True,
- 'CLAHE_params': None,#[200, 256, 3.0], # For viewAligned. Use None to disable.Blockradius, nBins, slope.
+ 'CLAHE_params': [200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': False, # enforce SIFT instead of blockmatching for all sections
  #'precompute': False, # use True at first, False when features and pointmatches exist already
  'SIFT_validateByFileExists': True, # When True, don't deserialize, only check if the .obj file exists
- 'bad_sections': {58: -1,#58 is the image 59. Image 59 would be swapped by Image 59 (-1) -> Image 58
+ 'bad_sections': {58: -1, #58 is the image 59. Image 59 would be swapped by Image 59 (-1) -> Image 58
                                   59: +1,
                                   241: -1,
                                   242: -2,
@@ -73,15 +71,11 @@ properties = {
                                   443: +1,
                                   1461: -1,
                                   1462: -2,
-                                  1463: -3,
+                                  1463: -3,  # precisely here the registration went pretty bad
                                   1464: +3,
                                   1465: +2,
-                                  1466: +1
-                                 }
- #'bad_sections': {6404: -1,
-   #               8913: -1,
-   #               9719: -1}, # 0-based section indices for keys, and relative index for the value}
-
+                                  1466: +1}
+}
 
 roi = properties.get("crop_roi", None)
 if roi:
@@ -117,15 +111,13 @@ params = {
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r  # for blockmatching
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 25, # a low value: we expect little translation
+ 'searchRadius': 220, # a low value: we expect little translation
  'blockRadius': 200, # small, yet enough
  'max_id': 50, # maximum distance between features in image space # for SIFT pointmatches
  'max_sd': 1.2, # maximum difference in size between features # for SIFT pointmatches
-
 }
 
-# Parameters for SIFT features, in case blockmatching fails due to large transla
-tion or image dimension mistmatch
+# Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
 paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
@@ -193,7 +185,7 @@ else:
 
 # Triggers the whole alignment and ends by showing a virtual stack of the aligned sections.
 # Crashware: can be restarted anytime, will resume from where it left off.
-if False:
+if True:
   imp = viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
                     FinalInterval([x0, y0], [x1, y1]))
   # Open a sortable table with 3 columns: the image filepath indices and the number of pointmatches
@@ -203,7 +195,7 @@ if False:
 
 # When the alignment is good enough, then export as N5 by swapping "False" for "True" below:
 
-if True:
+if False:
 
   # Ignore ROI: export the whole volume
   dimensions = original_dimensions
@@ -236,4 +228,4 @@ if True:
                #block_size=
                [256, 256, 64],
                True)# ~4 MB per block
->>>>>>> origin
+
