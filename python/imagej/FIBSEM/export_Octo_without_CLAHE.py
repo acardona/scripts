@@ -31,7 +31,7 @@ from ij import IJ
 
 srcDir = "/net/ark/janelia/dm11/cardonalab/FIBSEM_L1120_FullCNS_8x8x8nm/" # MUST have an ending slash
 tgtDir = "/net/zstore1/achampion/alignment/output/1120/v0/" # for CSV files
-exportDir = "/net/zstore1/acardona/20230329_FIBSEM_L1120_octo_without_CLAHE/" # for the N5 volume
+exportDir = "/net/zstore1/acardona/20230329_FIBSEM_L1120_octo_without_CLAHE/n5/" # for the N5 volume
 
 # Recursive search into srcDir for files ending a given extension
 filepaths = findFilePaths(srcDir, ".dat")
@@ -107,8 +107,13 @@ print "Filepaths found:", len(filepaths)
 # Use the whole interval
 interval3D = computeMaxInterval(os.path.join(csvDir, "matrices.csv"), dimensions, limit=12554) # NOTE limit is unnecesary here, the -10000 displacement is in the first set for some reason.
 print "Interval", interval3D
-# Use only 2 dimensions
-interval = FinalInterval([interval3D.min(0), interval3D.min(1)], [interval3D.max(0), interval3D.max(1)])
+# Use only 2 dimensions, and apply the ROI that Andrew Champion must have used but never wrote down or shared:
+interval = FinalInterval([interval3D.min(0) +1,  # both interval.min are negative
+                          interval3D.min(1) +1],
+                         [20486 + interval3D.min(0),
+                          21471 + interval3D.min(1)]) #[interval3D.max(0), interval3D.max(1)])
+
+print "interval", interval
 
 # Run the alignment
 matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
@@ -117,11 +122,8 @@ matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration,
 #for i, m in enumerate(matrices):
 #  print m
 
-
-
-
 # Visualize the result of the alignment with a VirtualStack
-img = viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, interval)
+#img = viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, interval)
 
 
 
@@ -130,11 +132,19 @@ name = srcDir.split('/')[-2]
 
 # Don't use compression: less than 5% gain, at considerable processing cost.
 # Expects matrices.csv file to exist already
-"""
-exportN5(filepaths, dimensions, loadMatrices("matrices", csvDir),
-         name, exportDir, interval,
+
+exportN5(filepaths,
+         loader,
+         dimensions,
+         loadMatrices("matrices", csvDir),
+         name,
+         exportDir,
+         interval,
          gzip_compression=0,
-        invert=True, CLAHE=None,
-        block_size=[256, 256, 64], # ~4 MB per block
-        n5_threads=0, as8bit=False)
-"""
+         invert=True,
+         CLAHE_params=None,
+         block_size=[128, 128, 128], # ~8 MB per block at 16-bit
+         n5_threads=0,
+         as8bit=False,
+         display_range_crop_roi=None)
+
