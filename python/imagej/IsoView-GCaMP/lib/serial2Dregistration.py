@@ -553,6 +553,7 @@ def viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfigurat
   def loadImg(filepath):
     return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"])
   cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
+  print "cropInterval", cropInterval
   print "viewAlignedPlain, cellImg:", cellImg
   print "viewAlignedPlain:", cellImg.getCellGrid()
   print "viewAlignedPlain:", cellImg.getCells()
@@ -657,7 +658,7 @@ def exportN5(filepaths,
                      dims[1],
                      1]
 
-  def asNormalizedUnsignedArrayImg(as8bit, interval, invert, blockRadius, n_bins, slope, matrices, index, imp, display_range_crop_roi):
+  def asNormalizedUnsignedArrayImg(as8bit, interval, invert, blockRadius, n_bins, slope, matrices, display_range_crop_roi, index, imp): # index and imp must always be the last arguments
     sp = imp.getProcessor() # ShortProcessor
     # Crop to interval if needed
     x = interval.min(0)
@@ -717,7 +718,7 @@ def exportN5(filepaths,
 
   # A CacheLoader that interprets the list of filepaths as a 3D volume: a stack of 2D slices
   loader = SectionCellLoader(filepaths,
-                             asArrayImg=partial(asNormalizedUnsignedArrayImg, as8bit,interval, invert, blockRadius, n_bins, slope, matrices, display_range_crop_roi),
+                             asArrayImg=partial(asNormalizedUnsignedArrayImg, as8bit, interval, invert, blockRadius, n_bins, slope, matrices, display_range_crop_roi),
                              loadFn=loadFn)
 
   t = UnsignedByteType if as8bit else UnsignedShortType
