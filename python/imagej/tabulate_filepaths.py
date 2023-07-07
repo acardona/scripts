@@ -32,7 +32,7 @@ from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
 # The path to the file listing the file paths to tabulate
 txt_file = None  # Set to e.g. "/path/to/list.txt"
-base_path = None
+base_path = "/home/albert/LarvalScreen/"
 
 # Laptop via sshfs
 #txt_file = "/home/albert/zstore1/barnesc/LarvalScreen.txt"
