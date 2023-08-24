@@ -2,7 +2,7 @@ from ij import IJ, ImagePlus, ImageStack
 from java.util.concurrent import Executors, Callable
 from java.lang import Thread
 import sys
-sys.path.append("//home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
+sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.util import Task, syncPrint
 
 imp4D = IJ.getImage()
