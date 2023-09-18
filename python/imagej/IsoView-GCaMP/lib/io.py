@@ -6,6 +6,8 @@ from java.nio import ByteBuffer, ByteOrder
 from java.math import BigInteger
 from java.util import Arrays
 from java.lang import System, Long
+from sc.fiji.io import FIBSEM_Reader
+from java.io import File, FileInputStream
 import operator, sys, os
 from net.imglib2 import RandomAccessibleInterval, IterableInterval
 from net.imglib2.view import Views
@@ -172,6 +174,41 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     return [ImagePlus(str(i), ShortProcessor(width, height, s, None)) for i, s in enumerate(channels)]
   else:
     return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
+
+
+
+def readFIBSEMHeader(filepath):
+  """ Parse the header of a .dat file using the sc.fiji.io.FIBSEM_Reader IO_.jar plugin.
+      Returns the header object, which can be queried like:
+      
+      print "width (pixels):", header.xRes
+      print "height (pixels):", header.yRes
+      print "stageX (mm):", header.stageX
+      print "stageY (mm):", header.stageY
+      print "stageZ (mm):", header.stageZ
+      print "stageT (degree):", header.stageT
+      print "stageR (degree):", header.stageR
+      print "stageM (mm):", header.stageM
+      print "fibShiftX (mm):", header.fibShiftX
+      print "fibShiftY (mm):", header.fibShiftY
+      print "semShiftX (mm):", header.semShiftX
+      print "semShiftY (mm):", header.semShiftY
+      
+      See all possible fields of the header here:
+      https://github.com/fiji/IO/blob/master/src/main/java/sc/fiji/io/FIBSEM_Reader.java#L308
+  """
+  r = FIBSEM_Reader()
+  fis = None
+  header = None
+  try:
+    fis = FileInputStream(File(filepath))
+    header = r.parseHeader(fis)
+  finally:
+    if fis is not None:
+      fis.close()
+      fis = None
+  return header
+
 
 
 if KLB:
