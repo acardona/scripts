@@ -106,8 +106,8 @@ filepaths = filepaths2
 
 # Parameters for blockmatching
 params = {
- 'scale': 0.25, # 10%
- 'meshResolution': 20, # 10 x 10 points = 100 point matches maximum
+ 'scale': 0.25, # 25%
+ 'meshResolution': 20, # 20 x 20 points = 100 point matches maximum
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r  # for blockmatching
  'maxCurvature': 1000.0, # default is 10
