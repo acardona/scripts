@@ -43,7 +43,10 @@ for filepath in filepaths:
   groups[sectionName].append(filepath)
 
 for groupName, tilePaths in groups.iteritems():
-  print groupName, len(tilePaths)
+  if 1 == len(tilePaths) or 4 == len(titePaths):
+    pass
+  else:
+    print "WARNING:", groupName, "has", len(tilePaths), "tiles"
   
 
 class MontageSlice2x2(Callable):
@@ -64,7 +67,7 @@ class MontageSlice2x2(Callable):
       "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
     }
     
-  def getFeatures(sp, roi):
+  def getFeatures(self, sp, roi):
     sp.setRoi(roi)
     crop = sp.crop()
     paramsSIFT = paramsSIFT.clone()
@@ -75,7 +78,7 @@ class MontageSlice2x2(Callable):
     ijSIFT.extractFeatures(ip, features)
     return features
     
-  def getPointMatches(sp0, roi0, sp1, roi1):
+  def getPointMatches(self, sp0, roi0, sp1, roi1):
     features0 = self.getFeatures(sp0, roi0)
     features1 = self.getFeatures(sp1, roi1)
     model = TranslationModel2D()
@@ -87,11 +90,15 @@ class MontageSlice2x2(Callable):
                                                   self.params.get("rod", 0.9)) # rod: ratio of best vs second best
     return pointmatches
 
-  def connectTiles(sps, tiles, i, j, roi0, roi1):
+  def connectTiles(self, sps, tiles, i, j, roi0, roi1):
     pointmatches = getPointMatches(sps[i], roi0, sps[j], roi1)
     tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
+    
+  def loadShortProcessors(self):
+    # Load images (TODO: should use FIBSEM_Reader instead)
+    return [readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor() for filepath in self.tilePaths]
 
-  def getMatrices(sps):
+  def getMatrices(self):
     # For each section to montage, for each image tile,
     # extract features from the appropriate ROI along the overlapping edges
     
@@ -99,6 +106,8 @@ class MontageSlice2x2(Callable):
     matrices = loadMatrices(self.name, self.csvDir)
     if matrices is not None:
       return matrices
+    
+    sps = self.loadShortProcessors()
       
     # Assumes images have the same dimensions
     width = sps[0].getWidth()
@@ -137,8 +146,11 @@ class MontageSlice2x2(Callable):
       matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
     saveMatrices(self.name, matrices, self.csvDir)
     return matrices
-
+  
   def call(self):
+    return getMatrices()
+
+  def makeMontage(self):
     # Return an ArrayImg representing the montage
     # Given that images are meant to overlap very little, just create it as large as the 2x2 images
     
@@ -147,16 +159,16 @@ class MontageSlice2x2(Callable):
     #width = header.xRes
     #height = header.yRes
     
-    # Load images (TODO: should use FIBSEM_Reader instead)
-    sps = [readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor() for filepath in self.tilePaths]
-    
+    sps = self.loadShortProcessors()
     matrices = getMatrices(sps)
     
     #imgMontage = ArrayImgs.unsignedShorts([0, 0], [width + width -1, height + height -1])
+    #How to insert full images at defined coordinates with imglib2?
+    
     impMontage = ShortProcessor(width * 2, height * 2, None)
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in reverse(zip(sps, matrices)):
-      impMontage.insert(sp, int(matrix[4] + 0.5), int(matrix[5] + 0.5))
+      impMontage.insert(sp, int(matrix[2] + 0.5), int(matrix[5] + 0.5)) # indices 2 and 5 are the X, Y translation
     
     return ArrayImgs.unsignedShorts(impMontage.getPixels(), [impMontage.getWidth(), impMomtage.getHeight()])
     
@@ -166,11 +178,10 @@ class SingleTileSection(Callable):
   def __init__(self, filepath):
     self.filepath = filepath
   def call(self):
-    sp = readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
-    #TODO dimensions?
-    
-    
-    # TODO
+    return [[1, 0, 0, 1, 0,  0]] # indices 2 and 5 are the X, Y translation
+  def makeMontage(self):
+    sp = readFIBSEMdat(self.filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
+    return ArrayImgs.unsignedShorts(sp.getPixels(), [sp.getWidth(), sp.getHeight()])
 
 
 
@@ -178,17 +189,15 @@ class SectionCellLoader(CacheLoader):
   """
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
-  def __init__(self, futures):
+  def __init__(self, dimensions, futures):
     """
-    filepaths: list of file paths, one per cell.
-    asArrayImg: a function that takes the index and an ImagePlus as argumebts and returns an ArrayImg for the Cell.
-    loadFn: default to IJ.openImage. Must return an object that asArrayImg can convert into an ArrayImg.
     """
-    self.filepaths = filepaths
-    self.asArrayImg = asArrayImg
-    self.loadFn = loadFn
+    self.futures = futures
   
   def get(self, index):
+    srcImg = self.futures.get()
+  
+  
     img = self.asArrayImg(index, self.loadFn(self.filepaths[index]))
     dims = Intervals.dimensionsAsLongArray(img)
     return Cell(list(dims) + [1], # cell dimensions
@@ -204,7 +213,7 @@ exe = newFixedThreadPool()
 
 futures = []
 
-# Iterate all sections in order
+# Iterate all sections in order and generate the transformation matrices defining a montage for each section
 for groupName in sorted(groups.iterkeys()):
   tilePaths = groups[groupName)
   # EXPECTING 2x2 tiles or 1
