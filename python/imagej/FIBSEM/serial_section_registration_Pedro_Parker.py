@@ -3,6 +3,7 @@ sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.serial2Dregistration import ensureSIFTFeatures
 from lib.io import findFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
 from lib.util import newFixedThreadPool
+from lib.ui import wrap
 from collections import defaultdict
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
@@ -11,7 +12,13 @@ from java.util import ArrayList
 from java.util.concurrent import Callable
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration
 from jarray import zeros
+from net.imglib2 import FinalInterval
+from net.imglib2.img.array import ArrayImgs
+from net.imglib2.algorithm.math import ImgMath
+from net.imglib2.type import PrimitiveType
 
+
+# Folders
 srcDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/"
 tgtDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/registration/"
 csvDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/registration/csv/"
@@ -20,6 +27,10 @@ csvDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/registration/csv/"
 
 offset = 60 # pixels # TODO not in use: needed? The left margin of each image is severely elastically deformed. Does it matter for SIFT?
 overlap = 124 # pixels
+
+section_width = 13000 # pixels, after section-wise montaging
+section_height = 13000
+
 
 # Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
 paramsSIFT = FloatArray2DSIFT.Param()
@@ -150,61 +161,50 @@ class MontageSlice2x2(Callable):
   def call(self):
     return getMatrices()
 
-  def makeMontage(self):
-    # Return an ArrayImg representing the montage
-    # Given that images are meant to overlap very little, just create it as large as the 2x2 images
-    
-    # Read dimensions from the first tile
-    #header = readFIBSEMHeader(self.tilePaths[0])
-    #width = header.xRes
-    #height = header.yRes
-    
+  def montagedImg(self, width, height):
+    """ Return an ArrayImg representing the montage
+        width, height: dimensions of the canvas onto which to insert the tiles.
+    """
+    matrices = getMatrices()
     sps = self.loadShortProcessors()
-    matrices = getMatrices(sps)
-    
-    #imgMontage = ArrayImgs.unsignedShorts([0, 0], [width + width -1, height + height -1])
-    #How to insert full images at defined coordinates with imglib2?
-    
-    impMontage = ShortProcessor(width * 2, height * 2, None)
+    impMontage = ShortProcessor(width, height, None)
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in reverse(zip(sps, matrices)):
       impMontage.insert(sp, int(matrix[2] + 0.5), int(matrix[5] + 0.5)) # indices 2 and 5 are the X, Y translation
     
-    return ArrayImgs.unsignedShorts(impMontage.getPixels(), [impMontage.getWidth(), impMomtage.getHeight()])
-    
+    return ArrayImgs.unsignedShorts(impMontage.getPixels(), width, height)
 
 
-class SingleTileSection(Callable):
-  def __init__(self, filepath):
-    self.filepath = filepath
-  def call(self):
-    return [[1, 0, 0, 1, 0,  0]] # indices 2 and 5 are the X, Y translation
-  def makeMontage(self):
-    sp = readFIBSEMdat(self.filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
-    return ArrayImgs.unsignedShorts(sp.getPixels(), [sp.getWidth(), sp.getHeight()])
-
-
-
-class SectionCellLoader(CacheLoader):
+class SectionLoader(CacheLoader):
   """
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
-  def __init__(self, dimensions, futures):
+  def __init__(self, dimensions, groups, paramsSIFT, csvDir):
     """
     """
-    self.futures = futures
+    self.dimensions = dimensions # a list of [width, height] for the canvas onto which draw the image tiles
+    self.groups = groups # a list of lists of file paths to .dat files, one per section
+    self.paramsSIFT = paramsSIFT
+    self.csvDir = csvDir
   
   def get(self, index):
-    srcImg = self.futures.get()
+    group = self.groups[index]
+    if 4 == len(group):
+      img = MontageSlice2x2(groupName, tilePaths, paramsSIFT, csvDir).montagedImg(*self.dimensions)
+    elif 1 == len(group):
+      img = readFIBSEMdat(group[0], channel_index=0, asImagePlus=False)[0]
+      
+    if self.dimensions[0] == img.dimension[0] and self.dimensions[1] == img.dimension[1]:
+      aimg = img
+    else:
+      # copy it onto a new canvas
+      aimg = ArrayImgs.unsignedShorts(self.dimensions)
+      ImgMath.compute(ImgMath.img(img)).into(aimg)
   
-  
-    img = self.asArrayImg(index, self.loadFn(self.filepaths[index]))
-    dims = Intervals.dimensionsAsLongArray(img)
+    dims = Intervals.dimensionsAsLongArray(aimg)
     return Cell(list(dims) + [1], # cell dimensions
-                [0] * img.numDimensions() + [index], # position in the grid: 0, 0, 0, Z-index
-                img.update(None)) # get the underlying DataAccess
-
-
+                [0] * aimg.numDimensions() + [index], # position in the grid: 0, 0, 0, Z-index
+                aimg.update(None)) # get the underlying DataAccess
 
 
 
@@ -225,13 +225,26 @@ for groupName in sorted(groups.iterkeys()):
   else:
     print "UNEXPECTED number of tiles in section named", groupName, ":", len(tilePaths)
 
-# Define a virtual CellImg expressing all the montages, one per section
 # Await them all
-#for future in futures:
-#  future.get()
-
-# TODO create a CellImg for all sections
+for future in futures:
+  future.get()
 
 
+# Define a virtual CellImg expressing all the montages, one per section
 
-#filepath, paramsSIFT, properties, csvDir, validateByFileExists=False):
+dimensions = [section_width, section_height]
+volume_dimensions = dimensions + [len(groups)]
+cell_dimensions = dimensions + [1]
+pixelType = UnsignedShortType
+primitiveType = PrimitiveType.SHORT
+
+volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groups, paramsSIFT, csvDir),
+                              volume_dimensions,
+                              cell_dimensions,
+                              pixelType,
+                              primitiveType)
+
+# Show the montages as a series of slices in a stack
+imp = wrap(volumeImg)
+imp.show()
+
