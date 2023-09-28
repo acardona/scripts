@@ -207,28 +207,49 @@ class SectionLoader(CacheLoader):
                 aimg.update(None)) # get the underlying DataAccess
 
 
+def ensureMontages2x2(groups, overlap, offset, paramsSIFT, csvDir):
+  """
+  Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
+  Each group must consist of 1 tile (no montage needed) or 4 tiles, which are assumed to be placed
+  in a barely overlapping 2 x 2 configuration.
+  The overlap between tiles is defined by overlap.
+  The offset is for ignoring that many pixels from the left edge, which are artifactually
+  non-linearly compressed and stretched in FIBSEM images. 
+  
+  groups: a dictionary of lists, with the common part of the filename of all tiles in a section as the key,
+          and the value being the list of tile filenames.
+          In other words, each entry represents a section with 1 or 4 image tiles in it.
+  overlap: the amount of pixels of overlap between two tiles in the 2x2 grid.
+  offset: the amount of pixels to ignore from the left edge of an image tile.
+  paramsSIFT: for montaging using scale invariant feature transform (SIFT).
+  csvDir: where to save the matrix CSV files, one per montage and section.
+  """
+  exe = newFixedThreadPool()
+  try:
 
-# Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging
-exe = newFixedThreadPool()
+    futures = []
 
-futures = []
+    # Iterate all sections in order and generate the transformation matrices defining a montage for each section
+    for groupName in sorted(groups.iterkeys()):
+      tilePaths = groups[groupName)
+      # EXPECTING 2x2 tiles or 1
+      if 4 == len(tilePaths):
+        # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
+        futures.append(MontageSlice2x2(groupName, tilePaths, paramsSIFT, csvDir))
+      else if 1 == len(tilePaths):
+        futures.append(SingleTileSection(tilePaths[0]))
+      else:
+        print "UNEXPECTED number of tiles in section named", groupName, ":", len(tilePaths)
 
-# Iterate all sections in order and generate the transformation matrices defining a montage for each section
-for groupName in sorted(groups.iterkeys()):
-  tilePaths = groups[groupName)
-  # EXPECTING 2x2 tiles or 1
-  if 4 == len(tilePaths):
-    # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
-    futures.append(MontageSlice2x2(groupName, tilePaths, paramsSIFT, csvDir))
-  else if 1 == len(tilePaths):
-    futures.append(SingleTileSection(tilePaths[0]))
-  else:
-    print "UNEXPECTED number of tiles in section named", groupName, ":", len(tilePaths)
+    # Await them all
+    for future in futures:
+      future.get()
+  finally:
+    exe.shutdown()
 
-# Await them all
-for future in futures:
-  future.get()
 
+# Montage all sections
+ensureMontages2x2(groups, overlap, offset, paramsSIFT, csvDir)
 
 # Define a virtual CellImg expressing all the montages, one per section
 
@@ -247,4 +268,9 @@ volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groups, paramsSIFT, csvD
 # Show the montages as a series of slices in a stack
 imp = wrap(volumeImg)
 imp.show()
+
+# TODO: align sections with blockmatching
+
+
+
 
