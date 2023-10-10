@@ -69,7 +69,7 @@ class MontageSlice2x2(Callable):
     self.paramsSIFT = paramsSIFT
     self.csvDir = csvDir
     self.params = {"max_sd": 1.5, # max_sd: maximal difference in size (ratio max/min)
-                   "max_id": Double.MAX_VALUE), # max_id: maximal distance in image space
+                   "max_id": Double.MAX_VALUE, # max_id: maximal distance in image space
                    "rod": 0.9} # rod: ratio of best vs second best
     self.paramsTileConfiguration = {
       "maxAllowedError": 0, # Saalfeld recommends 0
@@ -231,12 +231,12 @@ def ensureMontages2x2(groups, overlap, offset, paramsSIFT, csvDir):
 
     # Iterate all sections in order and generate the transformation matrices defining a montage for each section
     for groupName in sorted(groups.iterkeys()):
-      tilePaths = groups[groupName)
+      tilePaths = groups[groupName]
       # EXPECTING 2x2 tiles or 1
       if 4 == len(tilePaths):
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
         futures.append(MontageSlice2x2(groupName, tilePaths, paramsSIFT, csvDir))
-      else if 1 == len(tilePaths):
+      elif 1 == len(tilePaths):
         futures.append(SingleTileSection(tilePaths[0]))
       else:
         print "UNEXPECTED number of tiles in section named", groupName, ":", len(tilePaths)
