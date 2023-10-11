@@ -24,7 +24,13 @@ from functools import partial
 import re
 import os
 import sys
-from org.janelia.simview.klb import KLB
+
+try: # try-except block allows users with default FIJI to run the script without KLB installation
+  from org.janelia.simview.klb import KLB 
+except ImportError:
+  print "Warning: KLB format unavailable"
+  KLB = None
+
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 
 
@@ -35,8 +41,8 @@ txt_file = None  # Set to e.g. "/path/to/list.txt"
 base_path = "/home/albert/LarvalScreen/"
 
 # Laptop via sshfs
-#txt_file = "/home/albert/zstore1/barnesc/LarvalScreen.txt"
-#base_path = "/home/albert/zstore1/barnesc/flylight-backups/LarvalScreen/"
+txt_file = "/Volumes/zfs/barnesc/flylight-backups/LarvalScreen/manifest.txt"
+base_path = "/Volumes/zfs/barnesc/flylight-backups/LarvalScreen/"
 
 # At LMB desktop:
 txt_file = "/home/albert/LarvalScreen.txt"
@@ -142,6 +148,8 @@ class OpenImageFromTableCell(AbstractAction):
     def openImage():
       print rel_path
       if rel_path.endswith(".klb"):
+        if(KLB==None):
+          print "Cannot open KLB due to missing module"
         try:
           klb = KLB.newInstance()
           img = klb.readFull(os.path.join(base_path, rel_path))
