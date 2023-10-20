@@ -62,6 +62,28 @@ def findFilePaths(srcDir, extension):
   return paths
   
 
+def loadFilePaths(srcDir, extension, csvDir, cache_name, ignore_cache=False):
+  """ Find file paths that match the filename extension,
+      recursively into any subdirectories,
+      and cache them as a text file cache_name inside the csvDir.
+      If ignore_cache is true, files will be searched for always.
+      If ignore_cache is false (default), then if the csvDir/cache_name
+      file exists, filepaths will be read at one per line of that file.
+      Returns a list of filepaths.
+  """ 
+  cachepath = os.path.join(csvDir, cache_name)
+  if not ignore_cache and os.path.exists(cachepath):
+      with open(cachepath, 'r') as f:
+        return [line[:-1] for line in f] # Remove newline character
+  # Else, find them and cache them
+  filepaths = findFilePaths(srcDir, extension)
+  if not os.path.exists(csvDir):
+    os.mkdir(csvDir)
+  with open(cachepath, 'w') as f:
+    f.write("\n".join(sorted(filepaths)))
+  return filepaths
+
+
 def readFloats(path, dimensions, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
   """ Read a file as an ArrayImg of FloatType """
   size = reduce(operator.mul, dimensions)
