@@ -37,8 +37,8 @@ csvDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/"
 offset = 60 # pixels # TODO not in use: needed? The left margin of each image is severely elastically deformed. Does it matter for SIFT?
 overlap = 124 # pixels
 
-section_width = 13000 # pixels, after section-wise montaging
-section_height = 13000
+section_width = 26000 # pixels, after section-wise montaging
+section_height = 26000
 
 
 # Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
@@ -163,10 +163,14 @@ class MontageSlice2x2(Callable):
     
     # Save transformation matrices
     matrices = []
-    for tile in tiles:
+    corrections = [[0, 0], # top-left tile is fixed
+                   [width - overlap, 0], # top-right tile
+                   [0, height - overlap], # bottom-left tile
+                   [width - overlap, height - overlap]] # bottom-right tile
+    for i, tile in enumerate(tiles):
       a = zeros(6, 'd')
       tile.getModel().toArray(a)
-      matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
+      matrices.append(array([a[0], a[2], a[4] + corrections[i][0], a[1], a[3], a[5] + corrections[i][1]], 'd'))
     saveMatrices(self.groupName, matrices, self.csvDir)
     return matrices
   
