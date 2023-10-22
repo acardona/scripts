@@ -9,7 +9,6 @@ from lib.ui import wrap
 from collections import defaultdict
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
-from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
 from java.util.concurrent import Callable
 from java.lang import Double
