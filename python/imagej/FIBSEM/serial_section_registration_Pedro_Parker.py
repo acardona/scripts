@@ -62,7 +62,9 @@ for filepath in filepaths:
   sectionName = filename[0:-9]
   groups[sectionName].append(filepath)
 
+# Ensure tilePaths are sorted, and check there's 1 or 4 tiles per group
 for groupName_, tilePaths_ in groups.iteritems():
+  tilePaths_.sort() # in place
   if 1 == len(tilePaths_) or 4 == len(tilePaths_):
     pass
   else:
@@ -135,7 +137,7 @@ class MontageSlice2x2(Callable):
     width = sps[0].getWidth()
     height = sps[1].getHeight()
     
-    # Define 4 ROIs:
+    # Define 4 ROIs: (x, y, width, height)
     # left-right
     roiLeft = Roi(width - overlap, 0, overlap, height) # right edge, for tile 0-0-0  (and 0-1-0)
     roiRight = Roi(0, 0, overlap, height)              # left edge,  for tile 0-0-1  (and 0-1-1)
@@ -147,6 +149,7 @@ class MontageSlice2x2(Callable):
     tc = TileConfiguration()
     tiles = [Tile(TranslationModel2D()) for _ in self.tilePaths]
     tc.addTiles(tiles)
+    # ASSUMES that sps is a list of sorted tiles, as [0-0 top left, 0-1 top right, 1-0 bottom left, 1-1 bottom right]
     self.connectTiles(sps, tiles, 0, 1, roiLeft, roiRight)
     self.connectTiles(sps, tiles, 2, 3, roiLeft, roiRight)
     self.connectTiles(sps, tiles, 0, 2, roiTop, roiBottom)
@@ -162,14 +165,15 @@ class MontageSlice2x2(Callable):
     
     # Save transformation matrices
     matrices = []
+    # Corrections: make transformations relative to 0,0 of the first tile (top left)
     corrections = [[0, 0], # top-left tile is fixed
                    [width - overlap, 0], # top-right tile
                    [0, height - overlap], # bottom-left tile
                    [width - overlap, height - overlap]] # bottom-right tile
-    for i, tile in enumerate(tiles):
+    for tile, correction in izip(tiles, corrections):
       a = zeros(6, 'd')
       tile.getModel().toArray(a)
-      matrices.append(array([a[0], a[2], a[4] + corrections[i][0], a[1], a[3], a[5] + corrections[i][1]], 'd'))
+      matrices.append(array([a[0], a[2], a[4] + corrections[0], a[1], a[3], a[5] + corrections[1]], 'd'))
     saveMatrices(self.groupName, matrices, self.csvDir)
     return matrices
   
