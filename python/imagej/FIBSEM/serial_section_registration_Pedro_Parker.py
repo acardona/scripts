@@ -34,7 +34,7 @@ csvDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/"
 
 # TODO ensure tgtDir and csvDir exist
 
-offset = 60 # pixels # TODO not in use: needed? The left margin of each image is severely elastically deformed. Does it matter for SIFT?
+offset = 80 # pixels # TODO not in use: needed? The left margin of each image is severely elastically deformed. Does it matter for SIFT?
 overlap = 240 #124 # pixels
 
 section_width = 26000 # pixels, after section-wise montaging
@@ -88,7 +88,7 @@ class MontageSlice2x2(Callable):
     self.paramsTileConfiguration = {
       "maxAllowedError": 0, # Saalfeld recommends 0
       "maxPlateauwidth": 200, # Like in TrakEM2
-      "maxIterations": 100, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
+      "maxIterations": 1000, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
       "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
     }
     
@@ -173,21 +173,21 @@ class MontageSlice2x2(Callable):
     
     # Define 4 ROIs: (x, y, width, height)
     # left-right
-    roiLeft = Roi(width - self.overlap, 0, self.overlap, height) # right edge, for tile 0-0-0  (and 0-1-0)
-    roiRight = Roi(self.offset, 0, self.overlap, height)         # left edge,  for tile 0-0-1  (and 0-1-1)
+    roiEast = Roi(width - self.overlap, 0, self.overlap, height) # right edge, for tile 0-0-0  (and 0-1-0)
+    roiWest = Roi(self.offset, 0, self.overlap, height)          # left edge,  for tile 0-0-1  (and 0-1-1)
     # top-bottom
-    roiTop = Roi(0, height - self.overlap, width, self.overlap) # bottom edge, for tile 0-0-0  (and 0-0-1)
-    roiBottom = Roi(0, 0, width, self.overlap)                  # top edge,    for tile 0-1-0  (and 0-1-1)
+    roiSouth = Roi(0, height - self.overlap, width, self.overlap) # bottom edge, for tile 0-0-0  (and 0-0-1)
+    roiNorth = Roi(0, 0, width, self.overlap)                     # top edge,    for tile 0-1-0  (and 0-1-1)
     
     # Declare tile links
     tc = TileConfiguration()
     tiles = [Tile(TranslationModel2D()) for _ in self.tilePaths]
     tc.addTiles(tiles)
     # ASSUMES that sps is a list of sorted tiles, as [0-0 top left, 0-1 top right, 1-0 bottom left, 1-1 bottom right]
-    self.connectTiles(sps, tiles, 0, 1, roiLeft, roiRight, self.offset)
-    self.connectTiles(sps, tiles, 2, 3, roiLeft, roiRight, self.offset)
-    self.connectTiles(sps, tiles, 0, 2, roiTop, roiBottom, 0)
-    self.connectTiles(sps, tiles, 1, 3, roiTop, roiBottom, 0)
+    self.connectTiles(sps, tiles, 0, 1, roiEast, roiWest, self.offset)
+    self.connectTiles(sps, tiles, 2, 3, roiEast, roiWest, self.offset)
+    self.connectTiles(sps, tiles, 0, 2, roiSouth, roiNorth, 0)
+    self.connectTiles(sps, tiles, 1, 3, roiSouth, roiNorth, 0)
     tc.fixTile(tiles[0]) # top left tile
     
     # Optimise tile positions
@@ -195,7 +195,7 @@ class MontageSlice2x2(Callable):
     maxPlateauwidth = self.paramsTileConfiguration["maxPlateauwidth"]
     maxIterations   = self.paramsTileConfiguration["maxIterations"]
     damp            = self.paramsTileConfiguration["damp"]
-    tc.optimizeSilently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp)
+    tc.optimize(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp)
     
     # Save transformation matrices
     matrices = []
