@@ -12,7 +12,7 @@ from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/maste
 from java.util import ArrayList
 from java.util.concurrent import Callable
 from java.lang import Double
-from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration
+from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, Point, NotEnoughDataPointsException, Tile, TileConfiguration
 from jarray import zeros, array
 from net.imglib2 import FinalInterval
 from net.imglib2.img.array import ArrayImgs
@@ -21,6 +21,10 @@ from net.imglib2.type import PrimitiveType
 from net.imglib2.cache import CacheLoader
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.img.cell import Cell
+from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
+from net.imglib2.img.array import ArrayImgFactory
+from net.imglib2.type.numeric.real import FloatType
+from net.imglib2.type.numeric.complex import ComplexFloatType
 from ij.gui import Roi, PointRoi
 from ij.process import ShortProcessor
 from ij import ImagePlus
@@ -113,16 +117,61 @@ class MontageSlice2x2(Callable):
     
     return features
     
-  def getPointMatches(self, sp0, roi0, sp1, roi1, offset):
-    features0 = self.getFeatures(sp0, roi0)
-    features1 = self.getFeatures(sp1, roi1)
-    model = TranslationModel2D()
-    pointmatches = FloatArray2DSIFT.createMatches(features0,
-                                                  features1,
-                                                  self.params.get("max_sd", 1.5), # max_sd: maximal difference in size (ratio max/min)
-                                                  model,
-                                                  self.params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
-                                                  self.params.get("rod", 0.9)) # rod: ratio of best vs second best
+  def getPointMatches(self, sp0, roi0, sp1, roi1, offset, mode="PhaseCorrelation"):
+    """
+    Start off with PhaseCorrelation, fall back to SIFT if needed.
+    Or start right away with SIFT when mode="SIFT"
+    """
+    if "PhaseCorrelation" == mode:
+      sp0.setRoi(roi0)
+      spA = sp0.crop()
+      sp1.setRoi(roi1)
+      spB = sp1.crop()
+      # Thread pool
+      exe = Executors.newFixedThreadPool(1)
+      try:
+        # PCM: phase correlation matrix
+        pcm = PhaseCorrelation2.calculatePCM(spA,  
+                                             spB,  
+                                             ArrayImgFactory(FloatType()),  
+                                             FloatType(),  
+                                             ArrayImgFactory(ComplexFloatType()),  
+                                             ComplexFloatType(),  
+                                             exe)
+        # Number of phase correlation peaks to check with cross-correlation
+        nHighestPeaks = 10
+        # Minimum image overlap to consider, in pixels
+        minOverlap = min(spA.getWidth(), spa.getHeight()) / 3
+        # Returns an instance of PhaseCorrelationPeak2
+        peak = PhaseCorrelation2.getShift(pcm, spA, spB, nHighestPeaks,
+                                          minOverlap, True, True, exe)
+        # Construct a single PointMatch using the computed best x,y shift
+        shift = peak.getSubpixelShift()  
+        dx = shift.getFloatPosition(0)
+        dy = shift.getFloatPosition(1)
+        if 0.0 == dx and 0.0 == dy:
+          # The shift can't be zero
+          # Fall back to SIFT
+          mode = "SIFT"
+        else:
+          pointmatches = ArrayList()
+          pointmatches.add(PointMatch(Point(0.0, 0.0), Point(dx, dy)))
+      except Exception, e:
+        # No peaks found
+        mode = "SIFT"
+      finally:
+        exe.shutdow()
+
+    if "SIFT" == mode:
+      features0 = self.getFeatures(sp0, roi0)
+      features1 = self.getFeatures(sp1, roi1)
+      model = TranslationModel2D()
+      pointmatches = FloatArray2DSIFT.createMatches(features0,
+                                                    features1,
+                                                    self.params.get("max_sd", 1.5), # max_sd: maximal difference in size (ratio max/min)
+                                                    model,
+                                                    self.params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
+                                                    self.params.get("rod", 0.9)) # rod: ratio of best vs second best
     
     # Correct pointmatches position: roi0 is on the right or the bottom of the image
     bounds = roi0.getBounds()
