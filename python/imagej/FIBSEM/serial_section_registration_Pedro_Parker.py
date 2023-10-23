@@ -4,7 +4,7 @@ sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import saveMatrices, loadMatrices
 from lib.serial2Dregistration import ensureSIFTFeatures
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
-from lib.util import newFixedThreadPool
+from lib.util import newFixedThreadPool, syncPrint, printException
 from lib.ui import wrap
 from collections import defaultdict
 from mpicbg.imagefeatures import FloatArray2DSIFT
@@ -128,7 +128,7 @@ class MontageSlice2x2(Callable):
       sp1.setRoi(roi1)
       spB = sp1.crop()
       # Thread pool
-      exe = Executors.newFixedThreadPool(1)
+      exe = newFixedThreadPool(n_threads=1, name="phase-correlation")
       try:
         # PCM: phase correlation matrix
         pcm = PhaseCorrelation2.calculatePCM(spA,  
@@ -152,17 +152,21 @@ class MontageSlice2x2(Callable):
         if 0.0 == dx and 0.0 == dy:
           # The shift can't be zero
           # Fall back to SIFT
+          syncPrint("shift is zero, fall back to SIFT")
           mode = "SIFT"
         else:
           pointmatches = ArrayList()
           pointmatches.add(PointMatch(Point(0.0, 0.0), Point(dx, dy)))
       except Exception, e:
         # No peaks found
+        syncPrint("No peaks found, fallback to SIFT")
+        printException(e=e)
         mode = "SIFT"
       finally:
-        exe.shutdow()
+        exe.shutdown()
 
     if "SIFT" == mode:
+      syncPrint("PointMatches by SIFT")
       features0 = self.getFeatures(sp0, roi0)
       features1 = self.getFeatures(sp1, roi1)
       model = TranslationModel2D()
