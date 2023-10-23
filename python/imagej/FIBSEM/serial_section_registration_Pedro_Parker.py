@@ -130,12 +130,19 @@ class MontageSlice2x2(Callable):
     y0 = bounds.y
     for pm in pointmatches:
       # Correct points on left image for ROI being on its right margin
-      l1 = pm.getP1().getL()
+      p1 = pm.getP1()
+      l1 = p1.getL()
       l1[0] += x0
       l1[1] += y0
-      l2 = pm.getP2().getL()
+      w1 = p1.getW()
+      w1[0] += x0
+      w1[1] += y0
       # Correcting for the ~60 to ~100 px on the left margin that are non-linearly deformed
+      p2 = pm.getP2()
+      l2 = p2.getL()
       l2[0] += offset
+      w2 = p2.getW()
+      w2[0] += offset
     #
     return pointmatches
 
