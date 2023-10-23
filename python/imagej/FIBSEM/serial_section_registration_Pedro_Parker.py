@@ -21,8 +21,9 @@ from net.imglib2.type import PrimitiveType
 from net.imglib2.cache import CacheLoader
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.img.cell import Cell
-from ij.gui import Roi
+from ij.gui import Roi, PointRoi
 from ij.process import ShortProcessor
+from ij import ImagePlus
 from itertools import izip
 
 
@@ -34,7 +35,7 @@ csvDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/"
 # TODO ensure tgtDir and csvDir exist
 
 offset = 60 # pixels # TODO not in use: needed? The left margin of each image is severely elastically deformed. Does it matter for SIFT?
-overlap = 124 # pixels
+overlap = 240 #124 # pixels
 
 section_width = 26000 # pixels, after section-wise montaging
 section_height = 26000
@@ -89,7 +90,7 @@ class MontageSlice2x2(Callable):
       "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
     }
     
-  def getFeatures(self, sp, roi):
+  def getFeatures(self, sp, roi, debug=False):
     sp.setRoi(roi)
     sp = sp.crop()
     paramsSIFT = self.paramsSIFT.clone()
@@ -98,6 +99,16 @@ class MontageSlice2x2(Callable):
     ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
     features = ArrayList() # of Feature instances
     ijSIFT.extractFeatures(sp, features)
+    
+    if debug:
+      ip = sp.duplicate()
+      proi = PointRoi()
+      for p in features:
+        proi.addPoint(p.location[0], p.location[1])
+      imp = ImagePlus("", ip)
+      imp.setRoi(proi)
+      imp.show()
+    
     return features
     
   def getPointMatches(self, sp0, roi0, sp1, roi1):
@@ -110,6 +121,16 @@ class MontageSlice2x2(Callable):
                                                   model,
                                                   self.params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
                                                   self.params.get("rod", 0.9)) # rod: ratio of best vs second best
+    
+    # Correct pointmatches position: roi0 is on the right or the bottom of the image
+    bounds = roi0.getBounds()
+    x0 = bounds.x
+    y0 = bounds.y
+    for pm in pointmatches:
+      l = pm.getP1().getL()
+      l[0] += x0
+      l[1] += y0
+    
     return pointmatches
 
   def connectTiles(self, sps, tiles, i, j, roi0, roi1):
@@ -165,15 +186,10 @@ class MontageSlice2x2(Callable):
     
     # Save transformation matrices
     matrices = []
-    # Corrections: make transformations relative to 0,0 of the first tile (top left)
-    corrections = [[0, 0], # top-left tile is fixed
-                   [width - overlap, 0], # top-right tile
-                   [0, height - overlap], # bottom-left tile
-                   [width - overlap, height - overlap]] # bottom-right tile
-    for tile, correction in izip(tiles, corrections):
+    for tile in tiles:
       a = zeros(6, 'd')
       tile.getModel().toArray(a)
-      matrices.append(array([a[0], a[2], a[4] + corrections[0], a[1], a[3], a[5] + corrections[1]], 'd'))
+      matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
     saveMatrices(self.groupName, matrices, self.csvDir)
     return matrices
   
