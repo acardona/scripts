@@ -73,11 +73,13 @@ for groupName_, tilePaths_ in groups.iteritems():
   
 
 class MontageSlice2x2(Callable):
-  def __init__(self, groupName, tilePaths, paramsSIFT, csvDir):
+  def __init__(self, groupName, tilePaths, overlap, offset, paramsSIFT, csvDir):
     # EXPECTS 4 filepaths with filenames ending in ["_0-0-0.dat", "_0-0-1.dat", "_0-1-0.dat", "_0-1-1.dat"]
     # ASSUMES all tiles have the same dimensions
     self.groupName = groupName
     self.tilePaths = list(sorted(tilePaths))
+    self.overlap = overlap
+    self.offset = offset
     self.paramsSIFT = paramsSIFT
     self.csvDir = csvDir
     self.params = {"max_sd": 1.5, # max_sd: maximal difference in size (ratio max/min)
@@ -86,7 +88,7 @@ class MontageSlice2x2(Callable):
     self.paramsTileConfiguration = {
       "maxAllowedError": 0, # Saalfeld recommends 0
       "maxPlateauwidth": 200, # Like in TrakEM2
-      "maxIterations": 1000, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
+      "maxIterations": 100, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
       "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
     }
     
@@ -111,7 +113,7 @@ class MontageSlice2x2(Callable):
     
     return features
     
-  def getPointMatches(self, sp0, roi0, sp1, roi1):
+  def getPointMatches(self, sp0, roi0, sp1, roi1, offset):
     features0 = self.getFeatures(sp0, roi0)
     features1 = self.getFeatures(sp1, roi1)
     model = TranslationModel2D()
@@ -127,14 +129,18 @@ class MontageSlice2x2(Callable):
     x0 = bounds.x
     y0 = bounds.y
     for pm in pointmatches:
-      l = pm.getP1().getL()
-      l[0] += x0
-      l[1] += y0
-    
+      # Correct points on left image for ROI being on its right margin
+      l1 = pm.getP1().getL()
+      l1[0] += x0
+      l1[1] += y0
+      l2 = pm.getP2().getL()
+      # Correcting for the ~60 to ~100 px on the left margin that are non-linearly deformed
+      l2[0] += offset
+    #
     return pointmatches
 
-  def connectTiles(self, sps, tiles, i, j, roi0, roi1):
-    pointmatches = self.getPointMatches(sps[i], roi0, sps[j], roi1)
+  def connectTiles(self, sps, tiles, i, j, roi0, roi1, offset):
+    pointmatches = self.getPointMatches(sps[i], roi0, sps[j], roi1, offset)
     tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
     
   def loadShortProcessors(self):
@@ -160,21 +166,21 @@ class MontageSlice2x2(Callable):
     
     # Define 4 ROIs: (x, y, width, height)
     # left-right
-    roiLeft = Roi(width - overlap, 0, overlap, height) # right edge, for tile 0-0-0  (and 0-1-0)
-    roiRight = Roi(0, 0, overlap, height)              # left edge,  for tile 0-0-1  (and 0-1-1)
+    roiLeft = Roi(width - self.overlap, 0, self.overlap, height) # right edge, for tile 0-0-0  (and 0-1-0)
+    roiRight = Roi(self.offset, 0, self.overlap, height)         # left edge,  for tile 0-0-1  (and 0-1-1)
     # top-bottom
-    roiTop = Roi(0, height - overlap, width, overlap) # bottom edge, for tile 0-0-0  (and 0-0-1)
-    roiBottom = Roi(0, 0, width, overlap)             # top edge,    for tile 0-1-0  (and 0-1-1)
+    roiTop = Roi(0, height - self.overlap, width, self.overlap) # bottom edge, for tile 0-0-0  (and 0-0-1)
+    roiBottom = Roi(0, 0, width, self.overlap)                  # top edge,    for tile 0-1-0  (and 0-1-1)
     
     # Declare tile links
     tc = TileConfiguration()
     tiles = [Tile(TranslationModel2D()) for _ in self.tilePaths]
     tc.addTiles(tiles)
     # ASSUMES that sps is a list of sorted tiles, as [0-0 top left, 0-1 top right, 1-0 bottom left, 1-1 bottom right]
-    self.connectTiles(sps, tiles, 0, 1, roiLeft, roiRight)
-    self.connectTiles(sps, tiles, 2, 3, roiLeft, roiRight)
-    self.connectTiles(sps, tiles, 0, 2, roiTop, roiBottom)
-    self.connectTiles(sps, tiles, 1, 3, roiTop, roiBottom)
+    self.connectTiles(sps, tiles, 0, 1, roiLeft, roiRight, self.offset)
+    self.connectTiles(sps, tiles, 2, 3, roiLeft, roiRight, self.offset)
+    self.connectTiles(sps, tiles, 0, 2, roiTop, roiBottom, 0)
+    self.connectTiles(sps, tiles, 1, 3, roiTop, roiBottom, 0)
     tc.fixTile(tiles[0]) # top left tile
     
     # Optimise tile positions
@@ -214,12 +220,14 @@ class SectionLoader(CacheLoader):
   """
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
-  def __init__(self, dimensions, groupNames, tileGroups, paramsSIFT, csvDir):
+  def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, csvDir):
     """
     """
     self.dimensions = dimensions # a list of [width, height] for the canvas onto which draw the image tiles
     self.groupNames = groupNames # list of names of each group, used to find its montage CSV if any
     self.tileGroups = tileGroups # a list of lists of file paths to .dat files, one per section
+    self.overlap = overlap
+    self.offset = offset
     self.paramsSIFT = paramsSIFT
     self.csvDir = csvDir
   
@@ -227,7 +235,7 @@ class SectionLoader(CacheLoader):
     groupName = self.groupNames[index]
     tilePaths = self.tileGroups[index]
     if 4 == len(tilePaths):
-      img = MontageSlice2x2(groupName, tilePaths, paramsSIFT, csvDir).montagedImg(*self.dimensions)
+      img = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset, self.paramsSIFT, self.csvDir).montagedImg(*self.dimensions)
     elif 1 == len(group):
       img = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=False)[0]
     else:
@@ -276,7 +284,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, csvDi
       # EXPECTING 2x2 tiles or 1
       if 4 == len(tilePaths):
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
-        futures.append(exe.submit(MontageSlice2x2(groupName, tilePaths, paramsSIFT, csvDir)))
+        futures.append(exe.submit(MontageSlice2x2(groupName, tilePaths, overlap, offset, paramsSIFT, csvDir)))
       elif 1 == len(tilePaths):
         pass
       else:
@@ -314,7 +322,7 @@ cell_dimensions = dimensions + [1]
 pixelType = UnsignedShortType
 primitiveType = PrimitiveType.SHORT
 
-volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, paramsSIFT, csvDir),
+volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, csvDir),
                               volume_dimensions,
                               cell_dimensions,
                               pixelType,
