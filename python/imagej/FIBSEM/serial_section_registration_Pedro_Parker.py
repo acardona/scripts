@@ -127,8 +127,8 @@ class MontageSlice2x2(Callable):
       spA = sp0.crop()
       sp1.setRoi(roi1)
       spB = sp1.crop()
-      spA_img = ArrayImgs.unsignedShorts(spA.getPixels, spA.getWidth(), spaA.getHeight())
-      spB_img = ArrayImgs.unsignedShorts(spB.getPixels, spB.getWidth(), spaB.getHeight())
+      spA_img = ArrayImgs.unsignedShorts(spA.getPixels(), spA.getWidth(), spA.getHeight())
+      spB_img = ArrayImgs.unsignedShorts(spB.getPixels(), spB.getWidth(), spB.getHeight())
       # Thread pool
       exe = newFixedThreadPool(n_threads=1, name="phase-correlation")
       try:
@@ -143,7 +143,7 @@ class MontageSlice2x2(Callable):
         # Number of phase correlation peaks to check with cross-correlation
         nHighestPeaks = 10
         # Minimum image overlap to consider, in pixels
-        minOverlap = min(spA.getWidth(), spa.getHeight()) / 3
+        minOverlap = min(spA.getWidth(), spA.getHeight()) / 3
         # Returns an instance of PhaseCorrelationPeak2
         peak = PhaseCorrelation2.getShift(pcm, spA_img, spB_img, nHighestPeaks,
                                           minOverlap, True, True, exe)
@@ -158,7 +158,7 @@ class MontageSlice2x2(Callable):
           mode = "SIFT"
         else:
           pointmatches = ArrayList()
-          pointmatches.add(PointMatch(Point(0.0, 0.0), Point(dx, dy)))
+          pointmatches.add(PointMatch(Point([0.0, 0.0]), Point([dx, dy])))
       except Exception, e:
         # No peaks found
         syncPrint("No peaks found, fallback to SIFT")
