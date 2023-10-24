@@ -127,23 +127,25 @@ class MontageSlice2x2(Callable):
       spA = sp0.crop()
       sp1.setRoi(roi1)
       spB = sp1.crop()
+      spA_img = ArrayImgs.unsignedShorts(spA.getPixels, spA.getWidth(), spaA.getHeight())
+      spB_img = ArrayImgs.unsignedShorts(spB.getPixels, spB.getWidth(), spaB.getHeight())
       # Thread pool
       exe = newFixedThreadPool(n_threads=1, name="phase-correlation")
       try:
         # PCM: phase correlation matrix
-        pcm = PhaseCorrelation2.calculatePCM(spA,  
-                                             spB,  
-                                             ArrayImgFactory(FloatType()),  
-                                             FloatType(),  
-                                             ArrayImgFactory(ComplexFloatType()),  
-                                             ComplexFloatType(),  
+        pcm = PhaseCorrelation2.calculatePCM(spA_img,
+                                             spB_img,
+                                             ArrayImgFactory(FloatType()),
+                                             FloatType(),
+                                             ArrayImgFactory(ComplexFloatType()),
+                                             ComplexFloatType(),
                                              exe)
         # Number of phase correlation peaks to check with cross-correlation
         nHighestPeaks = 10
         # Minimum image overlap to consider, in pixels
         minOverlap = min(spA.getWidth(), spa.getHeight()) / 3
         # Returns an instance of PhaseCorrelationPeak2
-        peak = PhaseCorrelation2.getShift(pcm, spA, spB, nHighestPeaks,
+        peak = PhaseCorrelation2.getShift(pcm, spA_img, spB_img, nHighestPeaks,
                                           minOverlap, True, True, exe)
         # Construct a single PointMatch using the computed best x,y shift
         shift = peak.getSubpixelShift()  
