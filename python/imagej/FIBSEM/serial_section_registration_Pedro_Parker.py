@@ -1,6 +1,6 @@
 from __future__ import with_statement
 import sys, os
-sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
+sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import saveMatrices, loadMatrices
 from lib.serial2Dregistration import ensureSIFTFeatures
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
@@ -32,9 +32,9 @@ from itertools import izip
 
 
 # Folders
-srcDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/"
-tgtDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/registration-Albert/"
-csvDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/"
+srcDir = "/net/zstore1/FIBSEM/Pedro_parker/"
+tgtDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/"
+csvDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/"
 
 # Ensure tgtDir and csvDir exist
 if not os.path.exists(csvDir):
@@ -81,7 +81,7 @@ for groupName_, tilePaths_ in groups.iteritems():
   if 1 == len(tilePaths_) or 4 == len(tilePaths_):
     pass
   else:
-    print "WARNING:", groupName_, "has", len(tilePaths_), "tiles"
+    syncPrint("WARNING:" + groupName_ + " has " + str(len(tilePaths_)) + " tiles")
   
 
 class MontageSlice2x2(Callable):
@@ -126,7 +126,7 @@ class MontageSlice2x2(Callable):
     
     return features
     
-  def getPointMatches(self, sp0, roi0, sp1, roi1, offset, mode="PhaseCorrelation"):
+  def getPointMatches(self, sp0, roi0, sp1, roi1, offset, mode="SIFT"):
     """
     Start off with PhaseCorrelation, fall back to SIFT if needed.
     Or start right away with SIFT when mode="SIFT"
@@ -176,11 +176,12 @@ class MontageSlice2x2(Callable):
       finally:
         exe.shutdown()
 
+    model = TranslationModel2D() # suffices locally
+    
     if "SIFT" == mode:
       syncPrint("PointMatches by SIFT")
       features0 = self.getFeatures(sp0, roi0)
       features1 = self.getFeatures(sp1, roi1)
-      model = TranslationModel2D()
       pointmatches = FloatArray2DSIFT.createMatches(features0,
                                                     features1,
                                                     self.params.get("max_sd", 1.5), # max_sd: maximal difference in size (ratio max/min)
@@ -195,10 +196,10 @@ class MontageSlice2x2(Callable):
     minInlierRatio = self.paramsRANSAC.get("minInlierRatio", 0.01) # 1%
     modelFound = model.filterRansac(pointmatches, inliers, iterations, maxEpsilon, minInlierRatio)
     if modelFound:
-      print "Found model with %i inliers" % inliers.size()
+      syncPrint("Found model with %i inliers" % inliers.size())
       pointmatches = inliers
     else:
-      print "model NOT FOUND"
+      syncPrint("model NOT FOUND")
       return ArrayList() # empty
     
     # Correct pointmatches position: roi0 is on the right or the bottom of the image
@@ -211,15 +212,15 @@ class MontageSlice2x2(Callable):
       l1 = p1.getL()
       l1[0] += x0
       l1[1] += y0
-      w1 = p1.getW()
-      w1[0] += x0
-      w1[1] += y0
+      #w1 = p1.getW()
+      #w1[0] += x0
+      #w1[1] += y0
       # Correcting for the ~60 to ~100 px on the left margin that are non-linearly deformed
       p2 = pm.getP2()
       l2 = p2.getL()
       l2[0] += offset
-      w2 = p2.getW()
-      w2[0] += offset
+      #w2 = p2.getW()
+      #`w2[0] += offset
     #
     return pointmatches
 
@@ -229,7 +230,7 @@ class MontageSlice2x2(Callable):
     
   def loadShortProcessors(self):
     for filepath in self.tilePaths:
-      print "#%s#" % filepath
+      syncPrint("#%s#" % filepath)
     # Load images (TODO: should use FIBSEM_Reader instead)
     return [readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor() for filepath in self.tilePaths]
 
@@ -325,7 +326,7 @@ class SectionLoader(CacheLoader):
       img = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=False)[0]
     else:
       # return empty Cell
-      print "WARNING: number of tiles isn't 4 or 1"
+      syncPrint("WARNING: number of tiles isn't 4 or 1")
       return Cell(self.dimensions + [1],
                   [0, 0, index],
                   ArrayImgs.unsignedShorts(self.dimensions).update(None)) # TODO this should be a constant DataAccess
@@ -359,7 +360,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
   paramsSIFT: for montaging using scale invariant feature transform (SIFT).
   csvDir: where to save the matrix CSV files, one per montage and section.
   """
-  exe = newFixedThreadPool()
+  exe = newFixedThreadPool(32)
   try:
 
     futures = []
@@ -373,7 +374,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
       elif 1 == len(tilePaths):
         pass
       else:
-        print "UNEXPECTED number of tiles in section named", groupName, ":", len(tilePaths)
+        syncPrint("UNEXPECTED number of tiles in section named %s: %i" % (groupName, len(tilePaths)))
 
     # Await them all
     for future in futures:
@@ -392,8 +393,10 @@ for groupName in sorted(groups):
 
 
 # DEBUG: just one section
+"""
 groupNames = [groupNames[1000]]
 tileGroups = [tileGroups[1000]]
+"""
 
 
 # Montage all sections
