@@ -162,7 +162,7 @@ class MontageSlice2x2(Callable):
       except Exception, e:
         # No peaks found
         syncPrint("No peaks found, fallback to SIFT")
-        printException(e=e)
+        printException()
         mode = "SIFT"
       finally:
         exe.shutdown()
