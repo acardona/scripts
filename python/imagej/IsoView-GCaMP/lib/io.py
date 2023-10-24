@@ -74,7 +74,7 @@ def loadFilePaths(srcDir, extension, csvDir, cache_name, ignore_cache=False):
   cachepath = os.path.join(csvDir, cache_name)
   if not ignore_cache and os.path.exists(cachepath):
       with open(cachepath, 'r') as f:
-        return [line[:-1] for line in f] # Remove newline character
+        return f.read().splitlines() # Removes newline character
   # Else, find them and cache them
   filepaths = findFilePaths(srcDir, extension)
   if not os.path.exists(csvDir):
