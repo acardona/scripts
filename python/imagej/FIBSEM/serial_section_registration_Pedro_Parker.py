@@ -36,9 +36,11 @@ srcDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/"
 tgtDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/registration-Albert/"
 csvDir = "/home/albert/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/"
 
-# TODO ensure tgtDir and csvDir exist
+# Ensure tgtDir and csvDir exist
+if not os.path.exists(csvDir):
+  os.makedirs(csvDir) # recursive directory creation
 
-offset = 80 # pixels # TODO not in use: needed? The left margin of each image is severely elastically deformed. Does it matter for SIFT?
+offset = 80 # pixels The left margin of each image is severely elastically deformed. Does it matter for SIFT?
 overlap = 240 #124 # pixels
 
 section_width = 26000 # pixels, after section-wise montaging
@@ -54,6 +56,12 @@ paramsSIFT.initialSigma = 1.6 # default 1.6
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
     
+
+paramsRANSAC = {
+  "iterations": 1000,
+   "maxEpsilon": 5, # pixels, maximum error allowed
+   "minInlierRatio": 0.01 # 1%
+}
 
 # Find all .dat files, as a sorted list
 filepaths = loadFilePaths(srcDir, ".dat", csvDir, "imagefilepaths")
@@ -77,7 +85,7 @@ for groupName_, tilePaths_ in groups.iteritems():
   
 
 class MontageSlice2x2(Callable):
-  def __init__(self, groupName, tilePaths, overlap, offset, paramsSIFT, csvDir):
+  def __init__(self, groupName, tilePaths, overlap, offset, paramsSIFT, paramsRANSAC, csvDir):
     # EXPECTS 4 filepaths with filenames ending in ["_0-0-0.dat", "_0-0-1.dat", "_0-1-0.dat", "_0-1-1.dat"]
     # ASSUMES all tiles have the same dimensions
     self.groupName = groupName
@@ -85,6 +93,7 @@ class MontageSlice2x2(Callable):
     self.overlap = overlap
     self.offset = offset
     self.paramsSIFT = paramsSIFT
+    self.paramsRANSAC = paramsRANSAC
     self.csvDir = csvDir
     self.params = {"max_sd": 1.5, # max_sd: maximal difference in size (ratio max/min)
                    "max_id": Double.MAX_VALUE, # max_id: maximal distance in image space
@@ -178,6 +187,19 @@ class MontageSlice2x2(Callable):
                                                     model,
                                                     self.params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
                                                     self.params.get("rod", 0.9)) # rod: ratio of best vs second best
+
+    # Filter matches by geometric consensus
+    inliers = ArrayList()
+    iterations = self.paramsRANSAC.get("iterations", 1000)
+    maxEpsilon = self.paramsRANSAC.get("maxEpsilon", 25) # pixels
+    minInlierRatio = self.paramsRANSAC.get("minInlierRatio", 0.01) # 1%
+    modelFound = model.filterRansac(pointmatches, inliers, iterations, maxEpsilon, minInlierRatio)
+    if modelFound:
+      print "Found model with %i inliers" % inliers.size()
+      pointmatches = inliers
+    else:
+      print "model NOT FOUND"
+      return ArrayList() # empty
     
     # Correct pointmatches position: roi0 is on the right or the bottom of the image
     bounds = roi0.getBounds()
@@ -282,7 +304,7 @@ class SectionLoader(CacheLoader):
   """
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
-  def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, csvDir):
+  def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir):
     """
     """
     self.dimensions = dimensions # a list of [width, height] for the canvas onto which draw the image tiles
@@ -291,14 +313,15 @@ class SectionLoader(CacheLoader):
     self.overlap = overlap
     self.offset = offset
     self.paramsSIFT = paramsSIFT
+    self.paramsRANSAC = paramsRANSAC
     self.csvDir = csvDir
   
   def get(self, index):
     groupName = self.groupNames[index]
     tilePaths = self.tileGroups[index]
     if 4 == len(tilePaths):
-      img = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset, self.paramsSIFT, self.csvDir).montagedImg(*self.dimensions)
-    elif 1 == len(group):
+      img = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset, self.paramsSIFT, self.paramsRANSAC, self.csvDir).montagedImg(*self.dimensions)
+    elif 1 == len(tilePaths):
       img = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=False)[0]
     else:
       # return empty Cell
@@ -319,7 +342,7 @@ class SectionLoader(CacheLoader):
                 aimg.update(None)) # get the underlying DataAccess
 
 
-def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, csvDir):
+def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
   Each group must consist of 1 tile (no montage needed) or 4 tiles, which are assumed to be placed
@@ -346,7 +369,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, csvDi
       # EXPECTING 2x2 tiles or 1
       if 4 == len(tilePaths):
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
-        futures.append(exe.submit(MontageSlice2x2(groupName, tilePaths, overlap, offset, paramsSIFT, csvDir)))
+        futures.append(exe.submit(MontageSlice2x2(groupName, tilePaths, overlap, offset, paramsSIFT, paramsRANSAC, csvDir)))
       elif 1 == len(tilePaths):
         pass
       else:
@@ -374,7 +397,7 @@ tileGroups = [tileGroups[1000]]
 
 
 # Montage all sections
-ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, csvDir)
+ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir)
 
 # Define a virtual CellImg expressing all the montages, one per section
 
@@ -384,7 +407,7 @@ cell_dimensions = dimensions + [1]
 pixelType = UnsignedShortType
 primitiveType = PrimitiveType.SHORT
 
-volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, csvDir),
+volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir),
                               volume_dimensions,
                               cell_dimensions,
                               pixelType,
