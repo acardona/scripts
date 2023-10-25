@@ -96,7 +96,7 @@ for groupName_, tilePaths_ in groups.iteritems():
           fileSizes.append(os.stat(tilePath).st_size)
       except:
         syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
-      if 1 == len(set(widths)) and 1 == len(set(heights) and 1 == len(set(fileSizes)):
+      if 1 == len(set(widths)) and 1 == len(set(heights)) and 1 == len(set(fileSizes)):
         # all tiles are the same
         pass
       else:
