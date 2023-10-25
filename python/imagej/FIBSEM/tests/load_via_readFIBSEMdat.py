@@ -23,4 +23,5 @@ filepaths = [
 
 for filepath in filepaths:
   imp = readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0]
+  imp.setTitle(os.basepath(filepath))
   imp.show()
