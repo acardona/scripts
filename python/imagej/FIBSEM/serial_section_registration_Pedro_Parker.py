@@ -107,8 +107,8 @@ for groupName_, tilePaths_ in groups.iteritems():
     to_remove(groupName_)
 
 for groupName_ in to_remove:
-  del groups[groupName_)
-  syncPrintQ("Will ignore section " + groupName_, copy_to_stdout=True)
+  del groups[groupName_]
+  syncPrintQ("Will ignore section: " + groupName_, copy_to_stdout=True)
   
 
 class MontageSlice2x2(Callable):
