@@ -4,7 +4,7 @@ sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import saveMatrices, loadMatrices
 from lib.serial2Dregistration import ensureSIFTFeatures
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
-from lib.util import newFixedThreadPool, syncPrint, printException
+from lib.util import newFixedThreadPool, syncPrintQ, printException
 from lib.ui import wrap
 from collections import defaultdict
 from mpicbg.imagefeatures import FloatArray2DSIFT
@@ -76,12 +76,39 @@ for filepath in filepaths:
   groups[sectionName].append(filepath)
 
 # Ensure tilePaths are sorted, and check there's 1 or 4 tiles per group
+# and check that tiles are of the same dimensions and file size within each section:
+to_remove = set()
 for groupName_, tilePaths_ in groups.iteritems():
   tilePaths_.sort() # in place
   if 1 == len(tilePaths_) or 4 == len(tilePaths_):
-    pass
+    # Check that all tiles have the same dimensions and the same file size
+    widths = []
+    heights = []
+    fileSizes = []
+    for tilePath in tilePaths_:
+      try:
+        header = readFIBSEMHeader(tilePath)
+        if header is None:
+          to_remove.append(groupName_)
+        else:
+          widths.append(header.xRes)
+          heights.append(header.yRes)
+          fileSizes.append(os.stat(tilePath).st_size)
+      except:
+        syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
+      if 1 == len(set(widths)) and 1 == len(set(heights) and 1 == len(set(fileSizes)):
+        # all tiles are the same
+        pass
+      else:
+        to_remove.add(groupName_)
+        syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n" + groupName_, copy_to_stdout=True)
   else:
-    syncPrint("WARNING:" + groupName_ + " has " + str(len(tilePaths_)) + " tiles")
+    syncPrintQ("WARNING:" + groupName_ + " has " + str(len(tilePaths_)) + " tiles", copy_to_stdout=True)
+    to_remove(groupName_)
+
+for groupName_ in to_remove:
+  del groups[groupName_)
+  syncPrintQ("Will ignore section " + groupName_, copy_to_stdout=True)
   
 
 class MontageSlice2x2(Callable):
@@ -163,14 +190,14 @@ class MontageSlice2x2(Callable):
         if 0.0 == dx and 0.0 == dy:
           # The shift can't be zero
           # Fall back to SIFT
-          syncPrint("shift is zero, fall back to SIFT")
+          syncPrintQ("shift is zero, fall back to SIFT")
           mode = "SIFT"
         else:
           pointmatches = ArrayList()
           pointmatches.add(PointMatch(Point([0.0, 0.0]), Point([dx, dy])))
       except Exception, e:
         # No peaks found
-        syncPrint("No peaks found, fallback to SIFT")
+        syncPrintQ("No peaks found, fallback to SIFT")
         printException()
         mode = "SIFT"
       finally:
@@ -179,7 +206,7 @@ class MontageSlice2x2(Callable):
     model = TranslationModel2D() # suffices locally
     
     if "SIFT" == mode:
-      syncPrint("PointMatches by SIFT")
+      syncPrintQ("PointMatches by SIFT")
       features0 = self.getFeatures(sp0, roi0)
       features1 = self.getFeatures(sp1, roi1)
       pointmatches = FloatArray2DSIFT.createMatches(features0,
@@ -196,10 +223,10 @@ class MontageSlice2x2(Callable):
     minInlierRatio = self.paramsRANSAC.get("minInlierRatio", 0.01) # 1%
     modelFound = model.filterRansac(pointmatches, inliers, iterations, maxEpsilon, minInlierRatio)
     if modelFound:
-      syncPrint("Found model with %i inliers" % inliers.size())
+      syncPrintQ("Found model with %i inliers" % inliers.size())
       pointmatches = inliers
     else:
-      syncPrint("model NOT FOUND")
+      syncPrintQ("model NOT FOUND")
       return ArrayList() # empty
     
     # Correct pointmatches position: roi0 is on the right or the bottom of the image
@@ -230,7 +257,7 @@ class MontageSlice2x2(Callable):
     
   def loadShortProcessors(self):
     for filepath in self.tilePaths:
-      syncPrint("#%s#" % filepath)
+      syncPrintQ("#%s#" % filepath)
     # Load images (TODO: should use FIBSEM_Reader instead)
     return [readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor() for filepath in self.tilePaths]
 
@@ -326,7 +353,7 @@ class SectionLoader(CacheLoader):
       img = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=False)[0]
     else:
       # return empty Cell
-      syncPrint("WARNING: number of tiles isn't 4 or 1")
+      syncPrintQ("WARNING: number of tiles isn't 4 or 1")
       return Cell(self.dimensions + [1],
                   [0, 0, index],
                   ArrayImgs.unsignedShorts(self.dimensions).update(None)) # TODO this should be a constant DataAccess
@@ -374,7 +401,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
       elif 1 == len(tilePaths):
         pass
       else:
-        syncPrint("UNEXPECTED number of tiles in section named %s: %i" % (groupName, len(tilePaths)))
+        syncPrintQ("UNEXPECTED number of tiles in section named %s: %i" % (groupName, len(tilePaths)))
 
     # Await them all
     for future in futures:
