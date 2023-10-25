@@ -215,6 +215,8 @@ class MontageSlice2x2(Callable):
                                                     model,
                                                     self.params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
                                                     self.params.get("rod", 0.9)) # rod: ratio of best vs second best
+    if 0 == pointmatches.size():
+      return pointmatches
 
     # Filter matches by geometric consensus
     inliers = ArrayList()
@@ -256,7 +258,7 @@ class MontageSlice2x2(Callable):
     if pointmatches.size() > 0:
       tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
     else:
-      syncPrintQ("Disconnected tile! No pointmatches found for %i vs %i of group %s" % (i, j, self.groupName))
+      syncPrintQ("Disconnected tile! No pointmatches found for %i vs %i of section %s" % (i, j, self.groupName))
     
   def loadShortProcessors(self):
     for filepath in self.tilePaths:
