@@ -253,7 +253,10 @@ class MontageSlice2x2(Callable):
 
   def connectTiles(self, sps, tiles, i, j, roi0, roi1, offset):
     pointmatches = self.getPointMatches(sps[i], roi0, sps[j], roi1, offset)
-    tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
+    if pointmatches.size() > 0:
+      tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
+    else:
+      syncPrintQ("Disconnected tile! No pointmatches found for %i vs %i of group %s" % (i, j, self.groupName))
     
   def loadShortProcessors(self):
     for filepath in self.tilePaths:
