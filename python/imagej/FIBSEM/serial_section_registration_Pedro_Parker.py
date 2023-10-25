@@ -89,7 +89,7 @@ for groupName_, tilePaths_ in groups.iteritems():
       try:
         header = readFIBSEMHeader(tilePath)
         if header is None:
-          to_remove.append(groupName_)
+          to_remove.add(groupName_)
         else:
           widths.append(header.xRes)
           heights.append(header.yRes)
@@ -104,7 +104,7 @@ for groupName_, tilePaths_ in groups.iteritems():
         syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n" + groupName_, copy_to_stdout=True)
   else:
     syncPrintQ("WARNING:" + groupName_ + " has " + str(len(tilePaths_)) + " tiles", copy_to_stdout=True)
-    to_remove(groupName_)
+    to_remove.add(groupName_)
 
 for groupName_ in to_remove:
   del groups[groupName_]
