@@ -60,7 +60,7 @@ paramsSIFT.fdBins = 8 # default is 8
 
 paramsRANSAC = {
   "iterations": 1000,
-   "maxEpsilon": 5, # pixels, maximum error allowed, usual number is 25
+   "maxEpsilon": 25, # pixels, maximum error allowed, usual number is 25
    "minInlierRatio": 0.01 # 1%
 }
 
