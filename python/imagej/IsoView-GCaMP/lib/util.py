@@ -34,11 +34,13 @@ class Printer(Runnable):
 
 printService.scheduleWithFixedDelay(printMsgQueue, 500, 500, TimeUnit.MILLISECONDS)
 
-def syncPrintQ(msg):
+def syncPrintQ(msg, copy_to_stdout=False):
   """ Synchronized access to python's built-in print function.
       Messages are queued and printed every 0.5 seconds by a scheduled executor service.
   """
   msgQueue.insert(0, msg)
+  if copy_to_stdout:
+    System.out.println(msg)
 
 
 @make_synchronized
