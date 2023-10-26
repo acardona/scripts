@@ -6,6 +6,7 @@ from lib.serial2Dregistration import ensureSIFTFeatures
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
 from lib.util import newFixedThreadPool, syncPrintQ, printException
 from lib.ui import wrap
+from lib.serial2Dregistration import align, setupImageLoader
 from collections import defaultdict
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
@@ -25,6 +26,8 @@ from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
 from net.imglib2.img.array import ArrayImgFactory
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.type.numeric.complex import ComplexFloatType
+from net.imglib2.view import Views
+from net.imglib2.util import Intervals
 from ij.gui import Roi, PointRoi
 from ij.process import ShortProcessor
 from ij import ImagePlus
@@ -34,7 +37,8 @@ from itertools import izip
 # Folders
 srcDir = "/net/zstore1/FIBSEM/Pedro_parker/"
 tgtDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/"
-csvDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/"
+csvDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/" # form in-section montaging
+csvDirZ = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csvZ/" # for cross-section alignment
 
 # Ensure tgtDir and csvDir exist
 if not os.path.exists(csvDir):
@@ -53,8 +57,8 @@ check = False
 # Sections known to have problems
 to_remove = set([
   #"Merlin-FIBdeSEMAna_23-06-16_000236_", # has 5 tiles: there was a duplicate in the root folder
-  "Merlin-FIBdeSEMAna_23-07-12_232829_", # has only 2 tiles
-  "Merlin-FIBdeSEMAna_23-07-01_163948_", # one tile file is truncated
+  "Merlin-FIBdeSEMAna_23-07-12_232829_", # has only 2 tiles, the second one truncaded.
+  "Merlin-FIBdeSEMAna_23-07-01_163948_", # 4th tile file is truncated
   #"Merlin-FIBdeSEMAna_23-07-10_170614_",  # MONTAGED BY HAND - blurry tiles, no SIFT feature correspondences at all
   #"Merlin-FIBdeSEMAna_23-07-10_170205_"   # MONTAGED BY HAND
 ])
@@ -403,7 +407,7 @@ class SectionLoader(CacheLoader):
       ImgMath.compute(ImgMath.img(img)).into(aimg)
   
     return Cell(self.dimensions + [1], # cell dimensions
-                [0] * aimg.numDimensions() + [index], # position in the grid: 0, 0, 0, Z-index
+                [0, 0, index], # position in the grid: 0, 0, 0, Z-index
                 aimg.update(None)) # get the underlying DataAccess
 
 
@@ -490,8 +494,57 @@ volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, 
 imp = wrap(volumeImg)
 imp.show()
 
-# TODO: align sections with blockmatching
 
 
 
+# Align sections with blockmatching
+# Will use groupNames as filepaths, and a load function that will return hyperslices of volumeImg
+indices = {groupName: i for i, groupName in enumerate(groupNames)}
+
+def sliceLoader(groupName):
+  global volumeImg, indices
+  img2d = Views.hyperSlice(volumeImg, indices[groupName])
+  aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(volumeImg))
+  ImgMath.compute(ImgMath.img(img2d)).into(aimg)
+  imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None)))
+  return imp
+
+setupImageLoader(sliceLoader)
+
+# Some of these aren't needed here
+properties = {
+ 'name': "Pedro_Parker",
+ 'img_dimensions': Intervals.dimensionsAsLongArray(volumeImg),
+ 'srcDir': srcDir,
+ 'pixelType': UnsignedShortType,
+ 'n_threads': 32,
+ 'invert': False,
+ 'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
+ 'use_SIFT: False  # no need, falls back onto SIFT when needed. In this case, when transitioning from montages to single image sections.
+}
+
+# Parameters for blockmatching
+params = {
+ 'scale': 0.25, # 25%
+ 'meshResolution': 20,
+ 'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
+ 'rod': 0.9, # max second best r / best r
+ 'maxCurvature': 1000.0, # default is 10
+ 'searchRadius': 300, # has to account for the montages shifting about ~100 pixels in any direction
+ 'blockRadius': 200, # small, yet enough
+}
+
+# Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
+paramsSIFT = FloatArray2DSIFT.Param()
+paramsSIFT.fdSize = 8 # default is 4
+paramsSIFT.fdBins = 8 # default is 8
+paramsSIFT.maxOctaveSize = int(max(1024, dimensions[0] * params["scale"]))
+paramsSIFT.steps = 3
+paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
+paramsSIFT.initialSigma = 1.6 # default 1.6
+
+
+matrices = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties)
+
+# TODO modify the SectionLoader to consider the matrices if these exist
 
