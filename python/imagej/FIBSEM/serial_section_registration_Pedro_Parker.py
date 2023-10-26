@@ -52,10 +52,11 @@ check = False
 
 # Sections known to have problems
 to_remove = set([
-  "Merlin-FIBdeSEMAna_23-06-16_000236_", # has 5 tiles
+  #"Merlin-FIBdeSEMAna_23-06-16_000236_", # has 5 tiles: there was a duplicate in the root folder
   "Merlin-FIBdeSEMAna_23-07-12_232829_", # has only 2 tiles
   "Merlin-FIBdeSEMAna_23-07-01_163948_", # one tile file is truncated
-  "Merlin-FIBdeSEMAna_23-07-10_170614_"  # blurry tiles, no SIFT feature correspondences at all
+  #"Merlin-FIBdeSEMAna_23-07-10_170614_",  # MONTAGED BY HAND - blurry tiles, no SIFT feature correspondences at all
+  #"Merlin-FIBdeSEMAna_23-07-10_170205_"   # MONTAGED BY HAND
 ])
 
 # Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
@@ -464,8 +465,8 @@ tileGroups = [tileGroups[1000]]
 syncPrintQ("Number of sections found valid: %i" % len(groupNames))
 
 # DEBUG: use only the first 7665 sections
-groupNames = groupNames[0:7665]
-tileGroups = tileGroups[0:7665]
+#groupNames = groupNames[0:7665]
+#tileGroups = tileGroups[0:7665]
 
 
 # Montage all sections
