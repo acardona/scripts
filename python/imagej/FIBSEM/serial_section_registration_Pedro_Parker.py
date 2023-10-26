@@ -405,6 +405,8 @@ class SectionLoader(CacheLoader):
       # copy it onto a new canvas
       aimg = ArrayImgs.unsignedShorts(self.dimensions)
       ImgMath.compute(ImgMath.img(img)).into(aimg)
+    
+    img = None
   
     return Cell(self.dimensions + [1], # cell dimensions
                 [0, 0, index], # position in the grid: 0, 0, 0, Z-index
@@ -459,6 +461,7 @@ for groupName in sorted(groups):
   groupNames.append(groupName)
   tileGroups.append(groups[groupName])
 
+groups = None
 
 # DEBUG: just one section
 """
@@ -491,8 +494,8 @@ volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, 
                               primitiveType)
 
 # Show the montages as a series of slices in a stack
-imp = wrap(volumeImg)
-imp.show()
+#imp = wrap(volumeImg)
+#imp.show()
 
 
 
@@ -507,6 +510,9 @@ def sliceLoader(groupName):
   aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img2d))
   ImgMath.compute(ImgMath.img(img2d)).into(aimg)
   imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
+  # Process for BlockMatching and SIFT across sections
+  imp.getProcessor().invert()
+  CLAHE.run(imp, 200, 256, 3.0, None)
   return imp
 
 setupImageLoader(sliceLoader)
@@ -525,12 +531,12 @@ properties = {
 
 # Parameters for blockmatching
 params = {
- 'scale': 0.25, # 25%
+ 'scale': 0.1, # 10%
  'meshResolution': 20,
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 300, # has to account for the montages shifting about ~100 pixels in any direction
+ 'searchRadius': 500, # has to account for the montages shifting about ~100 pixels in any direction
  'blockRadius': 200, # small, yet enough
 }
 
