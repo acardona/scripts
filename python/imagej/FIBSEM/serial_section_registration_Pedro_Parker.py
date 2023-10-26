@@ -543,6 +543,14 @@ paramsSIFT.steps = 3
 paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
 paramsSIFT.initialSigma = 1.6 # default 1.6
 
+# Parameters for computing the transformation models
+paramsTileConfiguration = {
+  "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
+  "maxAllowedError": 0, # Saalfeld recommends 0
+  "maxPlateauwidth": 200, # Like in TrakEM2
+  "maxIterations": 1000, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
+  "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
+}
 
 matrices = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties)
 
