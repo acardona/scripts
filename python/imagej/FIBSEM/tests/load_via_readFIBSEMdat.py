@@ -21,7 +21,15 @@ filepaths = [
   "/net/zstore1/FIBSEM/Pedro_parker/M07/D10/Merlin-FIBdeSEMAna_23-07-10_170614_0-1-1.dat"
 ]
 
+# Smaller files: but all good
+filepaths = [
+  "/net/zstore1/FIBSEM/Pedro_parker/M07/D14/Merlin-FIBdeSEMAna_23-07-14_102820_0-0-0.dat",
+  "/net/zstore1/FIBSEM/Pedro_parker/M07/D14/Merlin-FIBdeSEMAna_23-07-14_102820_0-0-1.dat",
+  "/net/zstore1/FIBSEM/Pedro_parker/M07/D14/Merlin-FIBdeSEMAna_23-07-14_102820_0-1-0.dat",
+  "/net/zstore1/FIBSEM/Pedro_parker/M07/D14/Merlin-FIBdeSEMAna_23-07-14_102820_0-1-1.dat"
+]
+
 for filepath in filepaths:
   imp = readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0]
-  imp.setTitle(os.basepath(filepath))
+  imp.setTitle(os.path.basename(filepath))
   imp.show()
