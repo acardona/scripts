@@ -14,6 +14,7 @@ from java.util import ArrayList
 from java.util.concurrent import Callable
 from java.lang import Double
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, Point, NotEnoughDataPointsException, Tile, TileConfiguration
+from mpicbg.ij.clahe import FastFlat as CLAHE
 from jarray import zeros, array
 from net.imglib2 import FinalInterval
 from net.imglib2.img.array import ArrayImgs
