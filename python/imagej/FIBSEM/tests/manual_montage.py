@@ -13,17 +13,26 @@ def createTrakEM2Layer():
     print "Open a new TrakEM2 project first!"
     return
 
+  """
   paths = [
     "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170614_0-0-0.dat",
     "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170614_0-0-1.dat",
     "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170614_0-1-0.dat",
     "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170614_0-1-1.dat"
   ]
+  """
+  
+  paths = [
+    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170205_0-0-0.dat",
+    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170205_0-0-1.dat",
+    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170205_0-1-0.dat",
+    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170205_0-1-1.dat"
+  ]
 
   overlap = 250
   
   project = projects[0]
-  layer = project.getRootLayerSet().getLayers().get(0)
+  layer = project.getRootLayerSet().getLayers().get(1)
 
   widths = []
   heights = []
