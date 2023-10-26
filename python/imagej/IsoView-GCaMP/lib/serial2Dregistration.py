@@ -279,10 +279,27 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csv
                                                    params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
                                                    params.get("rod", 0.9)) # rod: ratio of best vs second best
     
+    # Filter matches by geometric consensus
+    n_pm = sourceMatches.size()
+    inliers = ArrayList()
+    iterations = properties.get("RANSAC_iterations", 1000)
+    maxEpsilon = properties.get("RANSAC_maxEpsilon", 25) # pixels
+    minInlierRatio = properties.get("RANSAC_minInlierRatio", 0.01) # 1%
+    modelFound = TranslationModel2D().filterRansac(sourceMatches, inliers, iterations, maxEpsilon, minInlierRatio)
+    msg = ""
+    if modelFound:
+      sourceMatches = inliers
+    else:
+      msg = "SIFT: model NOT FOUND for %s vs %s\n" % (os.path.basename(filepath1),
+                                                    os.path.basename(filepath2))
     
-    syncPrintQ("Found %i SIFT pointmatches for %s vs %s" % (sourceMatches.size(),
+    syncPrintQ("%sFound %i inlier SIFT pointmatches (from %i) for %s vs %s" % (msg,
+                                                            sourceMatches.size(),
+                                                            n_pm,
                                                             os.path.basename(filepath1),
                                                             os.path.basename(filepath2)))
+                                                            
+    
     
     # Store pointmatches
     savePointMatches(os.path.basename(filepath1),
