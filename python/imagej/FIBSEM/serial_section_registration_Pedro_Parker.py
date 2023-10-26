@@ -47,6 +47,16 @@ nominal_overlap = 250 # 2 microns at 8 nm/px = 250 px
 section_width = 26000 # pixels, after section-wise montaging
 section_height = 26000
 
+# CHECK whether some sections have problems
+check = False
+
+# Sections known to have problems
+to_remove = set([
+  "Merlin-FIBdeSEMAna_23-06-16_000236_", # has 5 tiles
+  "Merlin-FIBdeSEMAna_23-07-12_232829_", # has only 2 tiles
+  "Merlin-FIBdeSEMAna_23-07-01_163948_", # one tile file is truncated
+  "Merlin-FIBdeSEMAna_23-07-10_170614_"  # blurry tiles, no SIFT feature correspondences at all
+])
 
 # Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
 paramsSIFT = FloatArray2DSIFT.Param()
@@ -78,10 +88,12 @@ for filepath in filepaths:
 
 # Ensure tilePaths are sorted, and check there's 1 or 4 tiles per group
 # and check that tiles are of the same dimensions and file size within each section:
-to_remove = set()
+
 for groupName_, tilePaths_ in groups.iteritems():
   tilePaths_.sort() # in place
   if 1 == len(tilePaths_) or 4 == len(tilePaths_):
+    if not check:
+      continue
     # Check that all tiles have the same dimensions and the same file size
     widths = []
     heights = []
@@ -447,6 +459,12 @@ for groupName in sorted(groups):
 groupNames = [groupNames[1000]]
 tileGroups = [tileGroups[1000]]
 """
+
+syncPrintQ("Number of sections found valid: %i" % len(groupNames))
+
+# DEBUG: use only the first 7665 sections
+groupNames = groupNames[0:7665]
+tileGroups = tileGroups[0:7665]
 
 
 # Montage all sections
