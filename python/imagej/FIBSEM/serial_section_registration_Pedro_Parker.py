@@ -70,7 +70,7 @@ paramsSIFT.fdBins = 8 # default is 8
 
 paramsRANSAC = {
   "iterations": 1000,
-   "maxEpsilon": 25, # pixels, maximum error allowed, usual number is 25
+   "maxEpsilon": 25, # pixels, maximum error allowed, usual number is 25. Started out as 5 for the first ~6000 sections or so.
    "minInlierRatio": 0.01 # 1%
 }
 
@@ -171,6 +171,7 @@ class MontageSlice2x2(Callable):
     Start off with PhaseCorrelation, fall back to SIFT if needed.
     Or start right away with SIFT when mode="SIFT"
     """
+    # Ignoring PhaseCorrelation for now
     if "PhaseCorrelation" == mode:
       sp0.setRoi(roi0)
       spA = sp0.crop()
