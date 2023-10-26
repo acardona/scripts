@@ -42,6 +42,7 @@ if not os.path.exists(csvDir):
 
 offset = 80 # pixels The left margin of each image is severely elastically deformed. Does it matter for SIFT?
 overlap = 240 #124 # pixels
+nominal_overlap = 250 # 2 microns at 8 nm/px = 250 px
 
 section_width = 26000 # pixels, after section-wise montaging
 section_height = 26000
@@ -257,8 +258,10 @@ class MontageSlice2x2(Callable):
     pointmatches = self.getPointMatches(sps[i], roi0, sps[j], roi1, offset)
     if pointmatches.size() > 0:
       tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
-    else:
-      syncPrintQ("Disconnected tile! No pointmatches found for %i vs %i of section %s" % (i, j, self.groupName))
+      return True
+    # Else
+    syncPrintQ("Disconnected tile! No pointmatches found for %i vs %i of section %s" % (i, j, self.groupName))
+    return False
     
   def loadShortProcessors(self):
     for filepath in self.tilePaths:
@@ -294,11 +297,26 @@ class MontageSlice2x2(Callable):
     tiles = [Tile(TranslationModel2D()) for _ in self.tilePaths]
     tc.addTiles(tiles)
     # ASSUMES that sps is a list of sorted tiles, as [0-0 top left, 0-1 top right, 1-0 bottom left, 1-1 bottom right]
-    self.connectTiles(sps, tiles, 0, 1, roiEast, roiWest, self.offset)
-    self.connectTiles(sps, tiles, 2, 3, roiEast, roiWest, self.offset)
-    self.connectTiles(sps, tiles, 0, 2, roiSouth, roiNorth, 0)
-    self.connectTiles(sps, tiles, 1, 3, roiSouth, roiNorth, 0)
+    a = self.connectTiles(sps, tiles, 0, 1, roiEast, roiWest, self.offset)
+    b = self.connectTiles(sps, tiles, 2, 3, roiEast, roiWest, self.offset)
+    c = self.connectTiles(sps, tiles, 0, 2, roiSouth, roiNorth, 0)
+    d = self.connectTiles(sps, tiles, 1, 3, roiSouth, roiNorth, 0)
     tc.fixTile(tiles[0]) # top left tile
+    
+    if not a and not b and not c and not d:
+      syncPrintQ("All tiles failed to connect for section %s " % (self.groupName))
+      # TODO: either montage them manually, or try to montage by using cross-section correspondances.
+      # Store the expected tile positions given the nominal_overlap
+      matrices = [array([1.0, 0.0, 0.0,
+                         0.0, 1.0, 0.0], 'd'),
+                  array([1.0, 0.0, width - nominal_overlap,
+                         0.0, 1.0, 0.0], 'd'),
+                  array([1.0, 0.0, 0.0,
+                         0.0, 1.0, height - nominal_overlap], 'd'),
+                  array([1.0, 0.0, width - nominal_overlap,
+                         0.0, 1.0, height - nominal_overlap], 'd')]
+      saveMatrices(self.groupName, matrices, self.csvDir)
+      return matrices
     
     # Optimise tile positions
     maxAllowedError = self.paramsTileConfiguration["maxAllowedError"]
