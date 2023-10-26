@@ -506,7 +506,7 @@ def sliceLoader(groupName):
   img2d = Views.hyperSlice(volumeImg, 2, indices[groupName])
   aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img2d))
   ImgMath.compute(ImgMath.img(img2d)).into(aimg)
-  imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray()))
+  imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
   return imp
 
 setupImageLoader(sliceLoader)
@@ -517,7 +517,7 @@ properties = {
  'img_dimensions': Intervals.dimensionsAsLongArray(volumeImg),
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
- 'n_threads': 32,
+ 'n_threads': 8, # low, memory intensive
  'invert': False,
  'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT: False  # no need, falls back onto SIFT when needed. In this case, when transitioning from montages to single image sections.
