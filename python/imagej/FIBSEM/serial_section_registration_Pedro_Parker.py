@@ -503,7 +503,7 @@ indices = {groupName: i for i, groupName in enumerate(groupNames)}
 
 def sliceLoader(groupName):
   global volumeImg, indices
-  img2d = Views.hyperSlice(volumeImg, indices[groupName])
+  img2d = Views.hyperSlice(volumeImg, 2, indices[groupName])
   aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(volumeImg))
   ImgMath.compute(ImgMath.img(img2d)).into(aimg)
   imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None)))
