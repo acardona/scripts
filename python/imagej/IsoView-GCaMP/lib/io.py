@@ -24,7 +24,7 @@ from net.imglib2.type import PrimitiveType
 from net.imglib2.util import Intervals
 from net.imglib2.img.cell import CellGrid, Cell
 from net.imglib2.img.basictypeaccess import AccessFlags, ArrayDataAccessFactory
-from net.imglib2.cache.ref import SoftRefLoaderCache
+from net.imglib2.cache.ref import SoftRefLoaderCache, BoundedSoftRefLoaderCache
 from net.imglib2.cache.img import CachedCellImg
 from ij.io import FileSaver, ImageReader, FileInfo
 from ij import ImagePlus, IJ
@@ -361,7 +361,7 @@ class SectionCellLoader(CacheLoader):
                 img.update(None)) # get the underlying DataAccess
 
 
-def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType):
+def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType, maxRefs=0):
   """ Create a lazy CachedCellImg, backed by a SoftRefLoaderCache,
       which can be used to e.g. create the equivalent of ij.VirtualStack but with ImgLib2,
       with the added benefit of a cache based on SoftReference (i.e. no need to manage memory).
@@ -372,12 +372,16 @@ def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, pri
       cell_dimensions: a list of int or long numbers, whose last dimension is 1.
       pixelType: e.g. UnsignedByteType
       primitiveType: e.g. BYTE
+      maxRefs: defaults to zero which means unbounded, that is, soft references may have been garbage collected
+               but entries in the cache table are still around. When maxRefs larger > 0, then only that many references
+               will be kept as entries by using a BoundedSoftRefLoaderCache.
 
       Returns a CachedCellImg.
   """
+  cache = SoftRefLoaderCache() if 0 == maxRefs else BoundedSoftRefLoaderCache(maxRefs)
   return CachedCellImg(CellGrid(volume_dimensions, cell_dimensions),
                        pixelType(),
-                       SoftRefLoaderCache().withLoader(loader),
+                       cache.withLoader(loader),
                        ArrayDataAccessFactory.get(primitiveType, AccessFlags.setOf(AccessFlags.VOLATILE)))
 
 
