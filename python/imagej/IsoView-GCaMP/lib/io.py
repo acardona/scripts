@@ -174,6 +174,9 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     # Parse as 16-bit array
     sb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer()
     bytes = None
+  except:
+    syncPrintQ("Failed to load file " + path)
+    syncPrintQ(sys.exc_info())
   finally:
     ra.close()
   #
