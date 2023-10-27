@@ -492,7 +492,8 @@ volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, 
                               volume_dimensions,
                               cell_dimensions,
                               pixelType,
-                              primitiveType)
+                              primitiveType,
+                              maxRefs=32)  # number of threads times number of sections to compare against plus some padding
 
 # Show the montages as a series of slices in a stack
 #imp = wrap(volumeImg)
