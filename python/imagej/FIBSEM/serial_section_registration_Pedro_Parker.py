@@ -527,7 +527,7 @@ properties = {
  'n_threads': 8, # low, memory intensive
  'invert': False,
  'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
- 'use_SIFT: False,  # no need, falls back onto SIFT when needed. In this case, when transitioning from montages to single image sections.
+ 'use_SIFT': True,  # no need, falls back onto SIFT when needed. In this case, when transitioning from montages to single image sections.
  'RANSAC_iterations': 1000,
  'RANSAC_maxEpsilon': 25,
  'RANSAC_minInlierRatio': 0.01
