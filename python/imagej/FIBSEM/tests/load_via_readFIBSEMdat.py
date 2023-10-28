@@ -29,6 +29,10 @@ filepaths = [
   "/net/zstore1/FIBSEM/Pedro_parker/M07/D14/Merlin-FIBdeSEMAna_23-07-14_102820_0-1-1.dat"
 ]
 
+filepaths = [
+  "/net/zstore1/FIBSEM/Pedro_parker/M07/D14/Merlin-FIBdeSEMAna_23-07-14_110750_0-0-0.dat"
+]
+
 for filepath in filepaths:
   imp = readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0]
   imp.setTitle(os.path.basename(filepath))
