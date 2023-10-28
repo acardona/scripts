@@ -169,29 +169,35 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     height = ra.readInt()
     # Read the whole interleaved pixel array
     ra.seek(header)
-    bytes = zeros(width * height * 2 * numChannels, 'b') # 2 for 16-bit
-    ra.read(bytes)
-    # Parse as 16-bit array
-    sb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer()
-    bytes = None
+    # Determine if the file is larger than 2 GB
+    size = width * height * 2 * numChannels
+    if size > 2147483639:  # Integer.MAX_VALUE - 8 for some reason
+      channels = _readFIBSEMdatOver2GB(path, ra, width, height, numChannels, channel_index=channel_index, header=header, magic_number=magic_number, asImagePlus=asImagePlus, toUnsigned=toUnsigned)
+    else:
+      bytes = zeros(size, 'b') # 2 for 16-bit
+      ra.read(bytes)
+      # Parse as 16-bit array
+      sb = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer()
+      bytes = None
+      #
+      shorts = zeros(width * height * numChannels, 'h')
+      sb.get(shorts)
+      sb = None
+      # Deinterleave channels and convert to unsigned short
+      # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
+      # With ASM: fast
+      channels = DAT_handler.deinterleave(shorts, numChannels, channel_index)
+      shorts = None
+      #
+      if toUnsigned:
+        for s in channels:
+          DAT_handler.toUnsigned(s)
   except:
     syncPrintQ("Failed to load file " + path)
     syncPrintQ(sys.exc_info())
   finally:
     ra.close()
-  #
-  shorts = zeros(width * height * numChannels, 'h')
-  sb.get(shorts)
-  sb = None
-  # Deinterleave channels and convert to unsigned short
-  # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
-  # With ASM: fast
-  channels = DAT_handler.deinterleave(shorts, numChannels, channel_index)
-  shorts = None
-  #
-  if toUnsigned:
-    for s in channels:
-      DAT_handler.toUnsigned(s)
+  
   # With python array sampling: very slow, and not just from iterating whole array once per channel
   #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
   #channels = [shorts[i::numChannels] for i in seq]
@@ -200,6 +206,37 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
   else:
     return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
 
+
+def _readFIBSEMdatOver2GB(path, ra, width, height, numChannels, channel_index=-1, asImagePlus=False, toUnsigned=True):
+  # Channels are interleaved, so read by parts
+  # ASSUMES width * height * 2 < 2GB
+  bs = [zeros(width * height * 2, 'b') for _ in xrange(numChannels)]
+  for bytes in bs:
+    ra.read(bytes)
+  # Parse as 16-bit array
+  sbs = [ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer() for bytes in bs]
+  bs = None
+  ss = [zeros(width * height, 'h') for _ in xrange(numChannels)]
+  cs = []
+  for sb, shorts in zip(sbs, ss):
+    sb.get(shorts)
+    # Deinterleave channels and convert to unsigned short
+    cs.append(DAT_handler.deinterleave(shorts, numChannels, channel_index))
+    # Shockingly, these values are signed shorts, not unsigned!
+    if toUnsigned:
+      for s in channels[-1]:
+        DAT_handler.toUnsigned(s)
+  # Concatenate the multiple reads
+  # cs looks like: [[channel1, channel2],     ... with 1 or two channels
+  #                 [channel1, channel2]]
+  # Now concatenate the arrays belonging to the same channel
+  ps = [None] * len(cs[0]) # use len(cs[0]) and not numChannels because if channel_index is != -1 then only a single channel has been returned from DAT_hander.deinterleave
+  for channels in cs:
+    for i, channel in enumerate(channels):
+      ps[i] = channel if ps[i] is None else ps[i] + channel     
+  return ps
+  
+  
 
 
 def readFIBSEMHeader(filepath):
