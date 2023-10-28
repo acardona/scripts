@@ -390,24 +390,21 @@ class SectionLoader(CacheLoader):
     groupName = self.groupNames[index]
     tilePaths = self.tileGroups[index]
     if 4 == len(tilePaths):
-      img = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset, self.paramsSIFT, self.paramsRANSAC, self.csvDir).montagedImg(*self.dimensions)
+      aimg = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset, self.paramsSIFT, self.paramsRANSAC, self.csvDir).montagedImg(*self.dimensions)
     elif 1 == len(tilePaths):
-      img = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=False)[0]
+      imp = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=True)[0]
+      sp = ShortProcessor(self.dimensions[0], self.dimensions[1])
+      sp.insert(imp.getProcessor(), 0, 0)
+      aimg = ArrayImgs.unsignedShorts(sp.getPixels(), self.dimensions)
+      imp.flush()
+      imp = None
+      sp = None
     else:
       # return empty Cell
       syncPrintQ("WARNING: number of tiles isn't 4 or 1")
       return Cell(self.dimensions + [1],
                   [0, 0, index],
                   ArrayImgs.unsignedShorts(array(self.dimensions, 'l')).update(None)) # TODO this should be a constant DataAccess
-      
-    if self.dimensions[0] == img.dimension(0) and self.dimensions[1] == img.dimension(1):
-      aimg = img
-    else:
-      # copy it onto a new canvas
-      aimg = ArrayImgs.unsignedShorts(array(self.dimensions, 'l'))
-      ImgMath.compute(ImgMath.img(img)).into(aimg)
-    
-    img = None
   
     return Cell(self.dimensions + [1], # cell dimensions
                 [0, 0, index], # position in the grid: 0, 0, 0, Z-index
