@@ -398,13 +398,13 @@ class SectionLoader(CacheLoader):
       syncPrintQ("WARNING: number of tiles isn't 4 or 1")
       return Cell(self.dimensions + [1],
                   [0, 0, index],
-                  ArrayImgs.unsignedShorts(self.dimensions).update(None)) # TODO this should be a constant DataAccess
+                  ArrayImgs.unsignedShorts(array(self.dimensions, 'l')).update(None)) # TODO this should be a constant DataAccess
       
     if self.dimensions[0] == img.dimension(0) and self.dimensions[1] == img.dimension(1):
       aimg = img
     else:
       # copy it onto a new canvas
-      aimg = ArrayImgs.unsignedShorts(self.dimensions)
+      aimg = ArrayImgs.unsignedShorts(array(self.dimensions, 'l'))
       ImgMath.compute(ImgMath.img(img)).into(aimg)
     
     img = None
