@@ -150,6 +150,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
       asImagePlus: return a list of ImagePlus instead of ArrayImg which is the default.
   """
   ra = RandomAccessFile(path, 'r')
+  channels = None
   try:
     # Check the magic number
     ra.seek(0)
@@ -172,7 +173,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     # Determine if the file is larger than 2 GB
     size = width * height * 2 * numChannels
     if size > 2147483639:  # Integer.MAX_VALUE - 8 for some reason
-      channels = _readFIBSEMdatOver2GB(path, ra, width, height, numChannels, channel_index=channel_index, header=header, magic_number=magic_number, asImagePlus=asImagePlus, toUnsigned=toUnsigned)
+      channels = _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=channel_index, asImagePlus=asImagePlus, toUnsigned=toUnsigned)
     else:
       bytes = zeros(size, 'b') # 2 for 16-bit
       ra.read(bytes)
@@ -183,20 +184,20 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
       shorts = zeros(width * height * numChannels, 'h')
       sb.get(shorts)
       sb = None
-      # Deinterleave channels and convert to unsigned short
-      # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
+      # Deinterleave channels and convert to unsigned short      
       # With ASM: fast
       channels = DAT_handler.deinterleave(shorts, numChannels, channel_index)
       shorts = None
-      #
-      if toUnsigned:
-        for s in channels:
-          DAT_handler.toUnsigned(s)
   except:
     syncPrintQ("Failed to load file " + path)
     syncPrintQ(sys.exc_info())
   finally:
     ra.close()
+  
+  # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
+  if toUnsigned:
+    for s in channels:
+      DAT_handler.toUnsigned(s)
   
   # With python array sampling: very slow, and not just from iterating whole array once per channel
   #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
@@ -207,7 +208,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
 
 
-def _readFIBSEMdatOver2GB(path, ra, width, height, numChannels, channel_index=-1, asImagePlus=False, toUnsigned=True):
+def _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=-1, asImagePlus=False, toUnsigned=True):
   # Channels are interleaved, so read by parts
   # ASSUMES width * height * 2 < 2GB
   bs = [zeros(width * height * 2, 'b') for _ in xrange(numChannels)]
@@ -222,10 +223,7 @@ def _readFIBSEMdatOver2GB(path, ra, width, height, numChannels, channel_index=-1
     sb.get(shorts)
     # Deinterleave channels and convert to unsigned short
     cs.append(DAT_handler.deinterleave(shorts, numChannels, channel_index))
-    # Shockingly, these values are signed shorts, not unsigned!
-    if toUnsigned:
-      for s in channels[-1]:
-        DAT_handler.toUnsigned(s)
+  ss = None
   # Concatenate the multiple reads
   # cs looks like: [[channel1, channel2],     ... with 1 or two channels
   #                 [channel1, channel2]]
