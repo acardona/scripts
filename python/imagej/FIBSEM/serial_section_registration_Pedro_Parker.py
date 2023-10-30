@@ -377,7 +377,7 @@ class SectionLoader(CacheLoader):
   """
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
-  def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir):
+  def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir, csvDirZ):
     """
     """
     self.dimensions = dimensions # a list of [width, height] for the canvas onto which draw the image tiles
@@ -388,8 +388,9 @@ class SectionLoader(CacheLoader):
     self.paramsSIFT = paramsSIFT
     self.paramsRANSAC = paramsRANSAC
     self.csvDir = csvDir
+    self.csvDirZ = csvDirZ
     # Load the matrices.csv file if it exists
-    self.matrices = loadMatrices("matrices", csvDir)
+    self.matrices = loadMatrices("matrices", csvDirZ)
     if len(self.groupNames) != len(self.matrices):
       raise Exception("Lengths of groupNames and rows in the matrices file don't match!")
       
@@ -496,18 +497,22 @@ cell_dimensions = dimensions + [1]
 pixelType = UnsignedShortType
 primitiveType = PrimitiveType.SHORT
 
-volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir),
-                              volume_dimensions,
-                              cell_dimensions,
-                              pixelType,
-                              primitiveType,
-                              maxRefs=32)  # number of threads times number of sections to compare against plus some padding
+def volume(show=True):
+  volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir, csvDirZ),
+                                volume_dimensions,
+                                cell_dimensions,
+                                pixelType,
+                                primitiveType,
+                                maxRefs=32)  # number of threads times number of sections to compare against plus some padding
 
-# Show the montages as a series of slices in a stack
-#imp = wrap(volumeImg)
-#imp.show()
+  # Show the montages as a series of slices in a stack
+  if show:
+    imp = wrap(volumeImg)
+    imp.show()
+  
+  return volumeImg
 
-
+volumeImg = volume(show=False)
 
 
 # Align sections with blockmatching
@@ -574,5 +579,5 @@ paramsTileConfiguration = {
 
 matrices = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties)
 
-# TODO modify the SectionLoader to consider the matrices if these exist
+volumeImgAligned = volume(show=True)
 
