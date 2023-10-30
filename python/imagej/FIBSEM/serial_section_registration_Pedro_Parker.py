@@ -38,7 +38,7 @@ from itertools import izip
 # Folders
 srcDir = "/net/zstore1/FIBSEM/Pedro_parker/"
 tgtDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/"
-csvDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv-debug/" # form in-section montaging
+csvDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/" # for in-section montaging
 csvDirZ = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csvZ-debug/" # for cross-section alignment
 
 # Ensure tgtDir and csvDir exist
@@ -402,7 +402,7 @@ class SectionLoader(CacheLoader):
     self.csvDirZ = csvDirZ
     # Load the matrices.csv file if it exists
     self.matrices = loadMatrices("matrices", csvDirZ)
-    if len(self.groupNames) != len(self.matrices):
+    if self.matrices and len(self.groupNames) != len(self.matrices):
       raise Exception("Lengths of groupNames and rows in the matrices file don't match!")
     self.invert = invert
     self.CLAHE_params = CLAHE_params
