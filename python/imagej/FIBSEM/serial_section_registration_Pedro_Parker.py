@@ -356,16 +356,19 @@ class MontageSlice2x2(Callable):
   def call(self):
     return self.getMatrices()
 
-  def montagedImg(self, width, height):
+  def montagedImg(self, width, height, section_matrix):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
+        section_matrix: if there is a transform to apply section-wide, to the whole montage.
+                        Here, only the translation is applied, ultimately as integers.
     """
     matrices = self.getMatrices()
+    dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     sps = self.loadShortProcessors()
     impMontage = ShortProcessor(width, height)
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in reversed(zip(sps, matrices)):
-      impMontage.insert(sp, int(matrix[2] + 0.5), int(matrix[5] + 0.5)) # indices 2 and 5 are the X, Y translation
+      impMontage.insert(sp, int(matrix[2] + dx + 0.5), int(matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
     
     return ArrayImgs.unsignedShorts(impMontage.getPixels(), width, height)
 
@@ -385,16 +388,24 @@ class SectionLoader(CacheLoader):
     self.paramsSIFT = paramsSIFT
     self.paramsRANSAC = paramsRANSAC
     self.csvDir = csvDir
+    # Load the matrices.csv file if it exists
+    self.matrices = loadMatrices("matrices", csvDir)
+    if len(self.groupNames) != len(self.matrices):
+      raise Exception("Lengths of groupNames and rows in the matrices file don't match!")
+      
   
   def get(self, index):
     groupName = self.groupNames[index]
     tilePaths = self.tileGroups[index]
+    matrix = self.matrices[index] if self.matrices else None
+    #
     if 4 == len(tilePaths):
-      aimg = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset, self.paramsSIFT, self.paramsRANSAC, self.csvDir).montagedImg(*self.dimensions)
+      aimg = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset, self.paramsSIFT, self.paramsRANSAC, self.csvDir).montagedImg(self.dimensions[0], self.dimensions[1], matrix)
     elif 1 == len(tilePaths):
       imp = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=True)[0]
       sp = ShortProcessor(self.dimensions[0], self.dimensions[1])
-      sp.insert(imp.getProcessor(), 0, 0)
+      dx, dy = (matrix[2], matrix[5]) if matrix else (0, 0)
+      sp.insert(imp.getProcessor(), int(dx + 0.5), int(dy + 0.5))
       aimg = ArrayImgs.unsignedShorts(sp.getPixels(), self.dimensions)
       imp.flush()
       imp = None
