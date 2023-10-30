@@ -209,34 +209,34 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
 
 
 def _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=-1, asImagePlus=False):
+  """ Only works if each channel, independently, is smaller than 2 GB, which is java's array size limit. """
   # Channels are interleaved, so read by parts
-  # ASSUMES width * height * 2 < 2GB
-  bs = [zeros(width * height * 2, 'b') for _ in xrange(numChannels)] # list of byte arrays
   # Read the whole image into multiple byte arrays
-  for bytes in bs:
-    ra.read(bytes)
-  # Parse as 16-bit array
-  sbs = [ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer() for bytes in bs]
-  bs = None
-  ss = [zeros(width * height, 'h') for _ in xrange(numChannels)] # list of short arrays
-  cs = []
-  for sb, shorts in zip(sbs, ss):
-    sb.get(shorts)
+  n_bytes = width * height * 2 * numChannels # * 2 for 16-bit pixels
+  # bytes array for reuse in sequential readings of 0.5 GB each
+  bytes = zeros(536870912, 'b')
+  # shorts arrays, one per channel to be read
+  channels = [zeros(width * height, 'h') for _ in xrange(1 if -1 == channel_index else numChannels)]
+  # shorts array for reuse in sequential readings: half the size of the bytes array
+  shorts = zeros(268435456) # 0.25 of a GB
+  # Read sequentially in chunks
+  index = 0 # over the channels arrays
+  while n_bytes > 0:
+    # Read remaining bytes
+    length = min(len(bytes), n_bytes) # length of bytes to read from the file: as many as for a chunk or up to what remains to be read
+    n_bytes -= length # for next iteration: remaining bytes to be read
+    ra.read(bytes, 0, length)
+    # Parse as 16-bit array
+    ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer().get(shorts)
     # Deinterleave channels
-    cs.append(DAT_handler.deinterleave(shorts, numChannels, channel_index))
-  ss = None
-  # Concatenate the multiple reads
-  # cs looks like: [[channel1, channel2],     ... with 1 or two channels
-  #                 [channel1, channel2]]
-  # Now concatenate the arrays belonging to the same channel
-  ps = [None] * len(cs[0]) # use len(cs[0]) and not numChannels because if channel_index is != -1 then only a single channel has been returned from DAT_hander.deinterleave
-  for channels in cs:
-    for i, channel in enumerate(channels):
-      ps[i] = channel if ps[i] is None else ps[i] + channel
-  return ps
-  # Could also write:
-  #return reduce(lambda channelsA, channelsB: [a + b for a, b in zip(channelsA, channelsB)], cs)
-
+    chunks = DAT_handler.deinterleave(shorts, numChannels, channel_index)
+    for channel, chunk in zip(channels, chunks):
+      System.arraycopy(chunk, 0, channel, index, length / 2)
+    index += length / 2 # index over the channels array
+  #
+  bytes = None
+  shorts = None
+  return channels
   
   
 
