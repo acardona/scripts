@@ -30,7 +30,7 @@ from ij.io import FileSaver, ImageReader, FileInfo
 from ij import ImagePlus, IJ
 from ij.process import ShortProcessor
 from synchronize import make_synchronized
-from util import syncPrint, syncPrintQ, newFixedThreadPool
+from util import syncPrint, syncPrintQ, newFixedThreadPool, printException
 from ui import showStack, showBDV
 from io_asm import DAT_handler
 try:
@@ -216,9 +216,9 @@ def _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=-1, asIm
   # bytes array for reuse in sequential readings of 0.5 GB each
   bytes = zeros(536870912, 'b')
   # shorts arrays, one per channel to be read
-  channels = [zeros(width * height, 'h') for _ in xrange(1 if -1 == channel_index else numChannels)]
+  channels = [zeros(width * height, 'h') for _ in xrange(1 if -1 != channel_index else numChannels)] # channel_index of -1 means read all channels
   # shorts array for reuse in sequential readings: half the size of the bytes array
-  shorts = zeros(268435456) # 0.25 of a GB
+  shorts = zeros(268435456, 'h') # 0.25 of a GB: half the length of the bytes array
   # Read sequentially in chunks
   index = 0 # over the channels arrays
   while n_bytes > 0:
@@ -227,13 +227,13 @@ def _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=-1, asIm
     n_bytes -= length # for next iteration: remaining bytes to be read
     ra.read(bytes, 0, length)
     # Parse as 16-bit array
-    ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN).asShortBuffer().get(shorts)
+    ByteBuffer.wrap(bytes, 0, length).order(ByteOrder.BIG_ENDIAN).asShortBuffer().get(shorts, 0, length / 2)
     # Deinterleave channels
+    # (If only one channel is to be read, the length of chunks[0] will be a quarter of that of the read bytes)
     chunks = DAT_handler.deinterleave(shorts, numChannels, channel_index)
     for channel, chunk in zip(channels, chunks):
-      System.arraycopy(chunk, 0, channel, index, length / 2)
-    index += length / 2 # index over the channels array
-  #
+      System.arraycopy(chunk, 0, channel, index, min(len(chunk), len(channel) - index))
+    index += len(chunk) # index over the channels array
   bytes = None
   shorts = None
   return channels
