@@ -356,7 +356,7 @@ class MontageSlice2x2(Callable):
   def call(self):
     return self.getMatrices()
 
-  def montagedImg(self, width, height, section_matrix):
+  def montagedImg(self, width, height, section_matrix, invert=False, CLAHE_params=None):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
@@ -368,16 +368,27 @@ class MontageSlice2x2(Callable):
     impMontage = ShortProcessor(width, height)
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in reversed(zip(sps, matrices)):
-      impMontage.insert(sp, int(matrix[2] + dx + 0.5), int(matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
+      impMontage.insert(process(sp, invert=invert, CLAHE_params=CLAHE_params),
+                        int(matrix[2] + dx + 0.5),
+                        int(matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
     
     return ArrayImgs.unsignedShorts(impMontage.getPixels(), width, height)
+
+
+def process(sp, invert=False, CLAHE_params=None):
+  if invert:
+    sp.invert()
+  if CLAHE_params:
+    blockRadius, n_bins, slope = CLAHE_params
+    CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None)
+  return sp
 
 
 class SectionLoader(CacheLoader):
   """
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
-  def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir, csvDirZ):
+  def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir, csvDirZ, invert=False, CLAHE_params=None):
     """
     """
     self.dimensions = dimensions # a list of [width, height] for the canvas onto which draw the image tiles
@@ -393,7 +404,8 @@ class SectionLoader(CacheLoader):
     self.matrices = loadMatrices("matrices", csvDirZ)
     if len(self.groupNames) != len(self.matrices):
       raise Exception("Lengths of groupNames and rows in the matrices file don't match!")
-      
+    self.invert = invert
+    self.CLAHE_params = CLAHE_params
   
   def get(self, index):
     groupName = self.groupNames[index]
@@ -401,12 +413,15 @@ class SectionLoader(CacheLoader):
     matrix = self.matrices[index] if self.matrices else None
     #
     if 4 == len(tilePaths):
-      aimg = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset, self.paramsSIFT, self.paramsRANSAC, self.csvDir).montagedImg(self.dimensions[0], self.dimensions[1], matrix)
+      aimg = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset, self.paramsSIFT, self.paramsRANSAC, self.csvDir)
+           .montagedImg(self.dimensions[0], self.dimensions[1], matrix, invert=self.invert, CLAHE_params=self.CLAHE_params)
     elif 1 == len(tilePaths):
       imp = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=True)[0]
       sp = ShortProcessor(self.dimensions[0], self.dimensions[1])
       dx, dy = (matrix[2], matrix[5]) if matrix else (0, 0)
-      sp.insert(imp.getProcessor(), int(dx + 0.5), int(dy + 0.5))
+      sp.insert(process(imp.getProcessor(), invert=invert, CLAHE_params=CLAHE_params),
+                int(dx + 0.5),
+                int(dy + 0.5))
       aimg = ArrayImgs.unsignedShorts(sp.getPixels(), self.dimensions)
       imp.flush()
       imp = None
@@ -497,8 +512,9 @@ cell_dimensions = dimensions + [1]
 pixelType = UnsignedShortType
 primitiveType = PrimitiveType.SHORT
 
-def volume(show=True):
-  volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir, csvDirZ),
+def volume(show=True, invert=False, CLAHE_params=None):
+  volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir, csvDirZ
+                                              invert=invert, CLAHE_params=CLAHE_params),
                                 volume_dimensions,
                                 cell_dimensions,
                                 pixelType,
@@ -579,5 +595,6 @@ paramsTileConfiguration = {
 
 matrices = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties)
 
-volumeImgAligned = volume(show=True)
+# Show the volume aligned, inverted and processed with CLAHE:
+volumeImgAligned = volume(show=True, invert=True, CLAHE_params=[100, 255, 3.0])
 
