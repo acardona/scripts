@@ -210,6 +210,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
         if modelFound:
           sourceMatches = inliers
         else:
+          sourceMatches.clear()
           msg = "SIFT: model NOT FOUND for %s vs %s\n" % (os.path.basename(filepath1),
                                                           os.path.basename(filepath2))
       
@@ -311,6 +312,7 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csv
       if modelFound:
         sourceMatches = inliers
       else:
+        sourceMatches.clear() # None
         msg = "SIFT: model NOT FOUND for %s vs %s\n" % (os.path.basename(filepath1),
                                                         os.path.basename(filepath2))
     
