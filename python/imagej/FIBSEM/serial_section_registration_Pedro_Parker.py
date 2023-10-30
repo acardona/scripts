@@ -413,8 +413,9 @@ class SectionLoader(CacheLoader):
     matrix = self.matrices[index] if self.matrices else None
     #
     if 4 == len(tilePaths):
-      aimg = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset, self.paramsSIFT, self.paramsRANSAC, self.csvDir)
-           .montagedImg(self.dimensions[0], self.dimensions[1], matrix, invert=self.invert, CLAHE_params=self.CLAHE_params)
+      aimg = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset,
+                             self.paramsSIFT, self.paramsRANSAC, self.csvDir).montagedImg(self.dimensions[0], self.dimensions[1],
+                                                                                          matrix, invert=self.invert, CLAHE_params=self.CLAHE_params)
     elif 1 == len(tilePaths):
       imp = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=True)[0]
       sp = ShortProcessor(self.dimensions[0], self.dimensions[1])
