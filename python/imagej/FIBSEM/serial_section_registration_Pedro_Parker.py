@@ -38,8 +38,8 @@ from itertools import izip
 # Folders
 srcDir = "/net/zstore1/FIBSEM/Pedro_parker/"
 tgtDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/"
-csvDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/" # form in-section montaging
-csvDirZ = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csvZ/" # for cross-section alignment
+csvDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv-debug/" # form in-section montaging
+csvDirZ = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csvZ-debug/" # for cross-section alignment
 
 # Ensure tgtDir and csvDir exist
 if not os.path.exists(csvDir):
@@ -494,6 +494,10 @@ groups = None
 groupNames = [groupNames[1000]]
 tileGroups = [tileGroups[1000]]
 """
+# DEBUG: align from 7660 to 7675: transition from tiled to single-section
+groupNAmes = groupNames[7660:7675]
+tileGroups = tileGroups[7660:7675]
+
 
 syncPrintQ("Number of sections found valid: %i" % len(groupNames))
 
