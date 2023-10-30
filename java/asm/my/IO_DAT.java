@@ -14,6 +14,12 @@ static public final void toUnsigned(final short[] signed) {
   }
 }
 
+static public final void toUnsignedExact(final short[] signed) {
+  for (int i=0; i<signed.length; ++i) {
+  	signed[i] += 31768;
+  }
+}
+
 static public final short[][] deinterleave(final short[] source,
                                            final int numChannels,
                                            final int channel_index) {
