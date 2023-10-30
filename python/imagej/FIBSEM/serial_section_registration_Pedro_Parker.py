@@ -478,6 +478,14 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
   finally:
     exe.shutdown()
 
+# DEBUG: align from 7660 to 7675: transition from tiled to single-section
+keys = groups.keys()
+keys.sort()
+g2 = {}
+for k in keys[7660:7675]:
+  g2[k] = groups[k]
+groups = g2
+
 
 # Sort groups by key
 keys = groups.keys()
@@ -488,15 +496,6 @@ for groupName in sorted(groups):
   tileGroups.append(groups[groupName])
 
 groups = None
-
-# DEBUG: just one section
-"""
-groupNames = [groupNames[1000]]
-tileGroups = [tileGroups[1000]]
-"""
-# DEBUG: align from 7660 to 7675: transition from tiled to single-section
-groupNAmes = groupNames[7660:7675]
-tileGroups = tileGroups[7660:7675]
 
 
 syncPrintQ("Number of sections found valid: %i" % len(groupNames))
