@@ -420,7 +420,7 @@ class SectionLoader(CacheLoader):
       imp = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=True)[0]
       sp = ShortProcessor(self.dimensions[0], self.dimensions[1])
       dx, dy = (matrix[2], matrix[5]) if matrix else (0, 0)
-      sp.insert(process(imp.getProcessor(), invert=invert, CLAHE_params=CLAHE_params),
+      sp.insert(process(imp.getProcessor(), invert=self.invert, CLAHE_params=self.CLAHE_params),
                 int(dx + 0.5),
                 int(dy + 0.5))
       aimg = ArrayImgs.unsignedShorts(sp.getPixels(), self.dimensions)
