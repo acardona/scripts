@@ -498,6 +498,10 @@ for groupName in keys:
 
 groups = None
 
+# DEBUG: print groups
+for groupName, tilePaths in zip(groupNames, tileGroups):
+  syncPrintQ("%s: %i" % (groupName, len(tilePaths)))
+
 
 syncPrintQ("Number of sections found valid: %i" % len(groupNames))
 
