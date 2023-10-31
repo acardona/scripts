@@ -499,7 +499,7 @@ for groupName in keys:
 groups = None
 
 # DEBUG: print groups
-#for groupName, tilePaths in zip(groupNames, tileGroups):
+#for groupName, tilePaths in izip(groupNames, tileGroups):
 #  syncPrintQ("%s: %i" % (groupName, len(tilePaths)))
 
 
@@ -538,6 +538,7 @@ def volume(show=True, invert=False, CLAHE_params=None):
   
   return volumeImg
 
+# Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 volumeImg = volume(show=False, invert=True, CLAHE_params=[200, 255, 3.0])
 
 
@@ -570,8 +571,8 @@ properties = {
  'img_dimensions': Intervals.dimensionsAsLongArray(volumeImg),
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
- 'n_threads': 100, # low, memory intensive
- 'invert': False,
+ 'n_threads': 100, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
+ 'invert': False, # Processing is done already
  'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': True,  # no need, falls back onto SIFT when needed. In this case, when transitioning from montages to single image sections.
  'SIFT_validateByFileExists': True, # Avoid loading and parsing SIFT features just to make sure they are fine.
