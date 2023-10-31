@@ -533,22 +533,28 @@ def volume(show=True, invert=False, CLAHE_params=None):
   
   return volumeImg
 
-volumeImg = volume(show=False)
+volumeImg = volume(show=False, invert=True, CLAHE_params=[200, 255, 3.0])
 
 
-# Align sections with blockmatching
+# Align sections with SIFT
 # Will use groupNames as filepaths, and a load function that will return hyperslices of volumeImg
 indices = {groupName: i for i, groupName in enumerate(groupNames)}
 
 def sliceLoader(groupName):
   global volumeImg, indices
-  img2d = Views.hyperSlice(volumeImg, 2, indices[groupName])
-  aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img2d))
-  ImgMath.compute(ImgMath.img(img2d)).into(aimg)
-  imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
+  # Works, but copies it over
+  #img2d = Views.hyperSlice(volumeImg, 2, indices[groupName])
+  #aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img2d))
+  #ImgMath.compute(ImgMath.img(img2d)).into(aimg)
+  #imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
+  # Each slice is already an ArrayImg: get the DataAccess of the Cell at index, which is a 2D image
+  # ... and it's already processed for invert and CLAHE, and cached.
+  cell = volumeImg.randomAccess().setPositionAndGet([0, 0, indices[groupName])
+  pixels = cell.getData().getCurrentStorageArray()
+  imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), pixels, None))
   # Process for BlockMatching and SIFT across sections
-  imp.getProcessor().invert()
-  CLAHE.run(imp, 200, 256, 3.0, None)
+  #imp.getProcessor().invert()
+  #CLAHE.run(imp, 200, 256, 3.0, None)
   return imp
 
 setupImageLoader(sliceLoader)
