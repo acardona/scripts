@@ -554,9 +554,9 @@ def sliceLoader(groupName):
   #imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
   # Each slice is already an ArrayImg: get the DataAccess of the Cell at index, which is a 2D image
   # ... and it's already processed for invert and CLAHE, and cached.
-  cell = volumeImg.randomAccess().setPositionAndGet([0, 0, indices[groupName]])
+  cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, indices[groupName]])
   pixels = cell.getData().getCurrentStorageArray()
-  imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), pixels, None))
+  imp = ImagePlus(groupName, ShortProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
   # Process for BlockMatching and SIFT across sections
   #imp.getProcessor().invert()
   #CLAHE.run(imp, 200, 256, 3.0, None)
