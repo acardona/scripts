@@ -489,9 +489,10 @@ groups = g2
 
 # Sort groups by key
 keys = groups.keys()
+keys.sort()
 groupNames = []
 tileGroups = []
-for groupName in sorted(groups):
+for groupName in keys:
   groupNames.append(groupName)
   tileGroups.append(groups[groupName])
 
