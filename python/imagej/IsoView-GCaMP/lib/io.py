@@ -203,7 +203,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
   #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
   #channels = [shorts[i::numChannels] for i in seq]
   if asImagePlus:
-    return [ImagePlus(str(i), ShortProcessor(width, height, s, None)) for i, s in enumerate(channels)]
+    return [ImagePlus(os.path.basename(path) + " (" + str(i) + ")", ShortProcessor(width, height, s, None)) for i, s in enumerate(channels)]
   else:
     return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
 
