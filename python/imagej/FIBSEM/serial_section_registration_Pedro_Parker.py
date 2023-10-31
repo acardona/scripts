@@ -39,7 +39,7 @@ from itertools import izip
 srcDir = "/net/zstore1/FIBSEM/Pedro_parker/"
 tgtDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/"
 csvDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/" # for in-section montaging
-csvDirZ = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csvZ-debug/" # for cross-section alignment
+csvDirZ = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csvZ/" # for cross-section alignment
 
 # Ensure tgtDir and csvDir exist
 if not os.path.exists(csvDir):
@@ -479,12 +479,12 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
     exe.shutdown()
 
 # DEBUG: align from 7660 to 7675: transition from tiled to single-section
-keys = groups.keys()
-keys.sort()
-g2 = {}
-for k in keys[7660:7675]:
-  g2[k] = groups[k]
-groups = g2
+#keys = groups.keys()
+#keys.sort()
+#g2 = {}
+#for k in keys[7660:7675]:
+#  g2[k] = groups[k]
+#groups = g2
 
 
 # Sort groups by key
@@ -499,8 +499,8 @@ for groupName in keys:
 groups = None
 
 # DEBUG: print groups
-for groupName, tilePaths in zip(groupNames, tileGroups):
-  syncPrintQ("%s: %i" % (groupName, len(tilePaths)))
+#for groupName, tilePaths in zip(groupNames, tileGroups):
+#  syncPrintQ("%s: %i" % (groupName, len(tilePaths)))
 
 
 syncPrintQ("Number of sections found valid: %i" % len(groupNames))
@@ -570,7 +570,7 @@ properties = {
  'img_dimensions': Intervals.dimensionsAsLongArray(volumeImg),
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
- 'n_threads': 8, # low, memory intensive
+ 'n_threads': 100, # low, memory intensive
  'invert': False,
  'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': True,  # no need, falls back onto SIFT when needed. In this case, when transitioning from montages to single image sections.
@@ -605,7 +605,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 1000, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
+  "maxIterations": 10000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
 }
 
