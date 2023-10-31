@@ -598,7 +598,7 @@ paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
 paramsSIFT.maxOctaveSize = int(max(1024, dimensions[0] * params["scale"]))
 paramsSIFT.steps = 3
-paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps -1))
+paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
 paramsSIFT.initialSigma = 1.6 # default 1.6
 
 # Parameters for computing the transformation models
