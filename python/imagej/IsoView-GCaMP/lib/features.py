@@ -266,8 +266,8 @@ def savePointMatches(img_filename1, img_filename2, pointmatches, directory, para
                            else PointMatches.csvHeader(next(iter(pointmatches)))
     lines.append(",".join(header))
     for pm in pointmatches:
-      p1 = pm.getP1().getW() # a double[] array
-      p2 = pm.getP2().getW() # a double[] array
+      p1 = pm.getP1().getL() # a double[] array
+      p2 = pm.getP2().getL() # a double[] array
       lines.append("%f,%f,%f,%f" % (p1[0], p1[1], p2[0], p2[1]))
     body = "\n".join(lines)
     ra = RandomAccessFile(path, 'rw')
