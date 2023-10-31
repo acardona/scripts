@@ -577,7 +577,7 @@ properties = {
  'use_SIFT': True,  # no need, falls back onto SIFT when needed. In this case, when transitioning from montages to single image sections.
  'SIFT_validateByFileExists': True, # Avoid loading and parsing SIFT features just to make sure they are fine.
  'RANSAC_iterations': 1000,
- 'RANSAC_maxEpsilon': 25,
+ 'RANSAC_maxEpsilon': 10, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
  'RANSAC_minInlierRatio': 0.01
 }
 
