@@ -574,7 +574,7 @@ properties = {
  'img_dimensions': Intervals.dimensionsAsLongArray(volumeImg),
  'srcDir': srcDir,
  'pixelType': UnsignedShortType,
- 'n_threads': 100, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
+ 'n_threads': 200, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
  'invert': False, # Processing is done already
  'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': True,  # no need, falls back onto SIFT when needed. In this case, when transitioning from montages to single image sections.
@@ -609,7 +609,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 10000, # Saalfeld recommends 1000
+  "maxIterations": 66, # # gets worse after 66 # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
 }
 
