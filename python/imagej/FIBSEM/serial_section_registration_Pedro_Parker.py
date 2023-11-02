@@ -501,8 +501,11 @@ for groupName in keys:
 groups = None
 
 # DEBUG: print groups
-#for groupName, tilePaths in izip(groupNames, tileGroups):
-#  syncPrintQ("%s: %i" % (groupName, len(tilePaths)))
+rows = ["section index (1-based),groupName,number of tiles"]
+for i, (groupName, tilePaths) in enumerate(izip(groupNames, tileGroups)):
+  rows.append("%i,%s,%i" % (i+1, groupName, len(tilePaths)))
+with open(os.path.join(csvDir, "sections-list.csv"), 'w') as f:
+  f.write("\n".join(rows))
 
 
 syncPrintQ("Number of sections found valid: %i" % len(groupNames))
