@@ -2,7 +2,7 @@ from __future__ import with_statement
 import sys, os
 sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import saveMatrices, loadMatrices
-from lib.serial2Dregistration import ensureSIFTFeatures
+from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
 from lib.util import newFixedThreadPool, syncPrintQ, printException
 from lib.ui import wrap
@@ -626,6 +626,6 @@ cropInterval = FinalInterval([section_width, section_height])
 cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
 imp = IL.wrap(cellImg, properties.get("name" + " aligned subpixel", ""))
 imp.show()
-  
+
 
 
