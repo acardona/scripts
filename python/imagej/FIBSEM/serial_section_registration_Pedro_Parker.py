@@ -623,11 +623,10 @@ def loadImg(index):
   global volumeImg
   cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, index])
   pixels = cell.getData().getCurrentStorageArray()
-  imp = ImagePlus(groupName, ShortProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
-  return imp.getProcessor()
+  return ArrayImgs.unsignedShorts(pixels, [volumeImg.dimension(0), volumeImg.dimension(1)])
 
 cropInterval = FinalInterval([section_width, section_height])
-cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
+cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
 imp = IL.wrap(cellImg, properties.get("name" + " aligned subpixel", ""))
 imp.show()
 
