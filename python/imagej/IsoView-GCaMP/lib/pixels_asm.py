@@ -4,6 +4,13 @@ from lib.asm import CustomClassLoader, initClass, initMethod, initMethodObj
 from java.lang import Integer, Math, Double
 
 def definePixels(classname=None):
+  """ A static method to find the min and max using the following approach, as devised by Pedro Gómez Gálvez:
+  Ignoring all black pixels (value of zero), find the mean of the rest, then compute their standard deviation,
+  and then find the pixel values that fall within a given number of standard deviations.
+  Given that these min and max values can be computed exactly, there should be no need to further iterate
+  the pixels array one last time in search for the closest pixel value to the boundaries, but this is what this
+  algorithm does.
+  """
   if classname is None:
     classname = "asm/pixels/Pixels"
   

@@ -4,6 +4,7 @@ import ij.process.ShortProcessor;
 import java.lang.Math;
 import java.lang.Integer;
 
+/** As concieved by Pedro Gómez Gálvez, November 2023, written in java by Albert Cardona. */
 public class Pixels {
 
 	static public void enhancedMinAndMax(final ShortProcessor sp, final int n_stdDevs) {
