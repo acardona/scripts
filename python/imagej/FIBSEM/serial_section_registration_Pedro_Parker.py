@@ -627,7 +627,7 @@ def loadImg(index):
 
 cropInterval = FinalInterval([section_width, section_height])
 cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
-imp = IL.wrap(cellImg, properties.get("name" + " aligned subpixel", ""))
+imp = IL.wrap(cellImg, properties.get("name", "") + " aligned subpixel")
 imp.show()
 
 
