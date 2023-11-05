@@ -619,9 +619,12 @@ matrices = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguratio
 volumeImgAligned = volume(show=True, invert=True, CLAHE_params=[100, 255, 3.0], ignoreMatrices=False)
 
 # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
-def loadImg(groupName):
-  global sliceLoader
-  return sliceLoader(groupName).getProcessor()
+def loadImg(index):
+  global volumeImg
+  cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, index])
+  pixels = cell.getData().getCurrentStorageArray()
+  imp = ImagePlus(groupName, ShortProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
+  return imp.getProcessor()
 
 cropInterval = FinalInterval([section_width, section_height])
 cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
