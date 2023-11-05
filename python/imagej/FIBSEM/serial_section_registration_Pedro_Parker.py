@@ -388,7 +388,8 @@ class SectionLoader(CacheLoader):
   """
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
-  def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir, csvDirZ, invert=False, CLAHE_params=None):
+  def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC,
+               csvDir, csvDirZ, invert=False, CLAHE_params=None, ignoreMatrices=False):
     """
     """
     self.dimensions = dimensions # a list of [width, height] for the canvas onto which draw the image tiles
@@ -401,7 +402,7 @@ class SectionLoader(CacheLoader):
     self.csvDir = csvDir
     self.csvDirZ = csvDirZ
     # Load the matrices.csv file if it exists
-    self.matrices = loadMatrices("matrices", csvDirZ)
+    self.matrices = loadMatrices("matrices", csvDirZ) if not ignoreMatrices else None
     if self.matrices and len(self.groupNames) != len(self.matrices):
       raise Exception("Lengths of groupNames and rows in the matrices file don't match!")
     self.invert = invert
@@ -521,10 +522,11 @@ cell_dimensions = dimensions + [1]
 pixelType = UnsignedShortType
 primitiveType = PrimitiveType.SHORT
 
-def volume(show=True, invert=False, CLAHE_params=None):
+def volume(show=True, invert=False, CLAHE_params=None, ignoreMatrices=False):
   volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset,
                                               paramsSIFT, paramsRANSAC, csvDir, csvDirZ,
-                                              invert=invert, CLAHE_params=CLAHE_params),
+                                              invert=invert, CLAHE_params=CLAHE_params
+                                              ignoreMatrices=ignoreMatrices),
                                 volume_dimensions,
                                 cell_dimensions,
                                 pixelType,
@@ -539,7 +541,7 @@ def volume(show=True, invert=False, CLAHE_params=None):
   return volumeImg
 
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
-volumeImg = volume(show=False, invert=True, CLAHE_params=[200, 255, 3.0])
+volumeImg = volume(show=False, invert=True, CLAHE_params=[200, 255, 3.0], ignoreMatrices=True)
 
 
 # Align sections with SIFT
@@ -613,5 +615,17 @@ paramsTileConfiguration = {
 matrices = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties)
 
 # Show the volume aligned, inverted and processed with CLAHE:
-volumeImgAligned = volume(show=True, invert=True, CLAHE_params=[100, 255, 3.0])
+volumeImgAligned = volume(show=True, invert=True, CLAHE_params=[100, 255, 3.0], ignoreMatrices=False)
+
+# Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
+def loadImg(groupName):
+  global sliceLoader
+  return sliceLoader(groupName).getProcessor()
+
+cropInterval = FinalInterval([section_width, section_height])
+cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
+imp = IL.wrap(cellImg, properties.get("name" + " aligned subpixel", ""))
+imp.show()
+  
+
 
