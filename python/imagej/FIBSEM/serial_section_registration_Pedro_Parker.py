@@ -525,7 +525,7 @@ primitiveType = PrimitiveType.SHORT
 def volume(show=True, invert=False, CLAHE_params=None, ignoreMatrices=False):
   volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset,
                                               paramsSIFT, paramsRANSAC, csvDir, csvDirZ,
-                                              invert=invert, CLAHE_params=CLAHE_params
+                                              invert=invert, CLAHE_params=CLAHE_params,
                                               ignoreMatrices=ignoreMatrices),
                                 volume_dimensions,
                                 cell_dimensions,
