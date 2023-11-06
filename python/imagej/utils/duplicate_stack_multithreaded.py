@@ -4,11 +4,13 @@ from java.lang import Runtime
 from ij import IJ, ImagePlus, ImageStack
 
 class Copy(Callable):
-  def __init__(self, ip, shallow=False):
-    self.ip = ip
+  def __init__(self, stack, slice_index, shallow=False):
+    self.stack = stack
+    self.slice_index = slice_index # 1-based
     self.shallow = shallow
   def call(self):
-    return self.ip if self.shallow else self.ip.duplicate()
+    ip = self.stack.getProcessor(self.slice_index)
+    return ip if self.shallow else ip.duplicate()
 
 def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False):
   """ imp: defaults to None, meaning get the current image.
@@ -22,7 +24,7 @@ def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False):
   exe = Executors.newFixedThreadPool(n_threads if n_threads > 0 else min(Runtime.getRuntime().availableProcessors(), stack.getSize()))
   try:
     stack2 = ImageStack(imp.getWidth(), imp.getHeight())
-    futures = [(i, exe.submit(Copy(stack.getProcessor(i), shallow))) for i in slices]
+    futures = [(i, exe.submit(Copy(stack, i, shallow))) for i in slices]
     for i, fu in futures:
       label = stack.getSliceLabel(i)
       stack2.addSlice(label if label else str(i), fu.get())
