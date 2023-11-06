@@ -3,17 +3,20 @@ from sc.fiji.io import FIBSEM_Reader
 from ij import IJ
 from java.io import File, FileInputStream
 
+baseDir = "/home/albert/Desktop/t2/Pedro_Parker/"
+
 paths = [
-"/home/albert/zstore1/FIBSEM/Pedro_parker/M07/D14/Merlin-FIBdeSEMAna_23-07-14_000300_0-0-0.dat",
-"/home/albert/zstore1/FIBSEM/Pedro_parker/M07/D14/Merlin-FIBdeSEMAna_23-07-14_000300_0-0-1.dat",
-"/home/albert/zstore1/FIBSEM/Pedro_parker/M07/D14/Merlin-FIBdeSEMAna_23-07-14_000300_0-1-0.dat",
-"/home/albert/zstore1/FIBSEM/Pedro_parker/M07/D14/Merlin-FIBdeSEMAna_23-07-14_000300_0-1-1.dat"]
+  "Merlin-FIBdeSEMAna_23-06-17_235001_0-0-1.dat",
+  "Merlin-FIBdeSEMAna_23-06-17_235001_0-1-0.dat",
+  "Merlin-FIBdeSEMAna_23-06-17_235001_0-1-1.dat",
+  "Merlin-FIBdeSEMAna_23-07-14_110750_0-0-0.dat",
+]
 
 for path in paths:
   r = FIBSEM_Reader()
   fis = None
   try:
-    fis = FileInputStream(File(path))
+    fis = FileInputStream(File(baseDir + path))
     header = r.parseHeader(fis)
     print path
     print "stageX (mm):", header.stageX
@@ -26,6 +29,8 @@ for path in paths:
     print "fibShiftY (mm):", header.fibShiftY
     print "semShiftX (mm):", header.semShiftX
     print "semShiftY (mm):", header.semShiftY
+    print "gain:", header.gain
+    print "secondOrder:", header.secondOrder
   finally:
     if fis is not None:
       fis.close()
