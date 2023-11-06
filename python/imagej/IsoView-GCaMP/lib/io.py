@@ -138,7 +138,7 @@ def readUnsignedBytes(path, dimensions, header=0):
     ra.close()
 
 
-def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, asImagePlus=False, toUnsigned=True):
+def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, asImagePlus=False, toUnsigned=True, openAsRaw=False):
   """ Read a file from Shan Xu's FIBSEM software, where two or more channels are interleaved.
       Assumes channels are stored in 16-bit.
       
@@ -148,6 +148,9 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
       magic_number: defaults to that for version 8 of Shan Xu's .dat image file format.
       isSigned: defaults to True, will subtract the min value when negative.
       asImagePlus: return a list of ImagePlus instead of ArrayImg which is the default.
+      openAsRaw: defaults to False, which means (pixelValue * header.gain[channelIndex]) * header.secondOrder[channelIndex],
+                 round to a short, and then if smaller than zero, make zero, and if larger than 65535, make 65535.
+                 Otherwise when True just add 32768 to make the short unsigned.
   """
   ra = RandomAccessFile(path, 'r')
   channels = None
@@ -163,6 +166,15 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     # Read the number of channels
     ra.seek(32)
     numChannels = ra.readByte() & 0xff # a single byte as unsigned integer
+    # Parse gain and secondOrder, for scaling pixel values
+    gain = []
+    secondOrder = []
+    ra.seek(40)
+    gain.append(ra.readFloat())
+    secondOrder.append(ra.readFloat())
+    ra.seek(56)
+    gain.append(ra.readFloat())
+    secondOrder.append(ra.readFloat())
     # Parse width and height
     ra.seek(100)
     width = ra.readInt()
@@ -196,8 +208,13 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
   
   # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
   if toUnsigned:
-    for s in channels:
-      DAT_handler.toUnsignedExact(s)
+    if openAsRaw:
+      for s in channels:
+        DAT_handler.toUnsignedExact(s)
+    else:
+      for s, i in zip(channels, [channel_index] if channel_index > -1 else xrange(numChannels)):
+        DAT_handler.applyScale(s, gain[i], secondOrder[i])
+      
   
   # With python array sampling: very slow, and not just from iterating whole array once per channel
   #seq = xrange(numChannels) if -1 == channel_index else [channel_index]

@@ -40,4 +40,14 @@ static public final short[][] deinterleave(final short[] source,
   return channels;
 }
 
+static public final void applyScale(final short[] source, final float gain, final float secondOrder) {
+	for (int i=0; i<source.length; ++i) {
+		float v = (source[i] - gain) * secondOrder; // reads source as signed short
+		int iv = Math.round(v);
+		if (iv < 0) iv = 0;
+		else if (iv > 65535) iv = 65535;
+		source[i] = (short)iv;
+	}
+}
+
 }
