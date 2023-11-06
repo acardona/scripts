@@ -488,6 +488,14 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
 #  g2[k] = groups[k]
 #groups = g2
 
+# DEBUG: align from 1 to 7666: only multi-tile sections
+keys = groups.keys()
+keys.sort()
+g2 = {}
+for k in keys[1:7675]:
+  g2[k] = groups[k]
+groups = g2
+
 
 # Sort groups by key
 keys = groups.keys()
@@ -612,7 +620,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 66, # # gets worse after 66 # Saalfeld recommends 1000
+  "maxIterations": 1000, # # gets worse after 66 # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
 }
 
