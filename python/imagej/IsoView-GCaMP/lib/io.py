@@ -218,7 +218,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     ra.close()
   
   # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
-  if openAsRaw:
+  if not openAsRaw:
     for s, i in zip(channels, [channel_index] if channel_index > -1 else xrange(numChannels)):
       DAT_handler.applyScale(s, gain[i], secondOrder[i])
   elif toUnsigned:
