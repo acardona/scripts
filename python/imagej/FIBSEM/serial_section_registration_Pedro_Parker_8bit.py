@@ -387,6 +387,10 @@ class MontageSlice2x2(Callable):
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     sps = self.loadShortProcessors()
     spMontage = ShortProcessor(width, height)
+    if invert:
+      # fill with white, will be inverted to black
+      spMontage.setValue(65535)
+      spMontage.fill()
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in reversed(zip(sps, matrices)):
       spMontage.insert(sp,
@@ -589,7 +593,7 @@ def volume(show=True, invert=False, CLAHE_params=None, ignoreMatrices=False):
                                               paramsSIFT, paramsRANSAC, csvDir, csvDirZ,
                                               invert=invert, CLAHE_params=CLAHE_params,
                                               ignoreMatrices=ignoreMatrices,
-                                              as8bit=True)
+                                              as8bit=True),
                                 volume_dimensions,
                                 cell_dimensions,
                                 pixelType,
@@ -643,7 +647,8 @@ properties = {
  'SIFT_validateByFileExists': True, # Avoid loading and parsing SIFT features just to make sure they are fine.
  'RANSAC_iterations': 1000,
  'RANSAC_maxEpsilon': 10, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
- 'RANSAC_minInlierRatio': 0.01
+ 'RANSAC_minInlierRatio': 0.01,
+ 'preload': 64 # 64 sections, matching the export as N5 Z axis
 }
 
 # Parameters for blockmatching
@@ -685,7 +690,7 @@ def loadImg(index):
   global volumeImg
   cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, index])
   pixels = cell.getData().getCurrentStorageArray()
-  return ArrayImgs.unsignedShorts(pixels, [volumeImg.dimension(0), volumeImg.dimension(1)])
+  return ArrayImgs.unsignedBytes(pixels, [volumeImg.dimension(0), volumeImg.dimension(1)])
 
 cropInterval = FinalInterval([section_width, section_height])
 cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
