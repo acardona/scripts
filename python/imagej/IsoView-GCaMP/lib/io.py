@@ -159,7 +159,9 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
                    but we have to read 1 GB byte[] array into RAM, read them into a 16-bit 0.5 GB short[] array,
                    and finally return an image with a 250 MB short[] array. This uses (1 GB(b) + 0.5*2 GB(s) + 0.25*2*2 GB(s)) = 2.5 GB of RAM.
                    If buffer_size is e.g., 137 MB (the default), then will only use (137 MB(b) + 68.5*2 MB(s) + 0.25*2*2 GB(s)) = 1.274 GB of RAM
-                   for the same operation to read both channels, and much less to read just one.
+                   for the same operation to read both channels, and much less to read just one. In other words, pay the cost for the image
+                   plus that of the buffer, not that of the image more than twice over. These savings are particularly notable when
+                   requesting that only one channel is read and returned.
   """
   ra = RandomAccessFile(path, 'r')
   channels = None
@@ -177,8 +179,8 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     numChannels = ra.readByte() & 0xff # a single byte as unsigned integer
     # Parse gain and secondOrder, for scaling pixel values.
     # (avoids reading values it doesn't need)
-    gain = [0, 0]
-    secondOrder = [0, 0]
+    gain = [0, 0] # at seek 40 and 56
+    secondOrder = [0, 0] # at seek 44 and 60, 4 bytes offset from gain, i.e., consecutive to gain.
     for i, offset in (((0, 40), (1, 56)) if -1 == channel_index else (((0, 40),) if 0 == channel_index else ((1, 56),))):
       ra.seek(offset)
       gain[i] = ra.readFloat()
