@@ -39,7 +39,7 @@ def exportOpenVSAs8bitN5(name, # dataset name
     print "No ImgLib2 image!"
     return
   # as 8-bit:
-  img = convert2(imgT, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
+  img = convert2(img, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
   # Crop
   if roi:
     bounds = roi.getBounds()
@@ -54,9 +54,9 @@ def exportOpenVSAs8bitN5(name, # dataset name
 
 exportOpenVSas8bitN5("PedroParker",
                      "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/n5/",
+                     [256, 256, 64],
                      30924,
                      38829, # as measured for slice 4000. Works well for slice 3000, 5000 and 6000 too.
-                     [256, 256, 64],
                      gzip_compression=4,
                      n_threads=64)
 
