@@ -196,7 +196,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     # Determine if the file is larger than 2 GB
     size = width * height * 2 * numChannels
     if size > 2147483639 or buffer_size > 0:  # Integer.MAX_VALUE - 8 for some reason
-      channels = _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=channel_index, buffer_size=buffer_size)
+      channels = _readFIBSEMdatBuffered(ra, width, height, numChannels, channel_index=channel_index, buffer_size=buffer_size)
     else:
       bytes = zeros(size, 'b') # 2 for 16-bit
       ra.read(bytes)
@@ -231,7 +231,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
 
 
-def _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=-1, buffer_size=536870912):
+def _readFIBSEMdatBuffered(ra, width, height, numChannels, channel_index=-1, buffer_size=536870912):
   """ Only works if each channel, independently, is smaller than 2 GB, which is java's array size limit.
       It is ASSUMED that the caller knows to pass on an even buffer_size value.
       By default buffer_size is 0.5 GB.
