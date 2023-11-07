@@ -639,7 +639,7 @@ properties = {
  'name': "Pedro_Parker",
  'img_dimensions': Intervals.dimensionsAsLongArray(volumeImg),
  'srcDir': srcDir,
- 'pixelType': UnsignedShortType,
+ 'pixelType': UnsignedByteType,
  'n_threads': 200, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
  'invert': False, # Processing is done already
  'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
