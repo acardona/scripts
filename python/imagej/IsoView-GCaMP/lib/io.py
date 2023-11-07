@@ -185,7 +185,6 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
       ra.seek(offset)
       gain[i] = ra.readFloat()
       secondOrder[i] = ra.readFloat()
-    print gain, secondOrder
     # Parse width and height
     ra.seek(100)
     width = ra.readInt()
