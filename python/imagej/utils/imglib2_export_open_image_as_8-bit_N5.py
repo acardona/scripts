@@ -52,7 +52,7 @@ def exportOpenVSAs8bitN5(name, # dataset name
           n_threads=n_threads)
 
 
-exportOpenVSas8bitN5("PedroParker",
+exportOpenVSAs8bitN5("PedroParker",
                      "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/n5/",
                      [256, 256, 64],
                      30924,
