@@ -139,7 +139,7 @@ def readUnsignedBytes(path, dimensions, header=0):
 
 
 def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, asImagePlus=False,
-                  toUnsigned=True, openAsRaw=False, buffer_size=0):
+                  toUnsigned=True, openAsRaw=False, buffer_size=pow(2, 27)):
   """ Read a file from Shan Xu's FIBSEM software, where two or more channels are interleaved.
       Assumes channels are stored in 16-bit.
       
@@ -157,8 +157,9 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
                    If larger than zero, the pixels will be read in blocks of that size, which can potentially massively reduce memory size.
                    Consider a 1 GB file of 16-bit pixels with two channels. Each channel is 250 MB of 16-bit pixels,
                    but we have to read 1 GB byte[] array into RAM, read them into a 16-bit 0.5 GB short[] array,
-                   and finally return an image with a 250 MB short[] array. This uses (1 GB + 0.5 GB + 0.25 GB) = 1.75 GB of RAM.
-                   If buffer_size is e.g., 100 MB, then will only use 350 MB of RAM for the same operation.
+                   and finally return an image with a 250 MB short[] array. This uses (1 GB(b) + 0.5*2 GB(s) + 0.25*2*2 GB(s)) = 2.5 GB of RAM.
+                   If buffer_size is e.g., 137 MB (the default), then will only use (137 MB(b) + 68.5*2 MB(s) + 0.25*2*2 GB(s)) = 1.274 GB of RAM
+                   for the same operation to read both channels, and much less to read just one.
   """
   ra = RandomAccessFile(path, 'r')
   channels = None
