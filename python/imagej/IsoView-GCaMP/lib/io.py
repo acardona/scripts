@@ -207,18 +207,13 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     ra.close()
   
   # Shockingly, these values are signed shorts, not unsigned! (for first popeye2 squid volume, December 2021)
-  if toUnsigned:
-    if openAsRaw:
-      for s in channels:
-        DAT_handler.toUnsignedExact(s)
-    else:
-      for s, i in zip(channels, [channel_index] if channel_index > -1 else xrange(numChannels)):
-        DAT_handler.applyScale(s, gain[i], secondOrder[i])
-      
+  if openAsRaw:
+    for s, i in zip(channels, [channel_index] if channel_index > -1 else xrange(numChannels)):
+      DAT_handler.applyScale(s, gain[i], secondOrder[i])
+  elif toUnsigned:
+    for s in channels:
+      DAT_handler.toUnsignedExact(s)
   
-  # With python array sampling: very slow, and not just from iterating whole array once per channel
-  #seq = xrange(numChannels) if -1 == channel_index else [channel_index]
-  #channels = [shorts[i::numChannels] for i in seq]
   if asImagePlus:
     return [ImagePlus(os.path.basename(path) + " (" + str(i) + ")", ShortProcessor(width, height, s, None)) for i, s in enumerate(channels)]
   else:
