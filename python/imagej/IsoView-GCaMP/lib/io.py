@@ -138,7 +138,8 @@ def readUnsignedBytes(path, dimensions, header=0):
     ra.close()
 
 
-def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, asImagePlus=False, toUnsigned=True, openAsRaw=False):
+def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, asImagePlus=False,
+                  toUnsigned=True, openAsRaw=False, buffer_size=0):
   """ Read a file from Shan Xu's FIBSEM software, where two or more channels are interleaved.
       Assumes channels are stored in 16-bit.
       
@@ -151,6 +152,13 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
       openAsRaw: defaults to False, which means (pixelValue * header.gain[channelIndex]) * header.secondOrder[channelIndex],
                  round to a short, and then if smaller than zero, make zero, and if larger than 65535, make 65535.
                  Otherwise when True just add 32768 to make the short unsigned.
+      toUnsigned: if openAsRaw is True, then choose whether to convert to unsigned values. Default is True.
+      buffer_size: default of zero which means will attempt to read the whole pixel byte array in one go, unless it's larger than 2GB.
+                   If larger than zero, the pixels will be read in blocks of that size, which can potentially massively reduce memory size.
+                   Consider a 1 GB file of 16-bit pixels with two channels. Each channel is 250 MB of 16-bit pixels,
+                   but we have to read 1 GB byte[] array into RAM, read them into a 16-bit 0.5 GB short[] array,
+                   and finally return an image with a 250 MB short[] array. This uses (1 GB + 0.5 GB + 0.25 GB) = 1.75 GB of RAM.
+                   If buffer_size is e.g., 100 MB, then will only use 350 MB of RAM for the same operation.
   """
   ra = RandomAccessFile(path, 'r')
   channels = None
@@ -184,8 +192,8 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     ra.seek(header)
     # Determine if the file is larger than 2 GB
     size = width * height * 2 * numChannels
-    if size > 2147483639:  # Integer.MAX_VALUE - 8 for some reason
-      channels = _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=channel_index)
+    if size > 2147483639 or buffer_size > 0:  # Integer.MAX_VALUE - 8 for some reason
+      channels = _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=channel_index, buffer_size=buffer_size)
     else:
       bytes = zeros(size, 'b') # 2 for 16-bit
       ra.read(bytes)
@@ -220,17 +228,20 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     return [ArrayImgs.unsignedShorts(s, [width, height]) for s in channels]
 
 
-def _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=-1):
-  """ Only works if each channel, independently, is smaller than 2 GB, which is java's array size limit. """
+def _readFIBSEMdatOver2GB(ra, width, height, numChannels, channel_index=-1, buffer_size=536870912):
+  """ Only works if each channel, independently, is smaller than 2 GB, which is java's array size limit.
+      It is ASSUMED that the caller knows to pass on an even buffer_size value.
+      By default buffer_size is 0.5 GB.
+  """
   # Channels are interleaved, so read by parts
   # Read the whole image into multiple byte arrays
   n_bytes = width * height * 2 * numChannels # * 2 for 16-bit pixels
   # bytes array for reuse in sequential readings of 0.5 GB each
-  bytes = zeros(536870912, 'b')
+  bytes = zeros(buffer_size, 'b')
   # shorts arrays, one per channel to be read
   channels = [zeros(width * height, 'h') for _ in xrange(1 if -1 != channel_index else numChannels)] # channel_index of -1 means read all channels
   # shorts array for reuse in sequential readings: half the size of the bytes array
-  shorts = zeros(268435456, 'h') # 0.25 of a GB: half the length of the bytes array
+  shorts = zeros(buffer_size / 2, 'h') # 0.25 of a GB: half the length of the bytes array
   # Read sequentially in chunks
   index = 0 # over the channels arrays
   while n_bytes > 0:
