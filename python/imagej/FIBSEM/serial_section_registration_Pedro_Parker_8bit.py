@@ -546,7 +546,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
 keys = groups.keys()
 keys.sort()
 g2 = {}
-for k in keys[1:7675]:
+for k in keys[1:7665]:
   g2[k] = groups[k]
 groups = g2
 
