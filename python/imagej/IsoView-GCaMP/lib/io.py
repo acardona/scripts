@@ -166,15 +166,15 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
     # Read the number of channels
     ra.seek(32)
     numChannels = ra.readByte() & 0xff # a single byte as unsigned integer
-    # Parse gain and secondOrder, for scaling pixel values
-    gain = []
-    secondOrder = []
-    ra.seek(40)
-    gain.append(ra.readFloat())
-    secondOrder.append(ra.readFloat())
-    ra.seek(56)
-    gain.append(ra.readFloat())
-    secondOrder.append(ra.readFloat())
+    # Parse gain and secondOrder, for scaling pixel values.
+    # (avoids reading values it doesn't need)
+    gain = [0, 0]
+    secondOrder = [0, 0]
+    for i, offset in (((0, 40), (1, 56)) if -1 == channel_index else (((0, 40),) if 0 == channel_index else ((1, 56),))):
+      ra.seek(offset)
+      gain[i] = ra.readFloat()
+      secondOrder[i] = ra.readFloat()
+    print gain, secondOrder
     # Parse width and height
     ra.seek(100)
     width = ra.readInt()
@@ -196,7 +196,7 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
       shorts = zeros(width * height * numChannels, 'h')
       sb.get(shorts)
       sb = None
-      # Deinterleave channels and convert to unsigned short      
+      # Deinterleave channels and convert to unsigned short 
       # With ASM: fast
       channels = DAT_handler.deinterleave(shorts, numChannels, channel_index)
       shorts = None
