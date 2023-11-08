@@ -388,15 +388,15 @@ class MontageSlice2x2(Callable):
     sps = self.loadShortProcessors()
     spMontage = ShortProcessor(width, height)
     if invert:
-      for sp in sps:
-        sp.invert() # prior to montage
+      spMontage.setValue(65535)
+      spMontage.fill() # will get inverted back to black
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in reversed(zip(sps, matrices)):
       spMontage.insert(sp,
                        int(matrix[2] + dx + 0.5),
                        int(matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
     sps = None
-    bpMontage = processTo8bit(spMontage, invert=False, CLAHE_params=CLAHE_params)
+    bpMontage = processTo8bit(spMontage, invert=invert, CLAHE_params=CLAHE_params)
     
     return ArrayImgs.unsignedBytes(bpMontage.getPixels(), width, height)
 
