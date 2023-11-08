@@ -42,8 +42,8 @@ def exportOpenVSAs8bitN5(name, # dataset name
   if roi:
     bounds = roi.getBounds()
     print "Using ROI:", roi, "\nwith bounds:", bounds
-    img = Views.interval(img, [bounds.x, bounds.y, 0],
-                              [bounds.width -1, bounds.height -1, img.dimension(2) -1])
+    img = Views.zeroMin(Views.interval(img, [bounds.x, bounds.y, 0],
+                                            [bounds.x + bounds.width -1, bounds.y + bounds.height -1, img.dimension(2) -1]))
   # Ready to write
   writeN5(img, exportDir, name,
           block_size, gzip_compression_level=gzip_compression,
