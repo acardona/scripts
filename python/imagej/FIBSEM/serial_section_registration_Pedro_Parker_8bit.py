@@ -404,6 +404,7 @@ def processTo8bit(sp, invert=False, CLAHE_params=None):
   sp.findMinAndMax()
   maximum = sp.getMax() # even though this is really the min, 16-bit images get inverted within their display range
                         # so after .invert() this will be the max.
+                        # If it was done after .invert(), the black border would be 65535 and that max is the wrong one.
   # First invert
   if invert:
     sp.invert()
