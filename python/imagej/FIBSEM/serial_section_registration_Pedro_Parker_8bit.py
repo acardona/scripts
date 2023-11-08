@@ -388,16 +388,15 @@ class MontageSlice2x2(Callable):
     sps = self.loadShortProcessors()
     spMontage = ShortProcessor(width, height)
     if invert:
-      # fill with white, will be inverted to black
-      spMontage.setValue(65535)
-      spMontage.fill()
+      for sp in sps:
+        sp.invert() # prior to montage
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in reversed(zip(sps, matrices)):
       spMontage.insert(sp,
                        int(matrix[2] + dx + 0.5),
                        int(matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
     sps = None
-    bpMontage = processTo8bit(spMontage, invert=invert, CLAHE_params=CLAHE_params)
+    bpMontage = processTo8bit(spMontage, invert=False, CLAHE_params=CLAHE_params)
     
     return ArrayImgs.unsignedBytes(bpMontage.getPixels(), width, height)
 
@@ -546,7 +545,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
 keys = groups.keys()
 keys.sort()
 g2 = {}
-for k in keys[1:7665]:
+for k in keys[0:7665]:
   g2[k] = groups[k]
 groups = g2
 
