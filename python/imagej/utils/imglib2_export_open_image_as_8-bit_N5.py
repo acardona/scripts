@@ -29,9 +29,7 @@ def grabImg():
 
 def exportOpenVSAs8bitN5(name, # dataset name
                          exportDir, # target directory
-                         block_size, # [128,128,128
-                         minimum, # min display range for mapping to 8-bit
-                         maximum, # max display range for mapping to 8-bit
+                         block_size, # e.g., [128,128,128]
                          gzip_compression=6,
                          n_threads=1): # for writing
   img, roi = grabImg()
@@ -39,7 +37,7 @@ def exportOpenVSAs8bitN5(name, # dataset name
     print "No ImgLib2 image!"
     return
   # as 8-bit:
-  img = convert2(img, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
+  # Already 8-bit # img = convert2(img, RealUnsignedByteConverter(minimum, maximum), UnsignedByteType, randomAccessible=True) # use IterableInterval
   # Crop
   if roi:
     bounds = roi.getBounds()
@@ -55,8 +53,6 @@ def exportOpenVSAs8bitN5(name, # dataset name
 exportOpenVSAs8bitN5("PedroParker",
                      "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/n5/",
                      [256, 256, 64],
-                     30924,
-                     38829, # as measured for slice 4000. Works well for slice 3000, 5000 and 6000 too.
                      gzip_compression=4,
-                     n_threads=64)
+                     n_threads=128)
 
