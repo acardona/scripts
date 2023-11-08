@@ -480,7 +480,9 @@ class TranslatedSectionGet(LazyCellImg.Get):
     self.cell_dimensions = cell_dimensions # x,y must match dims of interval
     self.interval = interval # when smaller than the image, will crop
     self.cache = SoftMemoize(partial(TranslatedSectionGet.makeCell, self), maxsize=256)
-    self.exe = newFixedThreadPool(-1) if preload is not None else None # BEWARE native memory leak if not closed
+    self.exe = None
+    if preload:
+      self.exe = newFixedThreadPool(preload) # BEWARE native memory leak if not closed
     self.preload = preload
 
   def preloadCells(self, index):
