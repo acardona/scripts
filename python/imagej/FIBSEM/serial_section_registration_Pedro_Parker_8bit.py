@@ -387,9 +387,6 @@ class MontageSlice2x2(Callable):
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     sps = self.loadShortProcessors()
     spMontage = ShortProcessor(width, height)
-    if invert:
-      spMontage.setValue(65535)
-      spMontage.fill() # will get inverted back to black
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in reversed(zip(sps, matrices)):
       spMontage.insert(sp,
@@ -403,12 +400,16 @@ class MontageSlice2x2(Callable):
 
 def processTo8bit(sp, invert=False, CLAHE_params=None):
   """ WARNING will alter sp. """
+  # Find min and max of the image yet to be inverted
+  sp.findMinAndMax()
+  maximum = sp.getMax() # even though this is really the min, 16-bit images get inverted within their display range
+                        # so after .invert() this will be the max.
   # First invert
   if invert:
     sp.invert()
   # Second determine and set display range
-  sp.findMinAndMax()
-  sp.setMinAndMax(0, sp.getMax())
+  #sp.findMinAndMax()
+  sp.setMinAndMax(0, maximum)
   # Third convert to 8-bit
   bp = sp.convertToByte(True) # sets the display range into stone
   sp = None
