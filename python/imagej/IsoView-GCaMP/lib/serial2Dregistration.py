@@ -565,6 +565,9 @@ class SourcePanning(KeyAdapter):
 
 
 def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterval, preload):
+  """ Note that when preload > 0, tjhe returned cellGet (a TranslatedSectionGet as defined above)
+      will have created an ExecutorService that can be shutdown by invoking destroy() on the returned cellGet.
+  """
   dims = Intervals.dimensionsAsLongArray(cropInterval)
   voldims = [dims[0],
              dims[1],
