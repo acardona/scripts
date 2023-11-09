@@ -477,10 +477,14 @@ def writeN5(img, path, dataset_name, blockSize, gzip_compression_level=4, n_thre
       gzip_compression_level: defaults to 4, ranges from 0 (no compression) to 9 (maximum;
                               see java.util.zip.Deflater for details.).
       n_threads: defaults to as many as CPU cores, for parallel writing. """
-  N5Utils.save(img, N5FSWriter(path, GsonBuilder()),
-               dataset_name, blockSize,
-               GzipCompression(gzip_compression_level) if gzip_compression_level > 0 else RawCompression(),
-               newFixedThreadPool(n_threads=n_threads, name="jython-n5writer"))
+  exe = newFixedThreadPool(n_threads=n_threads, name="jython-n5writer")
+  try:
+    N5Utils.save(img, N5FSWriter(path, GsonBuilder()),
+                 dataset_name, blockSize,
+                 GzipCompression(gzip_compression_level) if gzip_compression_level > 0 else RawCompression(),
+                 exe)
+  finally:
+    exe.shutdown()
 
 
 def read2DImageROI(path, dimensions, interval, pixelType=UnsignedShortType, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
