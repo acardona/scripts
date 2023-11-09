@@ -1,3 +1,4 @@
+from time import time
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.view import Views
 from net.imglib2 import FinalInterval
@@ -310,7 +311,21 @@ def showTable(rows, title="Table", column_names=None, dataType=Number, width=400
   return table, frame
 
 
-
+def addWindowListener(window, fn, methods=["windowClosed"]):
+  """ window: the java.awt.Window onto which add a WindowAdapter.
+      fn: the function to run when any of the listener methods is triggered.
+          Note it gets an event as argument.
+      methods: defaults to a list with a single method name, "windowClosed".
+               Add others like windowOpened, windowClosing, windowGainedFocus, etc.
+               as defined in the convenience abstract class java.awt.WindowAdapter.
+  """
+  fnl = lambda self, event: fn(event)
+  listenerClass = type("MyListenOnClose-%i" % int(time()*100), # unique class name
+                       (WindowAdapter,),
+                       {method: fnl for method in methods })
+  listener = listenerClass()
+  window.addWindowListener(listener)
+  return listener
 
 
 
