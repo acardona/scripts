@@ -5,7 +5,7 @@ from lib.registration import saveMatrices, loadMatrices
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
 from lib.util import newFixedThreadPool, syncPrintQ, printException
-from lib.ui import wrap
+from lib.ui import wrap, addWindowListener
 from lib.serial2Dregistration import align, setupImageLoader
 from collections import defaultdict
 from mpicbg.imagefeatures import FloatArray2DSIFT
@@ -697,6 +697,8 @@ cropInterval = FinalInterval([section_width, section_height])
 cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
 imp = IL.wrap(cellImg, properties.get("name", "") + " aligned subpixel")
 imp.show()
+# Ensure cleanup of threads upon closing the window
+addWindowListener(imp.getWindow(), lambda event: cellGet.destroy())
 
 
 
