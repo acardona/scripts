@@ -591,7 +591,7 @@ primitiveType = PrimitiveType.BYTE #.SHORT
 
 def volume(show=True, matrices=None, invert=False, CLAHE_params=None, title=None):
   volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset,
-                                              paramsSIFT, paramsRANSAC, csvDir, csvDirZ, csvDirBM,
+                                              paramsSIFT, paramsRANSAC, csvDir,
                                               matrices=matrices,
                                               invert=invert, CLAHE_params=CLAHE_params,
                                               as8bit=True),
@@ -699,7 +699,7 @@ properties["use_SIFT"] = False
 matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=sliceLoader2)
 
 # fuse the matrices: concatenate the translation transforms
-# WARNING the SIFT+RANSAC registration will have been expressed as integers, so correct for that
+# WARNING the SIFT+RANSAC registration will have been expressed as integers, which is what the blockmatching saw, so correct for that
 matrices = []
 for m1, m2 in izip(matricesSIFT, matricesBM):
   # The SIFT alignment will have been expressed as integers, so correct for that
