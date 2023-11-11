@@ -63,9 +63,10 @@ def loadImp(filepath):
   syncPrintQ("Loading image " + filepath)
   return IJ.openImage(filepath)
 
-def loadUnsignedShort(filepath, invert=True, CLAHE_params=None):
+def loadUnsignedShort(filepath, invert=True, CLAHE_params=None, loaderImp=None):
   """ Returns an ImgLib2 ArrayImg """
-  imp = loadImp(filepath)
+  impLoader = loaderImp if loaderImp else loadImp
+  imp = impLoader(filepath)
   if invert:
     imp.getProcessor().invert()
   if CLAHE_params is not None:
@@ -73,9 +74,10 @@ def loadUnsignedShort(filepath, invert=True, CLAHE_params=None):
     CLAHE.run(imp, blockRadius, n_bins, slope, None)
   return ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), [imp.getWidth(), imp.getHeight()])
 
-def loadFloatProcessor(filepath, params, paramsSIFT, scale=True):
+def loadFloatProcessor(filepath, params, paramsSIFT, scale=True, loaderImp=None):
   try:
-    fp = loadImp(filepath).getProcessor().convertToFloatProcessor()
+    impLoader = loaderImp if loaderImp else loadImp
+    fp = impLoader(filepath).getProcessor().convertToFloatProcessor()
     # Preprocess images: Gaussian-blur to scale down, then normalize contrast
     if scale:
       fp = Filter.createDownsampled(fp, params["scale"], 0.5, paramsSIFT.initialSigma)
@@ -93,7 +95,7 @@ def setupImageLoader(loader=loadImp):
   loadImp = loader
 
 
-def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, csvDir, exeload, load):
+def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, csvDir, exeload, load, loaderImp=None):
   """
   filepath1: the file path to an image of a section.
   filepath2: the file path to an image of another section.
@@ -153,8 +155,8 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
       # Try SIFT features, which are location independent
       #
       # Images are now scaled: load originals
-      futures = [exeload.submit(Task(loadFloatProcessor, filepath1, params, paramsSIFT, scale=False)),
-                 exeload.submit(Task(loadFloatProcessor, filepath2, params, paramsSIFT, scale=False))]
+      futures = [exeload.submit(Task(loadFloatProcessor, filepath1, params, paramsSIFT, scale=False, loaderImp=loaderImp)),
+                 exeload.submit(Task(loadFloatProcessor, filepath2, params, paramsSIFT, scale=False, loaderImp=loaderImp))]
 
       fp1 = futures[0].get() # FloatProcessor, original
       fp2 = futures[1].get() # FloatProcessor, original
@@ -232,7 +234,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
     printException()
 
 
-def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateByFileExists=False):
+def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateByFileExists=False, loaderImp=None):
   """
      filepath: to the image from which SIFT features have been or have to be extracted.
      params: dict of registration parameters, including the key "scale".
@@ -262,8 +264,9 @@ def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateByFileE
       os.remove(path)
   # Else, extract de novo:
   try:
+    impLoader = loaderImp if loaderImp else loadImp
     # Extract features
-    imp = loadImp(filepath)
+    imp = impLoader(filepath)
     ip = imp.getProcessor()
     paramsSIFT = paramsSIFT.clone()
     ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
@@ -281,7 +284,7 @@ def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateByFileE
   return features
 
 
-def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csvDir):
+def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csvDir, loaderImp=None):
   # Skip if pointmatches CSV file exists already:
   csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepath2) + ".pointmatches.csv")
   if os.path.exists(csvpath):
@@ -289,8 +292,8 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csv
 
   try:
     # Load from CSV files or extract features de novo
-    features1 = ensureSIFTFeatures(filepath1, paramsSIFT, properties, csvDir)
-    features2 = ensureSIFTFeatures(filepath2, paramsSIFT, properties, csvDir)
+    features1 = ensureSIFTFeatures(filepath1, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
+    features2 = ensureSIFTFeatures(filepath2, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
     #syncPrintQ("Loaded %i features for %s\n       %i features for %s" % (features1.size(), os.path.basename(filepath1),
     #                                                                     features2.size(), os.path.basename(filepath2)))
     # Vector of PointMatch instances
@@ -335,20 +338,20 @@ def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csv
     printException()
 
 
-def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem):
+def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem, loaderImp=None):
   for i in xrange(len(filepaths) - n_adjacent):
     for inc in xrange(1, n_adjacent + 1):
       #syncPrintQ("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
-      yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, properties, csvDir, exeload, loadFPMem)
+      yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, properties, csvDir, exeload, loadFPMem, loaderImp=loaderImp)
 
-def generateSIFTMatches(filepaths, n_adjacent, params, paramsSIFT, properties, csvDir):
+def generateSIFTMatches(filepaths, n_adjacent, params, paramsSIFT, properties, csvDir, loaderImp=None):
   paramsRod = {"rod": params["rod"]} # only this parameter is needed for SIFT pointmatches
   for i in xrange(max(1, len(filepaths) - n_adjacent)):
     for inc in xrange(1, min(n_adjacent + 1, len(filepaths))):
-      yield Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], paramsRod, paramsSIFT, properties, csvDir)
+      yield Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], paramsRod, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
 
 
-def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties):
+def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties, loaderImp=None):
   """ If a pointmatches csv file doesn't exist, will create it. """
   w = ParallelTasks("ensurePointMatches", exe=newFixedThreadPool(properties["n_threads"]))
   exeload = newFixedThreadPool()
@@ -361,7 +364,7 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       chunk_size = properties["n_threads"] * 2
       count = 1
       for result in w.chunkConsume(chunk_size, # tasks to submit before starting to wait for futures
-                                   (Task(ensureSIFTFeatures, filepath, paramsSIFT, properties, csvDir, validateByFileExists=properties.get("SIFT_validateByFileExists"))
+                                   (Task(ensureSIFTFeatures, filepath, paramsSIFT, properties, csvDir, validateByFileExists=properties.get("SIFT_validateByFileExists"), loaderImp=loaderImp)
                                     for filepath in filepaths)):
         count += 1
         if 0 == count % chunk_size:
@@ -371,15 +374,15 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       # Compute pointmatches across adjacent sections
       count = 1
       for result in w.chunkConsume(chunk_size,
-                                   generateSIFTMatches(filepaths, n_adjacent, params, paramsSIFT, properties, csvDir)):
+                                   generateSIFTMatches(filepaths, n_adjacent, params, paramsSIFT, properties, csvDir, loaderImp=loaderImp)):
         count += 1
         syncPrintQ("Completed SIFT pointmatches %i/%i" % (count, len(filepaths) * n_adjacent))
     else:
       # Use blockmatches
       syncPrintQ("using blockmatches")
-      loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True), maxsize=properties["n_threads"] + n_adjacent)
+      loadFPMem = SoftMemoize(lambda path: loadFloatProcessor(path, params, paramsSIFT, scale=True, loaderImp=loaderImp), maxsize=properties["n_threads"] + n_adjacent)
       count = 1
-      for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem)):
+      for result in w.chunkConsume(properties["n_threads"], pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeload, properties, loadFPMem, loaderImp=loaderImp)):
         if result: # is False when CSV file already exists
           syncPrintQ("Completed %i/%i" % (count, len(filepaths) * n_adjacent))
         count += 1
@@ -406,9 +409,9 @@ def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       yield Task(loadPointMatchesPlus, filepaths, i, i + inc, csvDir, params)
 
 # When done, optimize tile pose globally
-def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties):
+def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties, loaderImp=None):
   if properties.get("precompute", True):
-    ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties)
+    ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties, loaderImp=loaderImp)
   try:
     tiles = [Tile(TranslationModel2D()) for _ in filepaths]
     # FAILS when running in parallel, for mysterious reasons related to jython internals, perhaps syncPrint fails
@@ -431,7 +434,7 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
     pass
 
 
-def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties):
+def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=None):
   if not os.path.exists(csvDir):
     os.makedirs(csvDir) # recursively
   name = "matrices"
@@ -440,7 +443,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
     return matrices
   
   # Optimize
-  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties)
+  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties, loaderImp=loaderImp)
   tc = TileConfiguration()
   tc.addTiles(tiles)
   tc.fixTile(tiles[len(tiles) / 2]) # middle tile
@@ -593,10 +596,10 @@ class OnClosing(ImageListener):
   def imageUpdated(self, imp):
     pass
 
-def viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval):
-  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
+def viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval, loaderImp=None):
+  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=loaderImp)
   def loadImg(filepath):
-    return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"])
+    return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"], loaderImp=loaderImp)
   cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
   print "cropInterval", cropInterval
   print "viewAlignedPlain, cellImg:", cellImg
@@ -611,10 +614,10 @@ def viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfigurat
   return cellImg
 
 
-def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval):
-  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties)
+def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval, loaderImp=None):
+  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=loaderImp)
   def loadImg(filepath):
-    return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"])
+    return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"], loaderImp=loaderImp)
   cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
   print cellImg
   comp = showStack(cellImg, title=properties["srcDir"].split('/')[-2], proper=True)
