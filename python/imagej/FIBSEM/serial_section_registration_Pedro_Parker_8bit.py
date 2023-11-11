@@ -40,7 +40,8 @@ from net.imglib2.img.display.imagej import ImageJFunctions as IL
 srcDir = "/net/zstore1/FIBSEM/Pedro_parker/"
 tgtDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/"
 csvDir = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csv/" # for in-section montaging
-csvDirZ = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csvZ/" # for cross-section alignment
+csvDirZ = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csvZ/" # for cross-section alignment with SIFT+RANSAC
+csvDirBM = "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/csvBM/" # for cross-section alignment with BlockMatching
 
 # Ensure tgtDir and csvDir exist
 if not os.path.exists(csvDir):
@@ -434,8 +435,9 @@ class SectionLoader(CacheLoader):
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
   def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC,
-               csvDir, csvDirZ, invert=False, CLAHE_params=None, ignoreMatrices=False, as8bit=False):
+               csvDir, matrices=None, invert=False, CLAHE_params=None, as8bit=False):
     """
+    csvDir: the directory specifying the montages, one matrices file per section.
     """
     self.dimensions = dimensions # a list of [width, height] for the canvas onto which draw the image tiles
     self.groupNames = groupNames # list of names of each group, used to find its montage CSV if any
@@ -445,10 +447,8 @@ class SectionLoader(CacheLoader):
     self.paramsSIFT = paramsSIFT
     self.paramsRANSAC = paramsRANSAC
     self.csvDir = csvDir
-    self.csvDirZ = csvDirZ
     self.as8bit = as8bit
-    # Load the matrices.csv file if it exists
-    self.matrices = loadMatrices("matrices", csvDirZ) if not ignoreMatrices else None
+    self.matrices = matrices # for alignment in Z
     if self.matrices and len(self.groupNames) != len(self.matrices):
       raise Exception("Lengths of groupNames and rows in the matrices file don't match!")
     self.invert = invert
@@ -589,11 +589,11 @@ cell_dimensions = dimensions + [1]
 pixelType = UnsignedByteType # UnsignedShortType
 primitiveType = PrimitiveType.BYTE #.SHORT
 
-def volume(show=True, invert=False, CLAHE_params=None, ignoreMatrices=False):
+def volume(show=True, matrices=None, invert=False, CLAHE_params=None, title=None):
   volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset,
-                                              paramsSIFT, paramsRANSAC, csvDir, csvDirZ,
+                                              paramsSIFT, paramsRANSAC, csvDir, csvDirZ, csvDirBM,
+                                              matrices=matrices,
                                               invert=invert, CLAHE_params=CLAHE_params,
-                                              ignoreMatrices=ignoreMatrices,
                                               as8bit=True),
                                 volume_dimensions,
                                 cell_dimensions,
@@ -604,12 +604,14 @@ def volume(show=True, invert=False, CLAHE_params=None, ignoreMatrices=False):
   # Show the montages as a series of slices in a stack
   if show:
     imp = wrap(volumeImg)
+    if title:
+      imp.setTitle(title)
     imp.show()
   
   return volumeImg
 
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
-volumeImg = volume(show=False, invert=True, CLAHE_params=[200, 255, 3.0], ignoreMatrices=True)
+volumeImg = volume(show=False, matrices=None, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
 
 
 # Align sections with SIFT
@@ -623,17 +625,16 @@ def sliceLoader(groupName):
   #aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img2d))
   #ImgMath.compute(ImgMath.img(img2d)).into(aimg)
   #imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
+  # Process for BlockMatching and SIFT across sections
+  #imp.getProcessor().invert()
+  #CLAHE.run(imp, 200, 256, 3.0, None)
+  # Instead:
   # Each slice is already an ArrayImg: get the DataAccess of the Cell at index, which is a 2D image
   # ... and it's already processed for invert and CLAHE, and cached.
   cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, indices[groupName]])
   pixels = cell.getData().getCurrentStorageArray()
   imp = ImagePlus(groupName, ShortProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
-  # Process for BlockMatching and SIFT across sections
-  #imp.getProcessor().invert()
-  #CLAHE.run(imp, 200, 256, 3.0, None)
   return imp
-
-setupImageLoader(sliceLoader)
 
 # Some of these aren't needed here
 properties = {
@@ -655,11 +656,11 @@ properties = {
 # Parameters for blockmatching
 params = {
  'scale': 0.1, # 10%
- 'meshResolution': 20,
+ 'meshResolution': 30,
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 500, # has to account for the montages shifting about ~100 pixels in any direction
+ 'searchRadius': 300, # has to account for the montages shifting about ~100 pixels in any direction
  'blockRadius': 200, # small, yet enough
 }
 
@@ -681,20 +682,42 @@ paramsTileConfiguration = {
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
 }
 
-matrices = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties)
+matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=sliceLoader)
 
-# Show the volume aligned, inverted and processed with CLAHE:
-volumeImgAligned = volume(show=True, invert=True, CLAHE_params=[100, 255, 3.0], ignoreMatrices=False)
+# Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
+volumeImgAlignedSIFT = volume(show=True, matrices=matricesSIFT, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC")
+
+def sliceLoader2(groupName):
+  global volumeImgAlignedSIFT, indices
+  cell = volumeImgAlignedSIFT.getCells().randomAccess().setPositionAndGet([0, 0, indices[groupName]])
+  pixels = cell.getData().getCurrentStorageArray()
+  imp = ImagePlus(groupName, ShortProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
+  return imp
+
+# Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
+properties["use_SIFT"] = False
+matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=sliceLoader2)
+
+# fuse the matrices: concatenate the translation transforms
+# WARNING the SIFT+RANSAC registration will have been expressed as integers, so correct for that
+matrices = []
+for m1, m2 in izip(matricesSIFT, matricesBM):
+  # The SIFT alignment will have been expressed as integers, so correct for that
+  matrices.append(array([1, 0, int(m1[2] + 0.5) + m2[2], 0, 1, int(m1[5] + 0.5) + m2[5]], 'd'))
+
+# Show the re-aligned volume
+volumeImgAlignedBM = volume(show=True, matrices=matrices, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
+
 
 # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
 def loadImg(index):
-  global volumeImg
-  cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, index])
+  global volumeImgAlignedBM
+  cell = volumeImgAlignedBM.getCells().randomAccess().setPositionAndGet([0, 0, index])
   pixels = cell.getData().getCurrentStorageArray()
   return ArrayImgs.unsignedBytes(pixels, [volumeImg.dimension(0), volumeImg.dimension(1)])
 
 cropInterval = FinalInterval([section_width, section_height])
-cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
+cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"], loadImg, properties["img_dimensions"], matricesBM, cropInterval, properties.get('preload', 0))
 imp = IL.wrap(cellImg, properties.get("name", "") + " aligned subpixel")
 imp.show()
 # Ensure cleanup of threads upon closing the window
