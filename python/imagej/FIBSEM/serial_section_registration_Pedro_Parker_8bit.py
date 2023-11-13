@@ -6,7 +6,7 @@ from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
 from lib.util import newFixedThreadPool, syncPrintQ, printException
 from lib.ui import wrap, addWindowListener
-from lib.serial2Dregistration import align, setupImageLoader
+from lib.serial2Dregistration import align
 from collections import defaultdict
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
