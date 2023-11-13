@@ -699,6 +699,7 @@ def sliceLoader2(groupName):
 
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
 properties["use_SIFT"] = False
+properties["n_threads"] = 32
 matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=sliceLoader2)
 
 # fuse the matrices: concatenate the translation transforms
