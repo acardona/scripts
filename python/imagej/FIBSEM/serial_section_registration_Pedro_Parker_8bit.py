@@ -657,12 +657,12 @@ properties = {
 # Parameters for blockmatching
 params = {
  'scale': 0.1, # 10%
- 'meshResolution': 30,
+ 'meshResolution': 20,
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 300, # has to account for the montages shifting about ~100 pixels in any direction
- 'blockRadius': 200, # small, yet enough
+ 'searchRadius': 100, # has to account for the montages shifting about ~100 pixels in any direction
+ 'blockRadius': 100, # small, yet enough
 }
 
 # Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
