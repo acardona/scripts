@@ -126,10 +126,11 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
     sourceMatches = ArrayList() # of PointMatch from filepath1 to filepath2
 
     # Don't use blockmatching if the dimensions are different
-    use_blockmatching = fp1.getWidth() == fp2.getWidth() and fp1.getHeight() == fp2.getHeight()
+    #use_blockmatching = fp1.getWidth() == fp2.getWidth() and fp1.getHeight() == fp2.getHeight()
 
-    # Fill the sourcePoints
-    mesh = TransformMesh(params["meshResolution"], fp1.width, fp1.height)
+    # Fill the sourcePoints in unscaled space (will be scaled down again by matchByMaximalPMCCFromPreScaledImages)
+    dimensions = properties['img_dimensions'] # unscaled
+    mesh = TransformMesh(params["meshResolution"], dimensions[0], dimensions[1]) # unscaled
     PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
     syncPrintQ("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
     # Run
