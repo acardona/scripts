@@ -30,7 +30,7 @@ from net.imglib2.type.numeric.complex import ComplexFloatType
 from net.imglib2.view import Views
 from net.imglib2.util import Intervals
 from ij.gui import Roi, PointRoi
-from ij.process import ShortProcessor
+from ij.process import ShortProcessor, ByteProcessor
 from ij import ImagePlus
 from itertools import izip
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
@@ -611,6 +611,7 @@ def volume(show=True, matrices=None, invert=False, CLAHE_params=None, title=None
   return volumeImg
 
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
+# NOTE: it's 8-bit
 volumeImg = volume(show=False, matrices=None, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
 
 
@@ -633,7 +634,7 @@ def sliceLoader(groupName):
   # ... and it's already processed for invert and CLAHE, and cached.
   cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, indices[groupName]])
   pixels = cell.getData().getCurrentStorageArray()
-  imp = ImagePlus(groupName, ShortProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
+  imp = ImagePlus(groupName, ByteProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
   return imp
 
 # Some of these aren't needed here
@@ -685,13 +686,15 @@ paramsTileConfiguration = {
 matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=sliceLoader)
 
 # Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
+# NOTE it's 8-bit !
 volumeImgAlignedSIFT = volume(show=True, matrices=matricesSIFT, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC")
 
 def sliceLoader2(groupName):
+  # Reads from an 8-bit image
   global volumeImgAlignedSIFT, indices
   cell = volumeImgAlignedSIFT.getCells().randomAccess().setPositionAndGet([0, 0, indices[groupName]])
   pixels = cell.getData().getCurrentStorageArray()
-  imp = ImagePlus(groupName, ShortProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
+  imp = ImagePlus(groupName, ByteProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
   return imp
 
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
