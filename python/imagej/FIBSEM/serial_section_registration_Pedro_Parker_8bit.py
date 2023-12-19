@@ -589,7 +589,7 @@ cell_dimensions = dimensions + [1]
 pixelType = UnsignedByteType # UnsignedShortType
 primitiveType = PrimitiveType.BYTE #.SHORT
 
-def volume(show=True, matrices=None, invert=False, CLAHE_params=None, title=None):
+def volume(groupNames, tileGroups, show=True, matrices=None, invert=False, CLAHE_params=None, title=None):
   volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset,
                                               paramsSIFT, paramsRANSAC, csvDir,
                                               matrices=matrices,
@@ -612,7 +612,7 @@ def volume(show=True, matrices=None, invert=False, CLAHE_params=None, title=None
 
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 # NOTE: it's 8-bit
-volumeImg = volume(show=False, matrices=None, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
+volumeImg = volume(groupNames, tileGroups, show=False, matrices=None, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
 
 
 # Align sections with SIFT
@@ -687,7 +687,7 @@ matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfigur
 
 # Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
 # NOTE it's 8-bit !
-volumeImgAlignedSIFT = volume(show=True, matrices=matricesSIFT, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC")
+volumeImgAlignedSIFT = volume(groupNames, tileGroups, show=True, matrices=matricesSIFT, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC")
 
 def sliceLoader2(groupName):
   # Reads from an 8-bit image
@@ -710,7 +710,7 @@ for m1, m2 in izip(matricesSIFT, matricesBM):
   matrices.append(array([1, 0, int(m1[2] + 0.5) + m2[2], 0, 1, int(m1[5] + 0.5) + m2[5]], 'd'))
 
 # Show the re-aligned volume
-volumeImgAlignedBM = volume(show=True, matrices=matrices, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
+volumeImgAlignedBM = volume(groupNames, tileGroups, show=True, matrices=matrices, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
 
 
 # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
