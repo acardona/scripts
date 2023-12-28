@@ -19,7 +19,7 @@ from ij import IJ
 
 # Each subfolder contains 1000 TIFF stacks of the deltaF/F
 # see subfolders therein starting with "t_"
-srcLSM = "/net/zstore1/data_WillBishop/"
+srcLSM = "/home/albert/zstore1/data_WillBishop/"
 
 srcCSV = "/home/albert/lab/projects/20231219_Nadine_Randel_measure_intensities_3D_4D/"
 
