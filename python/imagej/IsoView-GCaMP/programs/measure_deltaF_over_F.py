@@ -16,6 +16,7 @@ from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.algorithm.math import ImgMath
 from net.imglib2.view import Views
 from java.lang import Float, System
+from java.util.stream import StreamSupport
 from ij import IJ
 
 
@@ -113,7 +114,7 @@ with open(os.path.join(srcCSV, "measurements.csv"), 'w') as f:
     # Grab the 3D volume at timepoint t
     img3D = Views.hyperSlice(img4D, 3, t)
     # Assumes the ROI is small enough that the sum won't lose accuracy
-    measurements = [Regions.sample(roi, img3D).cursor().stream().map(get).reduce(0, Float.sum)
+    measurements = [StreamSupport.stream(Regions.sample(roi, img3D).spliterator(), False).map(get).reduce(0, Float.sum)
                     for roi in rois]
     # Write a row to the CSV file
     f.write("%s, " % path)
