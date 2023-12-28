@@ -23,7 +23,11 @@ srcLSM = "/net/zstore1/data_WillBishop/"
 
 srcCSV = "/home/albert/lab/projects/20231219_Nadine_Randel_measure_intensities_3D_4D/"
 
-# List of lists of 3D coordinates in floating-point
+radius = 2 # TODO choose a sensible radius
+# NOTE if the volume to measure is not a sphere, then use a openSuperEllipsoid instead of an openSphere.
+# The GeomMasks.openSuperEllipsoid takes the point, the list of 3 radii, and an exponent of 2.
+
+# List of lists of 3D coordinates in floating-point precision
 points = []
 
 # Read 3D coordinates from CSV file
@@ -37,7 +41,7 @@ with open(csvPath, 'r') as f:
     print points[-1]
   
 # List of OpenSphere ROIs, each centered on an integer-rounded 3D coordinate
-rois = [GeomMasks.openSphere(map(int, point), radius)]
+rois = [GeomMasks.openSphere(point, radius) for point in points]
 
 # Find all time points, one 3D volume for each.
 # Doesn't matter if they aren't sorted
