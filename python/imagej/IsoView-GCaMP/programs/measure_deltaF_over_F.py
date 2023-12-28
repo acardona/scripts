@@ -13,7 +13,9 @@ from net.imglib2.cache.img import CachedCellImg
 from net.imglib2.img.basictypeaccess import AccessFlags, ArrayDataAccessFactory
 from net.imglib2.img.cell import CellGrid, Cell
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
-from java.lang import Float
+from net.imglib2.algorithm.math import ImgMath
+from net.imglib2.view import Views
+from java.lang import Float, System
 from ij import IJ
 
 
@@ -46,17 +48,24 @@ rois = [GeomMasks.openSphere(point, radius) for point in points]
 # Find all time points, one 3D volume for each.
 # Doesn't matter if they aren't sorted
 timepoint_paths = []
-for root, folders, filenames in os.walk(src):
+for root, folders, filenames in os.walk(srcLSM):
   for filename in filenames:
     timepoint_paths.append(os.path.join(root, filename))
 
 
 # Copied from lib.io
 class ImageJLoader(CacheLoader):
-  def get(self, path):
-    return IL.wrap(IJ.openImage(path))
+  def get(self, i):
+    System.out.println(i)
+    imgPlanar = self.load(timepoint_paths[i])
+    cell_dimensions = [imgPlanar.dimension(i) for i in xrange(imgPlanar.numDimensions())] + [1]
+    # Copy to ArrayImg
+    img = ImgMath.computeIntoArrayImg(ImgMath.img(imgPlanar))
+    return Cell(cell_dimensions,
+                [0, 0, 0, i],
+                img.update(None))
   def load(self, path):
-    return self.get(path)
+    return IL.wrap(IJ.openImage(path))
 
 # Copied from lib.io
 def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType=None, maxRefs=0):
@@ -76,7 +85,7 @@ def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, pri
 
       Returns a CachedCellImg.
   """
-  primitiveType = primitiveType if primitiveType else pixelType.getNativeTypeFactory().getPrimitiveType()
+  primitiveType = primitiveType if primitiveType else pixelType().getNativeTypeFactory().getPrimitiveType()
   cache = SoftRefLoaderCache() if 0 == maxRefs else BoundedSoftRefLoaderCache(maxRefs)
   return CachedCellImg(CellGrid(volume_dimensions, cell_dimensions),
                        pixelType(),
@@ -84,7 +93,7 @@ def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, pri
                        ArrayDataAccessFactory.get(primitiveType, AccessFlags.setOf(AccessFlags.VOLATILE)))
 
 
-# Open the first image
+# Open the first image as an Img
 first = ImageJLoader().load(timepoint_paths[0])
 volume_dimensions = [first.dimension(i) for i in xrange(first.numDimensions())] + [len(timepoint_paths)]
 cell_dimensions = volume_dimensions[0:-1] + [1]
@@ -97,17 +106,17 @@ imp4D = IL.show(img4D)
 
 with open(os.path.join(srcCSV, "measurements.csv"), 'w') as f:
   # Write the header of the CSV file
-  header = ["timepoint"] + ['"%f::%f::%f"' % point for point in points] # each point is a 3d list
+  header = ["timepoint"] + ['"%f::%f::%f"' % (x,y,z) for (x,y,z) in points] # each point is a 3d list
   f.write(", ".join(header))
   f.write("\n")
-  for t in xrange(len(timepoint_paths))):
+  for t, path in enumerate(timepoint_paths):
     # Grab the 3D volume at timepoint t
     img3D = Views.hyperSlice(img4D, 3, t)
     # Assumes the ROI is small enough that the sum won't lose accuracy
-    measurements = [Regions.sample(roi, img3D).cursor().stream().reduce(0, Float.sum)
+    measurements = [Regions.sample(roi, img3D).cursor().stream().map(get).reduce(0, Float.sum)
                     for roi in rois]
     # Write a row to the CSV file
-    f.write("%i, " % t)
+    f.write("%s, " % path)
     f.write(", ".join(measurements))
     f.write("\n")
 
