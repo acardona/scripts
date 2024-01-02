@@ -15,9 +15,11 @@ from net.imglib2.img.cell import CellGrid, Cell
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.algorithm.math import ImgMath
 from net.imglib2.view import Views
-from java.lang import Float, System
+from java.lang import Double, System
 from java.util.stream import StreamSupport
+from java.util.function import Function, BinaryOperator
 from ij import IJ
+from itertools import imap
 
 
 # Each subfolder contains 1000 TIFF stacks of the deltaF/F
@@ -26,25 +28,42 @@ srcLSM = "/home/albert/zstore1/data_WillBishop/"
 
 srcCSV = "/home/albert/lab/projects/20231219_Nadine_Randel_measure_intensities_3D_4D/"
 
-radius = 2 # TODO choose a sensible radius
-# NOTE if the volume to measure is not a sphere, then use a openSuperEllipsoid instead of an openSphere.
-# The GeomMasks.openSuperEllipsoid takes the point, the list of 3 radii, and an exponent of 2.
+landmarksCSV = "landmarksLM-EMonly.csv"
 
-# List of lists of 3D coordinates in floating-point precision
+# Calibration
+pixelWidth = 406.5041 # nanometers per pixel
+pixelHeight = 406.5041
+pixelDepth = 1700
+
+radius = 2000 # in nanometers
+rX = radius / pixelWidth
+rY = radius / pixelHeight
+rZ = radius / pixelDepth
+
+print "Radii used (in pixels): %f, %f, %f" % (rX, rY, rZ)
+
+# List of lists of 3D coordinates in pixel space
 points = []
 
-# Read 3D coordinates from CSV file
-csvPath = os.path.join(srcCSV, "landmarksLM-EMonly.csv")
+# Read 3D coordinates (in nanometers) from the CSV file and calibrate them into pixel space
+csvPath = os.path.join(srcCSV, landmarksCSV)
 with open(csvPath, 'r') as f:
   reader = csv.reader(f, delimiter=',', quotechar="\"")
   header = reader.next() # skip first line
   for row in reader:
     # Columns at index 2, 3, 4 are the X, Y, Z of a coordinate in the LSM volume
-    points.append(map(float, row[2:5]))
+    points.append([float(row[2]) / pixelWidth,
+                   float(row[3]) / pixelHeight,
+                   float(row[4]) / pixelDepth])
     print points[-1]
-  
+
 # List of OpenSphere ROIs, each centered on an integer-rounded 3D coordinate
-rois = [GeomMasks.openSphere(point, radius) for point in points]
+# NOTE if the volume to measure is not a sphere, then use a openSuperEllipsoid instead of an openSphere.
+# The GeomMasks.openSuperEllipsoid takes the point, the list of 3 radii, and an exponent of 2.
+if rX == rY and rY == rZ:
+  rois = [GeomMasks.openSphere(point, radius) for point in points]
+else:
+  rois = [GeomMasks.openSuperEllipsoid(point, [rX, rY, rZ], 2) for point in points]
 
 # Find all time points, one 3D volume for each.
 # Doesn't matter if they aren't sorted
@@ -99,7 +118,13 @@ first = ImageJLoader().load(timepoint_paths[0])
 volume_dimensions = [first.dimension(i) for i in xrange(first.numDimensions())] + [len(timepoint_paths)]
 cell_dimensions = volume_dimensions[0:-1] + [1]
 pixelType = type(first.createLinkedType()) # a class
-get = pixelType.getDeclaredMethod("get")
+
+# Work around jython limitations: can't use a static method as a Stream Function
+class GetValue(Function):
+  apply = pixelType.getDeclaredMethod("get").invoke # 'get' returns a floating-point number
+  
+class DoubleSum(BinaryOperator):
+  apply = Double.sum
 
 # Load 4D image, lazily and with a cache (even though the measurement is only done once)
 img4D = lazyCachedCellImg(ImageJLoader(), volume_dimensions, cell_dimensions, pixelType)
@@ -114,11 +139,11 @@ with open(os.path.join(srcCSV, "measurements.csv"), 'w') as f:
     # Grab the 3D volume at timepoint t
     img3D = Views.hyperSlice(img4D, 3, t)
     # Assumes the ROI is small enough that the sum won't lose accuracy
-    measurements = [StreamSupport.stream(Regions.sample(roi, img3D).spliterator(), False).map(get).reduce(0, Float.sum)
+    measurements = [StreamSupport.stream(Regions.sample(roi, img3D).spliterator(), False).map(GetValue()).reduce(0, DoubleSum())
                     for roi in rois]
     # Write a row to the CSV file
     f.write("%s, " % path)
-    f.write(", ".join(measurements))
+    f.write(", ".join(imap(str, measurements)))
     f.write("\n")
 
     
