@@ -4,7 +4,7 @@
 # Works as a standalone script for Fiji
 
 from __future__ import with_statement
-import sys, os, csv
+import sys, os, csv, operator
 from net.imglib2.roi.geom import GeomMasks
 from net.imglib2.roi import Masks, Regions
 from net.imglib2.cache.ref import SoftRefLoaderCache, BoundedSoftRefLoaderCache
@@ -20,7 +20,10 @@ from java.util.stream import StreamSupport
 from java.util.function import Function, BinaryOperator
 from ij import IJ
 from itertools import imap
+from java.util.concurrent import Executors, Callable
 
+
+n_threads = 64
 
 # Each subfolder contains 1000 TIFF stacks of the deltaF/F
 # see subfolders therein starting with "t_"
@@ -71,6 +74,10 @@ timepoint_paths = []
 for root, folders, filenames in os.walk(srcLSM):
   for filename in filenames:
     timepoint_paths.append(os.path.join(root, filename))
+
+# Sort file paths numerically. File names look like ../t_123.tiff
+paths = {int(p[p.rfind('t_')+2:-5]): p for p in timepoint_paths}
+timepoint_paths = [paths[k] for k in sorted(paths.keys())]
 
 
 # Copied from lib.io
@@ -130,23 +137,48 @@ class DoubleSum(BinaryOperator):
 img4D = lazyCachedCellImg(ImageJLoader(), volume_dimensions, cell_dimensions, pixelType)
 imp4D = IL.show(img4D)
 
+class Measure(Callable):
+  def __init__(self, img4D, t, rois):
+    self.img4D = img4D
+    self.t = t
+    self.rois = rois
+  def call(self):
+    # Grab the 3D volume at timepoint t
+    img3D = Views.hyperSlice(self.img4D, 3, self.t)
+    # Assumes the ROI is small enough that the sum won't lose accuracy
+    measurements = [StreamSupport.stream(Regions.sample(roi, img3D).spliterator(), False).map(GetValue()).reduce(0, DoubleSum())
+                    for roi in self.rois]
+    return self.t, measurements
+
+
+def writeToCSV(f, future):
+  t, measurements = future.get()
+  path = timepoint_paths[t]
+  # Write a row to the CSV file
+  f.write("%s, " % path)
+  f.write(", ".join(imap(str, measurements)))
+  f.write("\n")
+
 with open(os.path.join(srcCSV, "measurements.csv"), 'w') as f:
   # Write the header of the CSV file
   header = ["timepoint"] + ['"%f::%f::%f"' % (x,y,z) for (x,y,z) in points] # each point is a 3d list
   f.write(", ".join(header))
   f.write("\n")
-  for t, path in enumerate(timepoint_paths):
-    # Grab the 3D volume at timepoint t
-    img3D = Views.hyperSlice(img4D, 3, t)
-    # Assumes the ROI is small enough that the sum won't lose accuracy
-    measurements = [StreamSupport.stream(Regions.sample(roi, img3D).spliterator(), False).map(GetValue()).reduce(0, DoubleSum())
-                    for roi in rois]
-    # Write a row to the CSV file
-    f.write("%s, " % path)
-    f.write(", ".join(imap(str, measurements)))
-    f.write("\n")
-
-    
+  exe = Executor.newFixedThreadPool(n_threads)
+  try:
+    futures = []
+    for t, path in enumerate(timepoint_paths):
+      futures.append(exe.submit(Measure(img4D, t, rois))
+      # Write to the CSV file when twice as many jobs have been submitted than threads
+      if len(futures) >= n_threads * 2:
+        # await and write up to n_threads of the presently submitted
+        while len(futures) > n_threads:
+          writeToCSV(f, futures.pop(0)) # process and pop out the first one
+    # Await and write all remaining
+    for fu in futures:
+      writeToCSV(f, fu)
+  finally:
+    exe.shutdown()
       
   
   
