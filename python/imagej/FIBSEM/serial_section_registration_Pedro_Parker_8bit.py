@@ -696,6 +696,11 @@ def sliceLoader2(groupName):
   pixels = cell.getData().getCurrentStorageArray()
   imp = ImagePlus(groupName, ByteProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
   return imp
+  
+# DEBUG: only for sections 764-771 (1-based)
+groupNames = groupNames[763:775]
+tileGroups = tileGroups[763:775]
+params['searchRadius'] = 1200
 
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
 properties["use_SIFT"] = False
@@ -710,7 +715,7 @@ for m1, m2 in izip(matricesSIFT, matricesBM):
   matrices.append(array([1, 0, int(m1[2] + 0.5) + m2[2], 0, 1, int(m1[5] + 0.5) + m2[5]], 'd'))
 
 # Show the re-aligned volume
-volumeImgAlignedBM = volume(groupNames, tileGroups, show=True, matrices=matrices, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
+volumeImgAlignedBM = volume(groupNames, tileGroups, show=True, matrices=matricesBM, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
 
 
 # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
