@@ -23,13 +23,14 @@ from itertools import imap
 from java.util.concurrent import Executors, Callable
 
 
-n_threads = 64
+n_threads = 128
 
 # Each subfolder contains 1000 TIFF stacks of the deltaF/F
 # see subfolders therein starting with "t_"
-srcLSM = "/home/albert/zstore1/data_WillBishop/"
+srcLSM = "/net/zstore1/data_WillBishop/"
 
-srcCSV = "/home/albert/lab/projects/20231219_Nadine_Randel_measure_intensities_3D_4D/"
+# For reading the landmarks CSV file and for writing the measurements CSV file
+srcCSV = "/lmb/home/acardona/lab/projects/20231219_Nadine_Randel_measure_intensities_3D_4D/"
 
 landmarksCSV = "landmarksLM-EMonly.csv"
 
@@ -164,11 +165,11 @@ with open(os.path.join(srcCSV, "measurements.csv"), 'w') as f:
   header = ["timepoint"] + ['"%f::%f::%f"' % (x,y,z) for (x,y,z) in points] # each point is a 3d list
   f.write(", ".join(header))
   f.write("\n")
-  exe = Executor.newFixedThreadPool(n_threads)
+  exe = Executors.newFixedThreadPool(n_threads)
   try:
     futures = []
     for t, path in enumerate(timepoint_paths):
-      futures.append(exe.submit(Measure(img4D, t, rois))
+      futures.append(exe.submit(Measure(img4D, t, rois)))
       # Write to the CSV file when twice as many jobs have been submitted than threads
       if len(futures) >= n_threads * 2:
         # await and write up to n_threads of the presently submitted
