@@ -15,6 +15,7 @@ from net.imglib2.img.cell import CellGrid, Cell
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.algorithm.math import ImgMath
 from net.imglib2.view import Views
+from net.imglib2.util import Intervals
 from java.lang import Double, System
 from java.util.stream import StreamSupport
 from java.util.function import Function, BinaryOperator
@@ -147,8 +148,12 @@ class Measure(Callable):
     # Grab the 3D volume at timepoint t
     img3D = Views.hyperSlice(self.img4D, 3, self.t)
     # Assumes the ROI is small enough that the sum won't lose accuracy
-    measurements = [StreamSupport.stream(Regions.sample(roi, img3D).spliterator(), False).map(GetValue()).reduce(0, DoubleSum())
-                    for roi in self.rois]
+    measurements = []
+    for roi in rois:
+      nucleus = Regions.sample(roi, img3D) # IterableInterval over the voxels of the spheroid
+      count = Intervals.numElements(nucleus) # number of pixels
+      sumOfVoxels = StreamSupport.stream(nucleus.spliterator(), False).map(GetValue()).reduce(0, DoubleSum())
+      measurements.append(sumOfVoxels / count)
     return self.t, measurements
 
 
