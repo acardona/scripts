@@ -136,7 +136,7 @@ class DoubleSum(BinaryOperator):
   apply = Double.sum
 
 # Load 4D image, lazily and with a cache (even though the measurement is only done once)
-img4D = lazyCachedCellImg(ImageJLoader(), volume_dimensions, cell_dimensions, pixelType)
+img4D = lazyCachedCellImg(ImageJLoader(), volume_dimensions, cell_dimensions, pixelType, maxRefs=n_threads*2)
 imp4D = IL.show(img4D)
 
 class Measure(Callable):
@@ -185,7 +185,7 @@ with open(os.path.join(srcCSV, "measurements.csv"), 'w') as f:
       writeToCSV(f, fu)
   finally:
     exe.shutdown()
-      
+
   
   
   
