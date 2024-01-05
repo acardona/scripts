@@ -66,7 +66,7 @@ to_remove = set([
   #"Merlin-FIBdeSEMAna_23-07-10_170205_"   # MONTAGED BY HAND
 ])
 
-# Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mistmatch
+# Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mismatch
 paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.steps = 1
 paramsSIFT.minOctaveSize = 0 # will be updated in a clone
@@ -271,7 +271,7 @@ class MontageSlice2x2(Callable):
       l2 = p2.getL()
       l2[0] += offset
       #w2 = p2.getW()
-      #`w2[0] += offset
+      #w2[0] += offset
     #
     return pointmatches
 
