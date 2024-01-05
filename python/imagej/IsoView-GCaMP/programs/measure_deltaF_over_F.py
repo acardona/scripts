@@ -33,7 +33,8 @@ srcLSM = "/net/zstore1/data_WillBishop/"
 # For reading the landmarks CSV file and for writing the measurements CSV file
 srcCSV = "/lmb/home/acardona/lab/projects/20231219_Nadine_Randel_measure_intensities_3D_4D/"
 
-landmarksCSV = "landmarksLM-EMonly.csv"
+#landmarksCSV = "landmarksLM-EMonly.csv"
+landmarksCSV = "landmarks_NAMES.csv"
 
 # Calibration
 pixelWidth = 406.5041 # nanometers per pixel
@@ -48,6 +49,7 @@ rZ = radius / pixelDepth
 print "Radii used (in pixels): %f, %f, %f" % (rX, rY, rZ)
 
 # List of lists of 3D coordinates in pixel space
+names = [] # landmark names
 points = []
 
 # Read 3D coordinates (in nanometers) from the CSV file and calibrate them into pixel space
@@ -60,7 +62,8 @@ with open(csvPath, 'r') as f:
     points.append([float(row[2]) / pixelWidth,
                    float(row[3]) / pixelHeight,
                    float(row[4]) / pixelDepth])
-    print points[-1]
+    names.append(row[1])
+    print names[-1], points[-1]
 
 # List of OpenSphere ROIs, each centered on an integer-rounded 3D coordinate
 # NOTE if the volume to measure is not a sphere, then use a openSuperEllipsoid instead of an openSphere.
@@ -167,7 +170,8 @@ def writeToCSV(f, future):
 
 with open(os.path.join(srcCSV, "measurements.csv"), 'w') as f:
   # Write the header of the CSV file
-  header = ["timepoint"] + ['"%f::%f::%f"' % (x,y,z) for (x,y,z) in points] # each point is a 3d list
+  #header = ["timepoint"] + ['"%f::%f::%f"' % (x,y,z) for (x,y,z) in points] # each point is a 3d list
+  header = ["timepoint"] + names
   f.write(", ".join(header))
   f.write("\n")
   exe = Executors.newFixedThreadPool(n_threads)
