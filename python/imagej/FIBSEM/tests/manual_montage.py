@@ -1,4 +1,4 @@
-from ini.trakem2.display import Patch
+from ini.trakem2.display import Patch, Layer
 from ini.trakem2 import Project
 import os, sys
 sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
@@ -7,32 +7,33 @@ from java.awt import Color
 from ij import ImagePlus
 from java.awt.geom import AffineTransform
 
-def createTrakEM2Layer():
+# Given a name like "Merlin-FIBdeSEMAna_23-07-10_170614_" generate the paths to the 4 tiles for it
+name = "Merlin-FIBdeSEMAna_23-06-15_064124_"
+z = 107
+overlap = 250 # between tiles along any border
+
+# Generate tile paths
+month = name[22:24]
+day = name[25:27]
+tag = name[28:34]
+basepath = "/net/zstore1/FIBSEM/Pedro_parker/M%s/D%s/Merlin-FIBdeSEMAna_23-%s-%s_%s_" % (month, day, month, day, tag)
+paths = [basepath + "0-%i-%i.dat" % (i, j) for i in [0, 1] for j in [0, 1]]
+
+for path in paths:
+  print path
+
+
+def createTrakEM2Layer(paths):
   projects = Project.getProjects()
   if 0 == projects.size():
     print "Open a new TrakEM2 project first!"
     return
 
-  """
-  paths = [
-    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170614_0-0-0.dat",
-    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170614_0-0-1.dat",
-    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170614_0-1-0.dat",
-    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170614_0-1-1.dat"
-  ]
-  """
-  
-  paths = [
-    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170205_0-0-0.dat",
-    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170205_0-0-1.dat",
-    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170205_0-1-0.dat",
-    "/home/albert/Desktop/t2/Pedro_Parker/failed SIFT montage 23-07-10_170164/Merlin-FIBdeSEMAna_23-07-10_170205_0-1-1.dat"
-  ]
-
-  overlap = 250
-  
   project = projects[0]
-  layer = project.getRootLayerSet().getLayers().get(1)
+  parent = project.getRootLayerSet()
+  layer = Layer(project, z, 1.0, parent)
+  parent.add(layer)
+  parent.recreateBuckets(layer, True)
 
   widths = []
   heights = []
@@ -42,16 +43,20 @@ def createTrakEM2Layer():
     widths.append(header.xRes)
     heights.append(header.yRes)
 
-  for i, (path, width, height) in enumerate(zip(paths, widths, heights)):
+  # Add tiles in reverse order for proper Z stacking
+  for i, (path, width, height) in enumerate(reversed(zip(paths, widths, heights))):
     x = (widths[i-1] - overlap) if 0 != i % 2 else 0
     y = (heights[i -2] - overlap) if i > 1 else 0
     patch = Patch(project, os.path.basename(path), widths[i], heights[i], widths[i], heights[i],
                   ImagePlus.GRAY16, 1.0, Color.yellow, False, 0, pow(2, 16) -1,
                   AffineTransform(1, 0, 0, 1, x, y), None)
     patch.setProperty("source_path", path)
-    # Use this very same script as the preprocessor script
+    # Setup preprocessor script to decode DAT files
     project.getLoader().setPreprocessorScriptPathSilently(patch, "/home/albert/lab/scripts/python/imagej/FIBSEM/tests/dat_trakem2_preprocessor_script.py")
+    # No need: it's a DAT file that can only be read properly via the preprocessor script
+    #patch.cacheCurrentPath(path)
+    #project.getLoader().addedPatchFrom(path, patch)
     layer.add(patch)
     patch.updateMipMaps()
 
-createTrakEM2Layer()
+createTrakEM2Layer(paths)
