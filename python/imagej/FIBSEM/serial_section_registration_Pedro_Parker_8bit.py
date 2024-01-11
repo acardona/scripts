@@ -543,11 +543,12 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
 #  g2[k] = groups[k]
 #groups = g2
 
-# DEBUG: align from 1 to 7666: only multi-tile sections
+# DEBUG: align from 100 to 7666: only multi-tile sections and skipping the first 100,
+# a number of which have montaging problems
 keys = groups.keys()
 keys.sort()
 g2 = {}
-for k in keys[0:7665]:
+for k in keys[100:7665]:
   g2[k] = groups[k]
 groups = g2
 
