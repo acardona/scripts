@@ -739,7 +739,11 @@ def loadImg(index):
 
 cropInterval = FinalInterval([section_width, section_height])
 cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"], loadImg, properties["img_dimensions"], matricesBM, cropInterval, properties.get('preload', 0))
-imp = IL.wrap(cellImg, properties.get("name", "") + " aligned subpixel")
+
+# Rotate 90 degrees to the right
+img = Views.rotate(cellImg, 0, 1)
+
+imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel")
 imp.show()
 # Ensure cleanup of threads upon closing the window
 addWindowListener(imp.getWindow(), lambda event: cellGet.destroy())
