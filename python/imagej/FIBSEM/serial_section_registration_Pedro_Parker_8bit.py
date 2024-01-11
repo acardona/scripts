@@ -680,7 +680,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 1000, # # gets worse after 66 # Saalfeld recommends 1000
+  "maxIterations": 1000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
 }
 
@@ -688,7 +688,8 @@ matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfigur
 
 # Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
 # NOTE it's 8-bit !
-volumeImgAlignedSIFT = volume(groupNames, tileGroups, show=True, matrices=matricesSIFT, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC")
+volumeImgAlignedSIFT = volume(groupNames, tileGroups, show=True, matrices=matricesSIFT,
+                              invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC")
 
 def sliceLoader2(groupName):
   # Reads from an 8-bit image
@@ -699,9 +700,9 @@ def sliceLoader2(groupName):
   return imp
   
 # DEBUG: only for sections 764-771 (1-based)
-groupNames = groupNames[763:775]
-tileGroups = tileGroups[763:775]
-params['searchRadius'] = 1200
+#groupNames = groupNames[763:775]
+#tileGroups = tileGroups[763:775]
+#params['searchRadius'] = 1200 # Used 1200 for rogue sections around 768
 
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
 properties["use_SIFT"] = False
