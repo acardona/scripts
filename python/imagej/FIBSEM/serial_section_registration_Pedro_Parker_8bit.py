@@ -748,5 +748,6 @@ imp.show()
 # Ensure cleanup of threads upon closing the window
 addWindowListener(imp.getWindow(), lambda event: cellGet.destroy())
 
-
+# Roi for cropping when exporting
+imp.setRoi(Roi(432, 480, 24672, 23392))
 
