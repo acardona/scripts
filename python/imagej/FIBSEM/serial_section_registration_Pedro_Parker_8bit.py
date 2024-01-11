@@ -29,7 +29,7 @@ from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.type.numeric.complex import ComplexFloatType
 from net.imglib2.view import Views
 from net.imglib2.util import Intervals
-from ij.gui import Roi, PointRoi
+from ij.gui import Roi, PointRoi, ShapeRoi
 from ij.process import ShortProcessor, ByteProcessor
 from ij import ImagePlus
 from itertools import izip
@@ -388,13 +388,23 @@ class MontageSlice2x2(Callable):
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     sps = self.loadShortProcessors()
     spMontage = ShortProcessor(width, height)
+    rois = []
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in reversed(zip(sps, matrices)):
-      spMontage.insert(sp,
-                       int(matrix[2] + dx + 0.5),
-                       int(matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
+      x = int(matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
+      y = int(matrix[5] + dy + 0.5)
+      spMontage.insert(sp, x, y)
+      rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     sps = None
     bpMontage = processTo8bit(spMontage, invert=invert, CLAHE_params=CLAHE_params)
+    if invert:
+      # paint white background as black
+      # (Can't invert earlier as the min, max wouldn't match, leading to uneven illumunation across tiles)
+      sp = ShapeRoi(rois[0])
+      for roi in rois[1:]:
+        sp = sp.or(ShapeRoi(roi))
+      bpMontage.setValue(0) # black
+      bpMontage.fill(sp.getInverse(ImagePlus("", bpMontage))) # fill the inverse of the tiles areas
     
     return ArrayImgs.unsignedBytes(bpMontage.getPixels(), width, height)
 
