@@ -714,7 +714,6 @@ def sliceLoader2(groupName):
 #tileGroups = tileGroups[763:775]
 #params['searchRadius'] = 1200 # Used 1200 for rogue sections around 768
 
-
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
 properties["use_SIFT"] = False
 properties["n_threads"] = 32
