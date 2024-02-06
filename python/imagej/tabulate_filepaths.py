@@ -40,7 +40,7 @@ base_path = "/home/albert/LarvalScreen/"
 
 # At LMB desktop:
 txt_file = "/home/albert/LarvalScreen.txt"
-basepath = "/home/albert/zstore1/Light_Microscopy_Library/Confocal_Images/"
+base_path = "/home/albert/zstore1/Light_Microscopy_Library/Confocal_Images/"
 
 # For I2K 2020 workshop
 #txt_file = "/home/albert/lab/presentations/20201130_I2K_Janelia/data/list.txt"
