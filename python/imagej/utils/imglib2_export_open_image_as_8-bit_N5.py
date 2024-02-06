@@ -51,7 +51,7 @@ def exportOpenVSAs8bitN5(name, # dataset name
 
 
 exportOpenVSAs8bitN5("PedroParker",
-                     "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/n5/",
+                     "/net/zstore1/FIBSEM/Pedro_parker/registration-Albert/n5-good/",
                      [256, 256, 64],
                      gzip_compression=4,
                      n_threads=128)
