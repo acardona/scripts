@@ -34,7 +34,13 @@ srcLSM = "/net/zstore1/data_WillBishop/"
 srcCSV = "/lmb/home/acardona/lab/projects/20231219_Nadine_Randel_measure_intensities_3D_4D/"
 
 #landmarksCSV = "landmarksLM-EMonly.csv"
-landmarksCSV = "landmarks_NAMES.csv"
+#landmarksCSV = "landmarks_NAMES.csv"
+#name_index = 1
+#ix, iy, iz = 2, 3, 4
+
+landmarksCSV = "landmarksLM-EM-Clemclam-only.csv"
+name_index = 0 # use the skeleton ID as name
+ix, iy, iz = 2, 3, 4
 
 # Calibration
 pixelWidth = 406.5041 # nanometers per pixel
@@ -59,10 +65,10 @@ with open(csvPath, 'r') as f:
   header = reader.next() # skip first line
   for row in reader:
     # Columns at index 2, 3, 4 are the X, Y, Z of a coordinate in the LSM volume
-    points.append([float(row[2]) / pixelWidth,
-                   float(row[3]) / pixelHeight,
-                   float(row[4]) / pixelDepth])
-    names.append(row[1])
+    points.append([float(row[ix]) / pixelWidth,
+                   float(row[iy]) / pixelHeight,
+                   float(row[iz]) / pixelDepth])
+    names.append(str(row[name_index]))
     print names[-1], points[-1]
 
 # List of OpenSphere ROIs, each centered on an integer-rounded 3D coordinate
