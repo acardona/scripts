@@ -25,8 +25,7 @@ from net.imglib2.view import Views
 from net.imglib2.util import Intervals
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 #from net.imglib2.algorithm.math import ImgMath
-from mpicbg.models import PointMatch, Point, TranslationModel2D, ErrorStatistic
-from mpicbg.trakem2.align import TileConfiguration
+from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, Point, NotEnoughDataPointsException, Tile, TileConfiguration
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.imagefeatures import FloatArray2DSIFT
