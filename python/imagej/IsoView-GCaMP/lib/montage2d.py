@@ -2,6 +2,7 @@ from util import newFixedThreadPool, syncPrintQ, printException
 from registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
 from lib.ui import wrap, addWindowListener
+from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
 from java.util import ArrayList
 from java.lang import Double, Exception
