@@ -5,9 +5,11 @@ from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths
 from lib.util import syncPrintQ
 from lib.serial2Dregistration import align
-from montage2d import ensureMontages2x2, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg
-
+from lib.montage2d import ensureMontages2x2, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg
+from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
+from net.imglib2.util import Intervals
+from net.imglib2.type.numeric.integer import UnsignedByteType
 
 
 
@@ -36,7 +38,8 @@ section_width = 14500 # pixels, after section-wise montaging
 section_height = 14500
 
 # CHECK whether some sections have problems
-check = True
+# SOME IMAGES fail to open for reading the header with readFIBSEMHeader
+check = False # To be used only the first time that the script is run
 
 
 
@@ -64,7 +67,14 @@ filepaths = loadFilePaths(srcDir, ".dat", csvDir, "imagefilepaths")
 to_remove = set([])
 
 
-groupNames, tileGroups = makeMontageGroups(filepaths, to_remove)
+# Sorted group names, one per section
+groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check)
+
+
+# Skip first ~2000 sections without brain and with only 1 tile per section
+# At index 2207 starts the 2x2 tiles (1-based)
+groupNames = groupNames[2206:]
+tileGroups = tileGroups[2206:]
 
 
 # DEBUG: print groups
@@ -75,14 +85,21 @@ with open(os.path.join(csvDir, "sections-list.csv"), 'w') as f:
   f.write("\n".join(rows))
 
 
+
+
 syncPrintQ("Number of sections found valid: %i" % len(groupNames))
 
+
+# How many sections to montage in parallel
+nThreadsMontaging = 128
+
+
 # Montage all sections
-ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir)
+ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir, nThreadsMontaging)
 
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 # NOTE: it's 8-bit
-volumeImg = makeVolume(groupNames, tileGroups, section_width, section_height,
+volumeImg = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
                    show=False, matrices=None, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
 
 
@@ -122,7 +139,7 @@ params = {
 paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
-paramsSIFT.maxOctaveSize = int(max(1024, dimensions[0] * params["scale"]))
+paramsSIFT.maxOctaveSize = int(max(1024, section_width * params["scale"]))
 paramsSIFT.steps = 3
 paramsSIFT.minOctaveSize = int(paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps))
 paramsSIFT.initialSigma = 1.6 # default 1.6
@@ -141,7 +158,7 @@ matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfigur
 
 # Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
 # NOTE it's 8-bit !
-volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section_height,
+volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
                                   show=True, matrices=matricesSIFT,
                                   invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC")
 
@@ -153,7 +170,8 @@ matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfigura
 
 
 # Show the re-aligned volume
-volumeImgAlignedBM = makeVolume(groupNames, tileGroups, show=True,
+volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
+                                show=True,
                                 matrices=fuseMatrices(matricesSIFT, matricesBM),
                                 invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
 
