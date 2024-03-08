@@ -1,3 +1,5 @@
+import os
+
 from util import newFixedThreadPool, syncPrintQ, printException
 from registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
@@ -6,8 +8,9 @@ from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
 from java.util import ArrayList
 from java.lang import Double, Exception
+from java.util.concurrent import Callable
 from ij.process import ShortProcessor, ByteProcessor
-from ij.gui import ShapeRoi, PointRoi
+from ij.gui import ShapeRoi, PointRoi, Roi
 from ij import ImagePlus
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
@@ -31,6 +34,7 @@ from mpicbg.imglib.type.numeric.complex import ComplexFloatType
 
 from functools import partial
 from collections import defaultdict
+from itertools import izip
 
 
 # TODO: generalise to NxM montages and even arbitrary montages
@@ -419,7 +423,7 @@ class SectionLoader(CacheLoader):
                 aimg.update(None)) # get the underlying DataAccess
 
 
-def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir):
+def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir, nThreads):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
   Each group must consist of 1 tile (no montage needed) or 4 tiles, which are assumed to be placed
@@ -436,7 +440,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
   paramsSIFT: for montaging using scale invariant feature transform (SIFT).
   csvDir: where to save the matrix CSV files, one per montage and section.
   """
-  exe = newFixedThreadPool(32)
+  exe = newFixedThreadPool(nThreads)
   try:
 
     futures = []
@@ -461,7 +465,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
 
 
 
-def makeMontageGroups(filepaths, to_remove):
+def makeMontageGroups(filepaths, to_remove, check):
   """
   ASSUMES montages are 2x2 or just 1 tile
   
@@ -495,10 +499,12 @@ def makeMontageGroups(filepaths, to_remove):
           header = readFIBSEMHeader(tilePath)
           if header is None:
             to_remove.add(groupName_)
+            print "HEADER: ", type(header)
           else:
             widths.append(header.xRes)
             heights.append(header.yRes)
             fileSizes.append(os.stat(tilePath).st_size)
+          #syncPrintQ("tilePath: %s\ndimensions: %i, %i" % (tilePath, header.xRes, header.yRes))
         except:
           syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
         if 1 == len(set(widths)) and 1 == len(set(heights)) and 1 == len(set(fileSizes)):
@@ -506,7 +512,7 @@ def makeMontageGroups(filepaths, to_remove):
           pass
         else:
           to_remove.add(groupName_)
-          syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n" + groupName_, copy_to_stdout=True)
+          syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n%s\n%s" %(groupName_, "\n".join(map(str, izip(widths, heights)))), copy_to_stdout=True)
     else:
       syncPrintQ("WARNING:" + groupName_ + " has " + str(len(tilePaths_)) + " tiles", copy_to_stdout=True)
       to_remove.add(groupName_)
@@ -514,6 +520,8 @@ def makeMontageGroups(filepaths, to_remove):
   for groupName_ in to_remove:
     del groups[groupName_]
     syncPrintQ("Will ignore section: " + groupName_, copy_to_stdout=True)
+  
+  syncPrintQ("Invalid sections: %i" % len(to_remove))
 
   # Sort groups by key
   keys = groups.keys()
@@ -529,7 +537,7 @@ def makeMontageGroups(filepaths, to_remove):
 
 
 # Define a virtual CellImg expressing all the montages, one per section
-def makeVolume(groupNames, tileGroups, section_width, section_height,
+def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
            show=True, matrices=None, invert=False, CLAHE_params=None, title=None):
   dimensions = [section_width, section_height]
   volume_dimensions = dimensions + [len(groupNames)]
