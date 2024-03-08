@@ -34,7 +34,7 @@ from mpicbg.imglib.type.numeric.complex import ComplexFloatType
 from functools import partial
 from collections import defaultdict
 from itertools import izip
-
+from jarray import zeros
 
 # TODO: generalise to NxM montages and even arbitrary montages
 
