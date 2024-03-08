@@ -34,12 +34,12 @@ from mpicbg.imglib.type.numeric.complex import ComplexFloatType
 from functools import partial
 from collections import defaultdict
 from itertools import izip
-from jarray import zeros
+from jarray import zeros, array
 
 # TODO: generalise to NxM montages and even arbitrary montages
 
 class MontageSlice2x2(Callable):
-  def __init__(self, groupName, tilePaths, overlap, offset, paramsSIFT, paramsRANSAC, csvDir):
+  def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir):
     """
     groupName:
     tilePaths:
@@ -54,6 +54,7 @@ class MontageSlice2x2(Callable):
     self.groupName = groupName
     self.tilePaths = list(sorted(tilePaths))
     self.overlap = overlap
+    self.nominal_overlap = nominal_overlap
     self.offset = offset
     self.paramsSIFT = paramsSIFT
     self.paramsRANSAC = paramsRANSAC
@@ -245,12 +246,12 @@ class MontageSlice2x2(Callable):
       # Store the expected tile positions given the nominal_overlap
       matrices = [array([1.0, 0.0, 0.0,
                          0.0, 1.0, 0.0], 'd'),
-                  array([1.0, 0.0, width - nominal_overlap,
+                  array([1.0, 0.0, width - self.nominal_overlap,
                          0.0, 1.0, 0.0], 'd'),
                   array([1.0, 0.0, 0.0,
-                         0.0, 1.0, height - nominal_overlap], 'd'),
-                  array([1.0, 0.0, width - nominal_overlap,
-                         0.0, 1.0, height - nominal_overlap], 'd')]
+                         0.0, 1.0, height - self.nominal_overlap], 'd'),
+                  array([1.0, 0.0, width - self.nominal_overlap,
+                         0.0, 1.0, height - self.nominal_overlap], 'd')]
       saveMatrices(self.groupName, matrices, self.csvDir)
       return matrices
     
@@ -360,7 +361,7 @@ class SectionLoader(CacheLoader):
   """
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
-  def __init__(self, dimensions, groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC,
+  def __init__(self, dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC,
                csvDir, matrices=None, invert=False, CLAHE_params=None, as8bit=False):
     """
     csvDir: the directory specifying the montages, one matrices file per section.
@@ -386,7 +387,7 @@ class SectionLoader(CacheLoader):
     matrix = self.matrices[index] if self.matrices else None
     #
     if 4 == len(tilePaths):
-      m2x2 = MontageSlice2x2(groupName, tilePaths, self.overlap, self.offset,
+      m2x2 = MontageSlice2x2(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
                              self.paramsSIFT, self.paramsRANSAC, self.csvDir)
       if self.as8bit:
         aimg = m2x2.montagedImg8bit(self.dimensions[0], self.dimensions[1],
@@ -422,7 +423,7 @@ class SectionLoader(CacheLoader):
                 aimg.update(None)) # get the underlying DataAccess
 
 
-def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, paramsRANSAC, csvDir, nThreads):
+def ensureMontages2x2(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, nThreads):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
   Each group must consist of 1 tile (no montage needed) or 4 tiles, which are assumed to be placed
@@ -449,7 +450,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, offset, paramsSIFT, param
       # EXPECTING 2x2 tiles or 1
       if 4 == len(tilePaths):
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
-        futures.append(exe.submit(MontageSlice2x2(groupName, tilePaths, overlap, offset, paramsSIFT, paramsRANSAC, csvDir)))
+        futures.append(exe.submit(MontageSlice2x2(groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir)))
       elif 1 == len(tilePaths):
         pass
       else:
