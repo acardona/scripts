@@ -370,6 +370,7 @@ class SectionLoader(CacheLoader):
     self.groupNames = groupNames # list of names of each group, used to find its montage CSV if any
     self.tileGroups = tileGroups # a list of lists of file paths to .dat files, one per section
     self.overlap = overlap
+    self.nominal_overlap = nominal_overlap
     self.offset = offset
     self.paramsSIFT = paramsSIFT
     self.paramsRANSAC = paramsRANSAC
@@ -537,7 +538,7 @@ def makeMontageGroups(filepaths, to_remove, check):
 
 
 # Define a virtual CellImg expressing all the montages, one per section
-def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
+def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
            show=True, matrices=None, invert=False, CLAHE_params=None, title=None):
   dimensions = [section_width, section_height]
   volume_dimensions = dimensions + [len(groupNames)]
@@ -545,7 +546,7 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, o
   pixelType = UnsignedByteType # UnsignedShortType
   primitiveType = PrimitiveType.BYTE #.SHORT
   
-  volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, offset,
+  volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset,
                                               paramsSIFT, paramsRANSAC, csvDir,
                                               matrices=matrices,
                                               invert=invert, CLAHE_params=CLAHE_params,
