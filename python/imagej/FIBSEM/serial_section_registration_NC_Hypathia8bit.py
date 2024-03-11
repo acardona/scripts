@@ -8,10 +8,13 @@ from lib.serial2Dregistration import align
 from lib.montage2d import ensureMontages2x2, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
+from net.imglib2 import FinalInterval
 from net.imglib2.util import Intervals
 from net.imglib2.type.numeric.integer import UnsignedByteType
 
 
+# Hypathia volume
+# Resolution is: 12x12x40 nm, FIBSEM
 
 # Folders
 srcDir = "/net/fibserver1/raw/NC_Hypathia/Y2023/"
@@ -93,7 +96,6 @@ syncPrintQ("Number of sections found valid: %i" % len(groupNames))
 # How many sections to montage in parallel
 nThreadsMontaging = 128
 
-
 # Montage all sections
 ensureMontages2x2(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, nThreadsMontaging)
 
@@ -116,10 +118,10 @@ properties = {
  'n_threads': 200, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
  'invert': False, # Processing is done already
  'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
- 'use_SIFT': True,  # no need, falls back onto SIFT when needed. In this case, when transitioning from montages to single image sections.
+ 'use_SIFT': True,
  'SIFT_validateByFileExists': True, # Avoid loading and parsing SIFT features just to make sure they are fine.
  'RANSAC_iterations': 1000,
- 'RANSAC_maxEpsilon': 10, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
+ 'RANSAC_maxEpsilon': 25, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
  'RANSAC_minInlierRatio': 0.01,
  'preload': 64 # 64 sections, matching the export as N5 Z axis
 }
@@ -127,7 +129,7 @@ properties = {
 # Parameters for blockmatching
 params = {
  'scale': 0.1, # 10%
- 'meshResolution': 20,
+ 'meshResolution': 20, # 20x20 = 400 points
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
@@ -163,8 +165,8 @@ volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section
                                   invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC")
 
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
-properties["use_SIFT"] = False
-properties["n_threads"] = 32
+properties["use_SIFT"] = False # Will still fall back to SIFT if blockmatching fails
+properties["n_threads"] = 200
 matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfiguration, properties,
                    loaderImp=makeSliceLoader(groupNames, volumeImgAlignedSIFT))
 
@@ -178,8 +180,9 @@ volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_h
 
 # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment,
 # ready for exporting to N5 (has preloader threads switched on)
-img, imp = showAlignedImg(volumeImgAlignedBM)
+cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
+img, imp = showAlignedImg(volumeImgAlignedBM, cropInterval, groupNames, properties, matricesBM, rotate=None)
 
 # Roi for cropping when exporting
-imp.setRoi(Roi(432, 480, 24672, 23392))
+# to be determined # imp.setRoi(Roi(432, 480, 24672, 23392))
 

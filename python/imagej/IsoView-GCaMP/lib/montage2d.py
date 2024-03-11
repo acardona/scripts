@@ -601,7 +601,7 @@ def fuseMatrices(matricesSIFT, matricesBM):
 
 
 
-def showAlignedImg(volumeImgAlignedBM, rotate=None):
+def showAlignedImg(volumeImgAlignedBM, cropInterval, groupNames, properties, matricesBM, rotate=None):
   """
   rotate: "right" or "left" or None
   """
@@ -609,9 +609,8 @@ def showAlignedImg(volumeImgAlignedBM, rotate=None):
   def loadImg(volumeImgAlignedBM, index):
     cell = volumeImgAlignedBM.getCells().randomAccess().setPositionAndGet([0, 0, index])
     pixels = cell.getData().getCurrentStorageArray()
-    return ArrayImgs.unsignedBytes(pixels, [volumeImg.dimension(0), volumeImg.dimension(1)])
-
-  cropInterval = FinalInterval([section_width, section_height])
+    return ArrayImgs.unsignedBytes(pixels, [volumeImgAlignedBM.dimension(0), volumeImgAlignedBM.dimension(1)])
+  
   cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"],
                              partial(loadImg, volumeImgAlignedBM), properties["img_dimensions"],
                              matricesBM, cropInterval, properties.get('preload', 0))
@@ -619,8 +618,10 @@ def showAlignedImg(volumeImgAlignedBM, rotate=None):
 
   if rotate:
     # By 90 or -90 degrees
-    a, b = (0, 1) if "right" == rotate else (1, 0)
+    a, b = (0, 1) if "right" == rotate else (1, 0) # left
     img = Views.rotate(cellImg, a, b) # the 0 and 1 are the two axis (dimensions) of reference, e.g., pux X (the 0) into Y (the 1).
+  else:
+    img = cellImg
 
   imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel")
   imp.show()
