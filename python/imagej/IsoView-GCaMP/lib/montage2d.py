@@ -598,7 +598,7 @@ def fuseMatrices(matricesSIFT, matricesBM):
   matrices = []
   for m1, m2 in izip(matricesSIFT, matricesBM):
     # The SIFT alignment will have been expressed as integers, so correct for that
-    matrices.append(array([1, 0, int(m1[2] + 0.5) - m2[2], 0, 1, int(m1[5] + 0.5) - m2[5]], 'd'))
+    matrices.append(array([1, 0, int(m1[2] + 0.5) + m2[2], 0, 1, int(m1[5] + 0.5) + m2[5]], 'd'))
 
 
 
