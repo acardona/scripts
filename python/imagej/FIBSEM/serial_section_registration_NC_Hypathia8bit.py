@@ -37,8 +37,8 @@ nominal_overlap = 666 # 8 microns at 12 nm/px = 8000 px
 # Intra-section montage: expecting 2x2 with each tile being 6375x6583
 
 # Working canvas
-section_width = 14500 # pixels, after section-wise montaging
-section_height = 14500
+section_width = 11550 #14500 # pixels, after section-wise montaging
+section_height = 12650 #14500
 
 # CHECK whether some sections have problems
 # SOME IMAGES fail to open for reading the header with readFIBSEMHeader
