@@ -101,8 +101,8 @@ ensureMontages2x2(groupNames, tileGroups, overlap, nominal_overlap, offset, para
 
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 # NOTE: it's 8-bit
-volumeImg = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
-                   show=False, matrices=None, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
+volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
+                               show=False, matrices=None, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
 
 
 # Start section registration
@@ -112,7 +112,7 @@ volumeImg = makeVolume(groupNames, tileGroups, section_width, section_height, ov
 # Some of these aren't needed here
 properties = {
  'name': "NC_Hypathia",
- 'img_dimensions': Intervals.dimensionsAsLongArray(volumeImg),
+ 'img_dimensions': Intervals.dimensionsAsLongArray(volumeImgMontaged),
  'srcDir': srcDir,
  'pixelType': UnsignedByteType,
  'n_threads': 200, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
@@ -156,7 +156,7 @@ paramsTileConfiguration = {
 }
 
 matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
-                     loaderImp=makeSliceLoader(groupNames, volumeImg))
+                     loaderImp=makeSliceLoader(groupNames, volumeImgMontaged))
 
 # Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
 # NOTE it's 8-bit !

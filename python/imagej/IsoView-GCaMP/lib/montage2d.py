@@ -291,9 +291,9 @@ class MontageSlice2x2(Callable):
                        int(matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
     
     return ArrayImgs.unsignedShorts(spMontage.getPixels(), width, height)
-    
-    
-    
+
+
+
   def montagedImg8bit(self, width, height, section_matrix, invert=False, CLAHE_params=None):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
@@ -356,6 +356,7 @@ def process(sp, invert=False, CLAHE_params=None):
     blockRadius, n_bins, slope = CLAHE_params
     CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None)
   return sp
+
 
 class SectionLoader(CacheLoader):
   """
