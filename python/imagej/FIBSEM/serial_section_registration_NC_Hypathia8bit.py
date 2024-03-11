@@ -5,7 +5,7 @@ from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths
 from lib.util import syncPrintQ
 from lib.serial2Dregistration import align
-from lib.montage2d import ensureMontages2x2, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg
+from lib.montage2d import ensureMontages2x2, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
 from net.imglib2.util import Intervals
