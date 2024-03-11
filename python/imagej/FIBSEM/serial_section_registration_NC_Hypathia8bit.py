@@ -181,7 +181,7 @@ volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_h
 # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment,
 # ready for exporting to N5 (has preloader threads switched on)
 cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
-img, imp = showAlignedImg(volumeImgAlignedBM, cropInterval, groupNames, properties, matricesBM, rotate=None)
+img, imp = showAlignedImg(volumeImgAlignedSIFT, cropInterval, groupNames, properties, matricesBM, rotate=None)
 
 # Roi for cropping when exporting
 # to be determined # imp.setRoi(Roi(432, 480, 24672, 23392))
