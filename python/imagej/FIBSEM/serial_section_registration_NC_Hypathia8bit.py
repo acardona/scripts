@@ -102,7 +102,7 @@ ensureMontages2x2(groupNames, tileGroups, overlap, nominal_overlap, offset, para
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 # NOTE: it's 8-bit
 volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
-                               show=False, matrices=None, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
+                               show=True, matrices=None, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
 
 
 # Start section registration
