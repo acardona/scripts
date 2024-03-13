@@ -290,7 +290,7 @@ class MontageSlice2x2(Callable):
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
     # Start pasting from the end, to bury the bad left edges
-    for sp, matrix in zip(self.yieldShortProcessors(reverse=True), reversed(matrices)):
+    for sp, matrix in izip(self.yieldShortProcessors(reverse=True), reversed(matrices)):
       spMontage.insert(process(sp, invert=invert, CLAHE_params=CLAHE_params),  # TODO don't process separately, see above
                        int(matrix[2] + dx + 0.5),
                        int(matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
@@ -310,7 +310,7 @@ class MontageSlice2x2(Callable):
     spMontage = ShortProcessor(width, height)
     rois = []
     # Start pasting from the end, to bury the bad left edges
-    for sp, matrix in zip(self.yieldShortProcessors(reverse=True), reversed(matrices)):
+    for sp, matrix in izip(self.yieldShortProcessors(reverse=True), reversed(matrices)):
       x = int(matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
       y = int(matrix[5] + dy + 0.5)
       spMontage.insert(sp, x, y)
