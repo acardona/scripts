@@ -128,7 +128,7 @@ properties = {
 
 # Parameters for blockmatching
 params = {
- 'scale': 0.1, # 10%
+ 'scale': 0.2, # 20%
  'meshResolution': 20, # 20x20 = 400 points
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
@@ -148,7 +148,7 @@ paramsSIFT.initialSigma = 1.6 # default 1.6
 
 # Parameters for computing the transformation models
 paramsTileConfiguration = {
-  "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
+  "n_adjacent": 6, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends 1000
@@ -162,11 +162,12 @@ matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfigur
 # NOTE it's 8-bit !
 volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
                                   show=True, matrices=matricesSIFT,
-                                  invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC")
+                                  invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC",
+                                  cache_size=properties["n_threads"] + paramsTileConfiguration["n_adjacent"] + 1) # Cache of SoftReference entries anyway
 
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
 properties["use_SIFT"] = False # Will still fall back to SIFT if blockmatching fails
-properties["n_threads"] = 200
+properties["n_threads"] = 64
 matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfiguration, properties,
                    loaderImp=makeSliceLoader(groupNames, volumeImgAlignedSIFT))
 
