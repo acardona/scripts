@@ -203,8 +203,14 @@ class MontageSlice2x2(Callable):
   def loadShortProcessors(self):
     for filepath in self.tilePaths:
       syncPrintQ("#%s#" % filepath)
-    # Load images (TODO: should use FIBSEM_Reader instead)
+    # Load images
     return [readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor() for filepath in self.tilePaths]
+    
+  def yieldShortProcessors(self, reverse=False):
+    ls = self.tilePaths if not reverse else reversed(self.tilePaths)
+    for filepath in ls:
+      syncPrintQ("#%s#" % filepath)
+      yield readFIBSEMdat(filepath, channel_index=0, asImagePlus=True, buffer_size=self.buffer_size)[0].getProcessor()
 
   def getMatrices(self):
     # For each section to montage, for each image tile,
@@ -282,10 +288,9 @@ class MontageSlice2x2(Callable):
     """
     matrices = self.getMatrices()
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
-    sps = self.loadShortProcessors()
     spMontage = ShortProcessor(width, height)
     # Start pasting from the end, to bury the bad left edges
-    for sp, matrix in reversed(zip(sps, matrices)):
+    for sp, matrix in zip(self.yieldShortProcessors(reverse=True), reversed(matrices)):
       spMontage.insert(process(sp, invert=invert, CLAHE_params=CLAHE_params),  # TODO don't process separately, see above
                        int(matrix[2] + dx + 0.5),
                        int(matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
@@ -302,17 +307,17 @@ class MontageSlice2x2(Callable):
     """
     matrices = self.getMatrices()
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
-    sps = self.loadShortProcessors()
     spMontage = ShortProcessor(width, height)
     rois = []
     # Start pasting from the end, to bury the bad left edges
-    for sp, matrix in reversed(zip(sps, matrices)):
+    for sp, matrix in zip(self.yieldShortProcessors(reverse=True), reversed(matrices)):
       x = int(matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
       y = int(matrix[5] + dy + 0.5)
       spMontage.insert(sp, x, y)
       rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     sps = None
     bpMontage = processTo8bit(spMontage, invert=invert, CLAHE_params=CLAHE_params)
+    spMontage = None
     if invert:
       # paint white background as black
       # (Can't invert earlier as the min, max wouldn't match, leading to uneven illumunation across tiles)
