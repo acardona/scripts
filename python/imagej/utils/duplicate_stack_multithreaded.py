@@ -34,5 +34,5 @@ def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False):
 
 
 imp = IJ.getImage()
-copy = duplicateInParallel(imp, range(3, 8), n_threads=10, shallow=True)
+copy = duplicateInParallel(imp, range(3490, 3493), n_threads=10, shallow=True)
 copy.show()
