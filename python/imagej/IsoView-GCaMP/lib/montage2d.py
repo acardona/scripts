@@ -210,7 +210,7 @@ class MontageSlice2x2(Callable):
     ls = self.tilePaths if not reverse else reversed(self.tilePaths)
     for filepath in ls:
       syncPrintQ("#%s#" % filepath)
-      yield readFIBSEMdat(filepath, channel_index=0, asImagePlus=True, buffer_size=self.buffer_size)[0].getProcessor()
+      yield readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
 
   def getMatrices(self):
     # For each section to montage, for each image tile,
