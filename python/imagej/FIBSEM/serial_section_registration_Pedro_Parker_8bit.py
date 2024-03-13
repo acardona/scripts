@@ -727,18 +727,20 @@ for m1, m2 in izip(matricesSIFT, matricesBM):
   matrices.append(array([1, 0, int(m1[2] + 0.5) - m2[2], 0, 1, int(m1[5] + 0.5) - m2[5]], 'd'))
 
 # Show the re-aligned volume
-volumeImgAlignedBM = volume(groupNames, tileGroups, show=True, matrices=matrices, invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
+volumeImgAlignedBM = volume(groupNames, tileGroups, show=True, matrices=matrices, invert=True, CLAHE_params=[100, 255, 3.0],
+                            title="SIFT+RANSAC+BlockMatching")
 
 
 # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
 def loadImg(index):
-  global volumeImgAlignedBM
-  cell = volumeImgAlignedBM.getCells().randomAccess().setPositionAndGet([0, 0, index])
+  global volumeImgAlignedSIFT
+  cell = volumeImgAlignedSIFT.getCells().randomAccess().setPositionAndGet([0, 0, index])
   pixels = cell.getData().getCurrentStorageArray()
-  return ArrayImgs.unsignedBytes(pixels, [volumeImg.dimension(0), volumeImg.dimension(1)])
+  return ArrayImgs.unsignedBytes(pixels, [volumeImgAlignedSIFT.dimension(0), volumeImgAlignedSIFT.dimension(1)])
 
 cropInterval = FinalInterval([section_width, section_height])
-cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"], loadImg, properties["img_dimensions"], matricesBM, cropInterval, properties.get('preload', 0))
+cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"], loadImg, properties["img_dimensions"], matricesBM,
+                           cropInterval, properties.get('preload', 0))
 
 # Rotate 90 degrees to the right
 img = Views.rotate(cellImg, 0, 1)
