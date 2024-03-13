@@ -172,7 +172,7 @@ volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section
 
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
 properties["use_SIFT"] = False # Will still fall back to SIFT if blockmatching fails
-properties["n_threads"] = 96 # for scale=0.2 use 128
+properties["n_threads"] = 64 # for scale=0.2 use 128
 matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfiguration, properties,
                    loaderImp=makeSliceLoader(groupNames, volumeImgAlignedSIFT),
                    fixed_tile_indices=fixed_tile_indices)
