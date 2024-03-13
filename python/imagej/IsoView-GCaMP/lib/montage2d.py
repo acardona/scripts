@@ -545,7 +545,7 @@ def makeMontageGroups(filepaths, to_remove, check):
 
 # Define a virtual CellImg expressing all the montages, one per section
 def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
-           show=True, matrices=None, invert=False, CLAHE_params=None, title=None):
+           show=True, matrices=None, invert=False, CLAHE_params=None, title=None, cache_size=64):
   dimensions = [section_width, section_height]
   volume_dimensions = dimensions + [len(groupNames)]
   cell_dimensions = dimensions + [1]
@@ -561,7 +561,7 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
                                 cell_dimensions,
                                 pixelType,
                                 primitiveType,
-                                maxRefs=64)  # number of threads times number of sections to compare against plus some padding
+                                maxRefs=cache_size)  # number of threads times number of sections to compare against plus some padding
 
   # Show the montages as a series of slices in a stack
   if show:
