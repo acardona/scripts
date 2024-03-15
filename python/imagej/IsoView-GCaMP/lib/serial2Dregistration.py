@@ -435,7 +435,8 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
     pass
 
 
-def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=None):
+def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+          loaderImp=None, fixed_tile_indices=None):
   if not os.path.exists(csvDir):
     os.makedirs(csvDir) # recursively
   name = "matrices"
@@ -447,7 +448,11 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties, loaderImp=loaderImp)
   tc = TileConfiguration()
   tc.addTiles(tiles)
-  tc.fixTile(tiles[len(tiles) / 2]) # middle tile
+  if not fixed_tile_indices:
+    tc.fixTile(tiles[len(tiles) / 2]) # middle tile
+  else:
+    for i in fixed_tile_indices:
+      tc.fixTile(tiles[i])
   
   maxAllowedError = paramsTileConfiguration["maxAllowedError"]
   maxPlateauwidth = paramsTileConfiguration["maxPlateauwidth"]
