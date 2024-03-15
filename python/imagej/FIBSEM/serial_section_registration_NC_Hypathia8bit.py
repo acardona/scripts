@@ -79,6 +79,10 @@ groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check)
 groupNames = groupNames[2206:]
 tileGroups = tileGroups[2206:]
 
+# From this new zero, the index 3492 is the last of the 2x2 tiles
+
+fixed_tile_indices = [2000] # A section in the brain, with 2x2 tiles
+
 
 # DEBUG: print groups
 rows = ["section index (1-based),groupName,number of tiles"]
@@ -156,7 +160,8 @@ paramsTileConfiguration = {
 }
 
 matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
-                     loaderImp=makeSliceLoader(groupNames, volumeImgMontaged))
+                     loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
+                     fixed_tile_indices=fixed_tile_indices)
 
 # Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
 # NOTE it's 8-bit !
@@ -167,9 +172,10 @@ volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section
 
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
 properties["use_SIFT"] = False # Will still fall back to SIFT if blockmatching fails
-properties["n_threads"] = 64
+properties["n_threads"] = 96 # for scale=0.2 use 128
 matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfiguration, properties,
-                   loaderImp=makeSliceLoader(groupNames, volumeImgAlignedSIFT))
+                   loaderImp=makeSliceLoader(groupNames, volumeImgAlignedSIFT),
+                   fixed_tile_indices=fixed_tile_indices)
 
 
 # Show the re-aligned volume
@@ -182,7 +188,7 @@ volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_h
 # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment,
 # ready for exporting to N5 (has preloader threads switched on)
 cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
-img, imp = showAlignedImg(volumeImgAlignedSIFT, cropInterval, groupNames, properties, matricesBM, rotate=None)
+img, imp = showAlignedImg(volumeImgAlignedSIFT, cropInterval, groupNames, properties, matricesBM, rotate="180")
 
 # Roi for cropping when exporting
 # to be determined # imp.setRoi(Roi(432, 480, 24672, 23392))
