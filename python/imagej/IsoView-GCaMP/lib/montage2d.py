@@ -622,10 +622,13 @@ def showAlignedImg(volumeImgAlignedBM, cropInterval, groupNames, properties, mat
                              matricesBM, cropInterval, properties.get('preload', 0))
 
 
-  if rotate:
+  if "right" == rotate or "left" == rotate:
     # By 90 or -90 degrees
     a, b = (0, 1) if "right" == rotate else (1, 0) # left
     img = Views.rotate(cellImg, a, b) # the 0 and 1 are the two axis (dimensions) of reference, e.g., pux X (the 0) into Y (the 1).
+  elif "180" == rotate:
+    # Rotate twice to the right
+    img = Views.rotate(Views.rotate(cellImg, 0, 1), 0, 1)
   else:
     img = cellImg
 
