@@ -34,5 +34,9 @@ def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False):
 
 
 imp = IJ.getImage()
-copy = duplicateInParallel(imp, range(3490, 3493), n_threads=10, shallow=True)
+# NC_Hypathia transition from 2x2 tiles to single tile
+#copy = duplicateInParallel(imp, range(3490, 3493), n_threads=10, shallow=True)
+
+#copy = duplicateInParallel(imp, range(3470, 3520), n_threads=50, shallow=True)
+copy = duplicateInParallel(imp, range(1990, 2010), n_threads=50, shallow=True)
 copy.show()
