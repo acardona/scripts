@@ -79,9 +79,15 @@ groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check)
 groupNames = groupNames[2206:]
 tileGroups = tileGroups[2206:]
 
-# From this new zero, the index 3492 is the last of the 2x2 tiles
-
+# From this new zero, the index 3491 (1-based) is the last of the 2x2 tiles
 fixed_tile_indices = [2000] # A section in the brain, with 2x2 tiles
+
+# Manual offset for sections with a single tile:
+def sectionOffsets(index): # index is 0-based
+  # Must always return a tuple with two integers
+  if index >= 3491: # index 3491 (0-based) is the first of the single-tile sections
+    return (4225, 167)
+  return (0, 0)
 
 
 # DEBUG: print groups
@@ -106,7 +112,7 @@ ensureMontages2x2(groupNames, tileGroups, overlap, nominal_overlap, offset, para
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 # NOTE: it's 8-bit
 volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
-                               show=True, matrices=None, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
+                               show=True, matrices=None, section_offsets=sectionOffsets, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
 
 
 # Start section registration
@@ -167,6 +173,7 @@ matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfigur
 # NOTE it's 8-bit !
 volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
                                   show=True, matrices=matricesSIFT,
+                                  section_offsets=sectionOffsets,
                                   invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC",
                                   cache_size=properties["n_threads"] + paramsTileConfiguration["n_adjacent"] + 1) # Cache of SoftReference entries anyway
 
@@ -181,6 +188,7 @@ matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfigura
 # Show the re-aligned volume
 volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
                                 show=True,
+                                section_offsets=sectionOffsets,
                                 matrices=fuseMatrices(matricesSIFT, matricesBM),
                                 invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
 
@@ -192,4 +200,5 @@ img, imp = showAlignedImg(volumeImgAlignedSIFT, cropInterval, groupNames, proper
 
 # Roi for cropping when exporting
 # to be determined # imp.setRoi(Roi(432, 480, 24672, 23392))
+
 

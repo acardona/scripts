@@ -280,7 +280,7 @@ class MontageSlice2x2(Callable):
   def call(self):
     return self.getMatrices()
 
-  def montagedImg(self, width, height, section_matrix, invert=False, CLAHE_params=None):
+  def montagedImg(self, width, height, section_matrix, sdx=0, sdy=0, invert=False, CLAHE_params=None):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
@@ -292,14 +292,14 @@ class MontageSlice2x2(Callable):
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in izip(self.yieldShortProcessors(reverse=True), reversed(matrices)):
       spMontage.insert(process(sp, invert=invert, CLAHE_params=CLAHE_params),  # TODO don't process separately, see above
-                       int(matrix[2] + dx + 0.5),
-                       int(matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
+                       int(sdx + matrix[2] + dx + 0.5),
+                       int(sdy + matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
     
     return ArrayImgs.unsignedShorts(spMontage.getPixels(), width, height)
 
 
 
-  def montagedImg8bit(self, width, height, section_matrix, invert=False, CLAHE_params=None):
+  def montagedImg8bit(self, width, height, section_matrix, sdx=0, sdy=0, invert=False, CLAHE_params=None):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
@@ -311,8 +311,8 @@ class MontageSlice2x2(Callable):
     rois = []
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in izip(self.yieldShortProcessors(reverse=True), reversed(matrices)):
-      x = int(matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
-      y = int(matrix[5] + dy + 0.5)
+      x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
+      y = int(sdy + matrix[5] + dy + 0.5)
       spMontage.insert(sp, x, y)
       rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     sps = None
@@ -367,8 +367,10 @@ class SectionLoader(CacheLoader):
   """
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
-  def __init__(self, dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC,
-               csvDir, matrices=None, invert=False, CLAHE_params=None, as8bit=False):
+  def __init__(self, dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset,
+               paramsSIFT, paramsRANSAC, csvDir,
+               section_offsets=None, # A function that given an index returns a tuple of two integers
+               matrices=None, invert=False, CLAHE_params=None, as8bit=False):
     """
     csvDir: the directory specifying the montages, one matrices file per section.
     """
@@ -382,6 +384,7 @@ class SectionLoader(CacheLoader):
     self.paramsRANSAC = paramsRANSAC
     self.csvDir = csvDir
     self.as8bit = as8bit
+    self.section_offsets = section_offsets
     self.matrices = matrices # for alignment in Z
     if self.matrices and len(self.groupNames) != len(self.matrices):
       raise Exception("Lengths of groupNames and rows in the matrices file don't match!")
@@ -392,16 +395,17 @@ class SectionLoader(CacheLoader):
     groupName = self.groupNames[index]
     tilePaths = self.tileGroups[index]
     matrix = self.matrices[index] if self.matrices else None
+    sdx, sdy = self.section_offsets(index) if self.section_offsets else (0, 0)
     #
     if 4 == len(tilePaths):
       m2x2 = MontageSlice2x2(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
                              self.paramsSIFT, self.paramsRANSAC, self.csvDir)
       if self.as8bit:
         aimg = m2x2.montagedImg8bit(self.dimensions[0], self.dimensions[1],
-                                    matrix, invert=self.invert, CLAHE_params=self.CLAHE_params)
+                                    matrix, sdx=sdx, sdy=sdy, invert=self.invert, CLAHE_params=self.CLAHE_params)
       else:
         aimg = m2x2.montagedImg(self.dimensions[0], self.dimensions[1],
-                                matrix, invert=self.invert, CLAHE_params=self.CLAHE_params)
+                                matrix, sdx=sdx, sdy=sdy, invert=self.invert, CLAHE_params=self.CLAHE_params)
     elif 1 == len(tilePaths):
       imp = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=True)[0]
       if self.as8bit:
@@ -412,8 +416,8 @@ class SectionLoader(CacheLoader):
         ip = ShortProcessor(self.dimensions[0], self.dimensions[1])
       dx, dy = (matrix[2], matrix[5]) if matrix else (0, 0)
       ip.insert(ipTile,
-                int(dx + 0.5),
-                int(dy + 0.5))
+                int(sdx + dx + 0.5),
+                int(sdy + dy + 0.5))
       fn = ArrayImgs.unsignedBytes if self.as8bit else ArrayImgs.unsignedShorts
       aimg = fn(ip.getPixels(), self.dimensions)
       imp.flush()
@@ -545,7 +549,7 @@ def makeMontageGroups(filepaths, to_remove, check):
 
 # Define a virtual CellImg expressing all the montages, one per section
 def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
-           show=True, matrices=None, invert=False, CLAHE_params=None, title=None, cache_size=64):
+           show=True, matrices=None, section_offsets=None, invert=False, CLAHE_params=None, title=None, cache_size=64):
   dimensions = [section_width, section_height]
   volume_dimensions = dimensions + [len(groupNames)]
   cell_dimensions = dimensions + [1]
@@ -555,6 +559,7 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
   volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset,
                                               paramsSIFT, paramsRANSAC, csvDir,
                                               matrices=matrices,
+                                              section_offsets=section_offsets,
                                               invert=invert, CLAHE_params=CLAHE_params,
                                               as8bit=True),
                                 volume_dimensions,
