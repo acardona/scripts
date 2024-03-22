@@ -5,7 +5,7 @@ from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths
 from lib.util import syncPrintQ
 from lib.serial2Dregistration import align
-from lib.montage2d import ensureMontages2x2, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices
+from lib.montage2d import ensureMontages2x2, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices, fuseTranslationMatrices
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
 from net.imglib2 import FinalInterval
@@ -76,8 +76,9 @@ groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check)
 
 # Skip first ~2000 sections without brain and with only 1 tile per section
 # At index 2207 starts the 2x2 tiles (1-based)
-groupNames = groupNames[2206:]
-tileGroups = tileGroups[2206:]
+# Also gnore last 167 sections which show poor registration
+groupNames = groupNames[2206:-167]
+tileGroups = tileGroups[2206:-167]
 
 # From this new zero, the index 3491 (1-based) is the last of the 2x2 tiles
 fixed_tile_indices = [2000] # A section in the brain, with 2x2 tiles
@@ -169,6 +170,14 @@ matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfigur
                      loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
                      fixed_tile_indices=fixed_tile_indices)
 
+cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
+imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
+                                  matricesSIFT,
+                                  rotate=None
+                                  title_addendum=" SIFT+RANSAC")
+
+
+"""
 # Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
 # NOTE it's 8-bit !
 volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
@@ -176,29 +185,43 @@ volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section
                                   section_offsets=sectionOffsets,
                                   invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC",
                                   cache_size=properties["n_threads"] + paramsTileConfiguration["n_adjacent"] + 1) # Cache of SoftReference entries anyway
+"""
 
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
 properties["use_SIFT"] = False # Will still fall back to SIFT if blockmatching fails
 properties["n_threads"] = 64 # for scale=0.2 use 128
+paramsTileConfiguration["n_adjacent"] = 3
 matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfiguration, properties,
-                   loaderImp=makeSliceLoader(groupNames, volumeImgAlignedSIFT),
+                   loaderImp=makeSliceLoader(groupNames, imgSIFT),
                    fixed_tile_indices=fixed_tile_indices)
 
-
+"""
 # Show the re-aligned volume
 volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
                                 show=True,
                                 section_offsets=sectionOffsets,
                                 matrices=fuseMatrices(matricesSIFT, matricesBM),
                                 invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
-
+"""
 
 # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment,
 # ready for exporting to N5 (has preloader threads switched on)
 cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
-img, imp = showAlignedImg(volumeImgAlignedSIFT, cropInterval, groupNames, properties, matricesBM, rotate="180")
+img, imp = showAlignedImg(imgSIFT, cropInterval, groupNames, properties,
+                          matricesBM,
+                          rotate="180",
+                          title_addendum=" BM")
+
+
+# Also directly from the montages to avoid interpolation of an interpolated image
+img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
+                          fuseTranslationMatrices(matricesSIFT, matricesBM),
+                          rotate="180",
+                          title_addendum=" single interpolation")
+imp.setTitle(imp.getTitle() + )
+
 
 # Roi for cropping when exporting
 # to be determined # imp.setRoi(Roi(432, 480, 24672, 23392))
 
-
+"""
