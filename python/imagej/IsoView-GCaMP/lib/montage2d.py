@@ -19,12 +19,12 @@ from net.imglib2.type.numeric.complex import ComplexFloatType
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.type import PrimitiveType
 from net.imglib2.img.array import ArrayImgFactory
-from net.imglib2.img.cell import Cell
+from net.imglib2.img.cell import Cell, CellImg
 from net.imglib2.cache import CacheLoader
 from net.imglib2.view import Views
 from net.imglib2.util import Intervals
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
-#from net.imglib2.algorithm.math import ImgMath
+from net.imglib2.algorithm.math import ImgMath
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, Point, NotEnoughDataPointsException, Tile, TileConfiguration
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
@@ -320,7 +320,7 @@ class MontageSlice2x2(Callable):
     spMontage = None
     if invert:
       # paint white background as black
-      # (Can't invert earlier as the min, max wouldn't match, leading to uneven illumunation across tiles)
+      # (Can't invert earlier as the min, max wouldn't match, leading to uneven illumination across tiles)
       sp = ShapeRoi(rois[0])
       for roi in rois[1:]:
         sp = sp.or(ShapeRoi(roi))
@@ -579,6 +579,10 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
 
 
 def makeSliceLoader(groupNames, volumeImg):
+  """
+    groupNames: a list of lists, each defining a section with one or more tiles
+    volumeImg: a CellImg
+  """
   # Will use groupNames as filepaths, and a load function that will return hyperslices of volumeImg
   indices = {groupName: i for i, groupName in enumerate(groupNames)}
 
@@ -610,21 +614,32 @@ def fuseMatrices(matricesSIFT, matricesBM):
     # The SIFT alignment will have been expressed as integers, so correct for that
     matrices.append(array([1, 0, int(m1[2] + 0.5) + m2[2], 0, 1, int(m1[5] + 0.5) + m2[5]], 'd'))
 
+def fuseTranslationMatrices(matrices1, matrices2):
+  return [array([1, 0, m1[2] + m2[2],
+                 0, 1, m1[5] + m2[5]], 'd')
+          for m1, m2 in izip(matrices1, matrices2)]
 
 
-def showAlignedImg(volumeImgAlignedBM, cropInterval, groupNames, properties, matricesBM, rotate=None):
+def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=None, title_addendum=""):
   """
-  rotate: "right" or "left" or None
+  rotate: "right" or "left" or "180" or None
   """
   # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
-  def loadImg(volumeImgAlignedBM, index):
-    cell = volumeImgAlignedBM.getCells().randomAccess().setPositionAndGet([0, 0, index])
-    pixels = cell.getData().getCurrentStorageArray()
-    return ArrayImgs.unsignedBytes(pixels, [volumeImgAlignedBM.dimension(0), volumeImgAlignedBM.dimension(1)])
+  def loadImg(img, index):
+    if isinstance(img, CellImg):
+      cell = img.getCells().randomAccess().setPositionAndGet([0, 0, index])
+      pixels = cell.getData().getCurrentStorageArray()
+      return ArrayImgs.unsignedBytes(pixels, [img.dimension(0), img.dimension(1)])
+    else:
+      img2d = Views.hyperSlice(img, 2, index)
+      aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img2d))
+      ImgMath.compute(ImgMath.img(img2d)).into(aimg)
+      return aimg
+      
   
   cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"],
-                             partial(loadImg, volumeImgAlignedBM), properties["img_dimensions"],
-                             matricesBM, cropInterval, properties.get('preload', 0))
+                             partial(loadImg, img), properties["img_dimensions"],
+                             matrices, cropInterval, properties.get('preload', 0))
 
 
   if "right" == rotate or "left" == rotate:
@@ -637,7 +652,7 @@ def showAlignedImg(volumeImgAlignedBM, cropInterval, groupNames, properties, mat
   else:
     img = cellImg
 
-  imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel")
+  imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel" + title_addendum)
   imp.show()
   # Ensure cleanup of threads upon closing the window
   addWindowListener(imp.getWindow(), lambda event: cellGet.destroy())
