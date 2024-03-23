@@ -153,8 +153,8 @@ def readFIBSEMdat(path, channel_index=-1, header=1024, magic_number=3555587570, 
                  round to a short, and then if smaller than zero, make zero, and if larger than 65535, make 65535.
                  Otherwise when True just add 32768 to make the short unsigned.
       toUnsigned: if openAsRaw is True, then choose whether to convert to unsigned values. Default is True.
-      buffer_size: default of zero which means will attempt to read the whole pixel byte array in one go, unless it's larger than 2GB.
-                   If larger than zero, the pixels will be read in blocks of that size, which can potentially massively reduce memory size.
+      buffer_size: a value of zero means it will attempt to read the whole pixel byte array in one go, unless it's larger than 2GB.
+                   If larger than zero, the pixels will be read in blocks of that size, which can potentially massively reduce memory usage.
                    Consider a 1 GB file of 16-bit pixels with two channels. Each channel is 250 MB of 16-bit pixels,
                    but we have to read 1 GB byte[] array into RAM, read them into a 16-bit 0.5 GB short[] array,
                    and finally return an image with a 250 MB short[] array. This uses (1 GB(b) + 0.5*2 GB(s) + 0.25*2*2 GB(s)) = 2.5 GB of RAM.
