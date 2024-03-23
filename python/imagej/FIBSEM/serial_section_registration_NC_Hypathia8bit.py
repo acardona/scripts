@@ -11,6 +11,7 @@ from itertools import izip
 from net.imglib2 import FinalInterval
 from net.imglib2.util import Intervals
 from net.imglib2.type.numeric.integer import UnsignedByteType
+from ij.gui import Roi
 
 
 # Hypathia volume
@@ -37,7 +38,7 @@ nominal_overlap = 666 # 8 microns at 12 nm/px = 8000 px
 # Intra-section montage: expecting 2x2 with each tile being 6375x6583
 
 # Working canvas
-section_width = 11550 #14500 # pixels, after section-wise montaging
+section_width = 12000 #14500 # pixels, after section-wise montaging
 section_height = 12650 #14500
 
 # CHECK whether some sections have problems
@@ -173,19 +174,26 @@ matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfigur
 cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
 imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
                                   matricesSIFT,
-                                  rotate=None
+                                  rotate="180", # None 
                                   title_addendum=" SIFT+RANSAC")
 
+impSIFT.setRoi(Roi(8, 252, 11992, 12096))
+
+# Below: blockmatching always looks worse than 6-adjacent SIFT
+# SIFT has under 6 pixel error, whereas blockmatching gets 11.2
+# This is likely because section thickness is large for this volume.
+
 
 """
+
 # Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
 # NOTE it's 8-bit !
-volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
-                                  show=True, matrices=matricesSIFT,
-                                  section_offsets=sectionOffsets,
-                                  invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC",
-                                  cache_size=properties["n_threads"] + paramsTileConfiguration["n_adjacent"] + 1) # Cache of SoftReference entries anyway
-"""
+#volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
+#                                  show=True, matrices=matricesSIFT,
+#                                  section_offsets=sectionOffsets,
+#                                  invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC",
+#                                  cache_size=properties["n_threads"] + paramsTileConfiguration["n_adjacent"] + 1) # Cache of SoftReference entries anyway
+
 
 # Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
 properties["use_SIFT"] = False # Will still fall back to SIFT if blockmatching fails
@@ -195,14 +203,14 @@ matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfigura
                    loaderImp=makeSliceLoader(groupNames, imgSIFT),
                    fixed_tile_indices=fixed_tile_indices)
 
-"""
+
 # Show the re-aligned volume
-volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
-                                show=True,
-                                section_offsets=sectionOffsets,
-                                matrices=fuseMatrices(matricesSIFT, matricesBM),
-                                invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
-"""
+#volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
+#                                show=True,
+#                                section_offsets=sectionOffsets,
+#                                matrices=fuseMatrices(matricesSIFT, matricesBM),
+#                                invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
+
 
 # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment,
 # ready for exporting to N5 (has preloader threads switched on)
