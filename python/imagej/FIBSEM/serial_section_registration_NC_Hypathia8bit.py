@@ -87,6 +87,14 @@ fixed_tile_indices = [2000] # A section in the brain, with 2x2 tiles
 # Manual offset for sections with a single tile:
 def sectionOffsets(index): # index is 0-based
   # Must always return a tuple with two integers
+  if index >= 10598:
+    return (5497, 496)
+  if index == 10597:
+    return (5478, 499)
+  if index >= 10595:
+    return (3471, 456)
+  if index >= 8985:
+    return (4224, 1751)
   if index >= 3491: # index 3491 (0-based) is the first of the single-tile sections
     return (4225, 167)
   return (0, 0)
