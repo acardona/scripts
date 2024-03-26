@@ -89,15 +89,15 @@ def sectionOffsets(index): # index is 0-based
   # Must always return a tuple with two integers
   if index >= 10598:
     #return (5497, 496)
-    return (4747, 2368)
+    return (4748, 785)
   if index == 10597:
     #return (5478, 499)
-    return (4725, 2370)
+    return (4726, 787)
   if index >= 10595:
     #return (3471, 456)
-    return (3472, 2038)   # (-752, +287) relative to below
+    return (3473, 455)   # (-752, +287) relative to below   
   if index >= 8985:
-    return (4224, 1751)
+    return (4225, 167)
   if index >= 3491: # index 3491 (0-based) is the first of the single-tile sections
     return (4225, 167)
   return (0, 0)
@@ -178,6 +178,8 @@ paramsTileConfiguration = {
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
 }
 
+
+
 matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
                      loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
                      fixed_tile_indices=fixed_tile_indices)
@@ -189,6 +191,7 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
                                   title_addendum=" SIFT+RANSAC")
 
 impSIFT.setRoi(Roi(8, 252, 11992, 12096))
+
 
 # Below: blockmatching always looks worse than 6-adjacent SIFT
 # SIFT has under 6 pixel error, whereas blockmatching gets 11.2
