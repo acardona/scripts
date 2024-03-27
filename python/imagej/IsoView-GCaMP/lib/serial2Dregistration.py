@@ -421,13 +421,15 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
     syncPrintQ("Loading all pointmatches.")
     if properties.get("use_SIFT"):
       params = {"rod": params["rod"]}
+    last = -1
     for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
       i, j, pointmatches = task.call()
       #syncPrintQ("%i, %i : %i" % (i, j, len(pointmatches)))
       if pointmatches is None or 0 == len(pointmatches):
         syncPrintQ("%i, %i : %i from files:\n%s\n%s" % (i, j, len(pointmatches) if pointmatches else None, filepaths[i], filepaths[j]))
       tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
-      if 0 == i % 1000:
+      if 0 == i % 1000 and i != last:
+        last = i
         syncPrintQ("Completed loading %i/%i pointmatches" % (i, len(filepaths)))
     syncPrintQ("Finished loading all pointmatches.")
     return tiles
