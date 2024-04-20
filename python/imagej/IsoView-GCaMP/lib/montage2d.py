@@ -36,6 +36,147 @@ from collections import defaultdict
 from itertools import izip
 from jarray import zeros, array
 
+
+
+def getFeatures(self, sp, roi, paramsSIFT, debug=False):
+  sp.setRoi(roi)
+  sp = sp.crop()
+  paramsSIFT = paramsSIFT.clone()
+  paramsSIFT.minOctaveSize = min(sp.getWidth(), sp.getHeight())
+  paramsSIFT.maxOctaveSize = max(sp.getWidth(), sp.getHeight())
+  ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
+  features = ArrayList() # of Feature instances
+  ijSIFT.extractFeatures(sp, features)
+  
+  if debug:
+    ip = sp.duplicate()
+    proi = PointRoi()
+    for p in features:
+      proi.addPoint(p.location[0], p.location[1])
+    imp = ImagePlus("", ip)
+    imp.setRoi(proi)
+    imp.show()
+  
+  return features
+
+
+    
+def getPointMatches(self, sp0, roi0, sp1, roi1, offset,
+                    paramsSIFT, paramsRANSAC, params, mode="SIFT"):
+  """
+  Start off with PhaseCorrelation, fall back to SIFT if needed.
+  Or start right away with SIFT when mode="SIFT"
+  """
+  # Ignoring PhaseCorrelation for now
+  if "PhaseCorrelation" == mode:
+    sp0.setRoi(roi0)
+    spA = sp0.crop()
+    sp1.setRoi(roi1)
+    spB = sp1.crop()
+    spA_img = ArrayImgs.unsignedShorts(spA.getPixels(), spA.getWidth(), spA.getHeight())
+    spB_img = ArrayImgs.unsignedShorts(spB.getPixels(), spB.getWidth(), spB.getHeight())
+    # Thread pool
+    exe = newFixedThreadPool(n_threads=1, name="phase-correlation")
+    try:
+      # PCM: phase correlation matrix
+      pcm = PhaseCorrelation2.calculatePCM(spA_img,
+                                           spB_img,
+                                           ArrayImgFactory(FloatType()),
+                                           FloatType(),
+                                           ArrayImgFactory(ComplexFloatType()),
+                                           ComplexFloatType(),
+                                           exe)
+      # Number of phase correlation peaks to check with cross-correlation
+      nHighestPeaks = 10
+      # Minimum image overlap to consider, in pixels
+      minOverlap = min(spA.getWidth(), spA.getHeight()) / 3
+      # Returns an instance of PhaseCorrelationPeak2
+      peak = PhaseCorrelation2.getShift(pcm, spA_img, spB_img, nHighestPeaks,
+                                        minOverlap, True, True, exe)
+      # Construct a single PointMatch using the computed best x,y shift
+      shift = peak.getSubpixelShift()  
+      dx = shift.getFloatPosition(0)
+      dy = shift.getFloatPosition(1)
+      if 0.0 == dx and 0.0 == dy:
+        # The shift can't be zero
+        # Fall back to SIFT
+        syncPrintQ("shift is zero, fall back to SIFT")
+        mode = "SIFT"
+      else:
+        pointmatches = ArrayList()
+        pointmatches.add(PointMatch(Point([0.0, 0.0]), Point([dx, dy])))
+    except Exception, e:
+      # No peaks found
+      syncPrintQ("No peaks found, fallback to SIFT")
+      printException()
+      mode = "SIFT"
+    finally:
+      exe.shutdown()
+
+  model = TranslationModel2D() # suffices locally
+  
+  if "SIFT" == mode:
+    syncPrintQ("PointMatches by SIFT")
+    features0 = getFeatures(sp0, roi0, paramsSIFT)
+    features1 = getFeatures(sp1, roi1, paramsSIFT)
+    pointmatches = FloatArray2DSIFT.createMatches(features0,
+                                                  features1,
+                                                  params.get("max_sd", 1.5), # max_sd: maximal difference in size (ratio max/min)
+                                                  model,
+                                                  params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
+                                                  params.get("rod", 0.9)) # rod: ratio of best vs second best
+  if 0 == pointmatches.size():
+    return pointmatches
+
+  # Filter matches by geometric consensus
+  inliers = ArrayList()
+  iterations = paramsRANSAC.get("iterations", 1000)
+  maxEpsilon = paramsRANSAC.get("maxEpsilon", 25) # pixels
+  minInlierRatio = paramsRANSAC.get("minInlierRatio", 0.01) # 1%
+  modelFound = model.filterRansac(pointmatches, inliers, iterations, maxEpsilon, minInlierRatio)
+  if modelFound:
+    syncPrintQ("Found model with %i inliers" % inliers.size())
+    pointmatches = inliers
+  else:
+    syncPrintQ("model NOT FOUND")
+    return ArrayList() # empty
+  
+  # Correct pointmatches position: roi0 is on the right or the bottom of the image
+  bounds = roi0.getBounds()
+  x0 = bounds.x
+  y0 = bounds.y
+  for pm in pointmatches:
+    # Correct points on left image for ROI being on its right margin
+    p1 = pm.getP1()
+    l1 = p1.getL()
+    l1[0] += x0
+    l1[1] += y0
+    #w1 = p1.getW()
+    #w1[0] += x0
+    #w1[1] += y0
+    # Correcting for the ~60 to ~100 px on the left margin that are non-linearly deformed
+    p2 = pm.getP2()
+    l2 = p2.getL()
+    l2[0] += offset
+    #w2 = p2.getW()
+    #w2[0] += offset
+  #
+  return pointmatches
+
+
+def loadShortProcessors(tilePaths):
+  for filepath in tilePaths:
+    syncPrintQ("#%s#" % filepath)
+  # Load images
+  return [readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor() for filepath in tilePaths]
+  
+def yieldShortProcessors(tilePaths, reverse=False):
+  ls = tilePaths if not reverse else reversed(tilePaths)
+  for filepath in ls:
+    syncPrintQ("#%s#" % filepath)
+    yield readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
+
+
 # TODO: generalise to NxM montages and even arbitrary montages
 
 class MontageSlice2x2(Callable):
@@ -68,131 +209,10 @@ class MontageSlice2x2(Callable):
       "maxIterations": 1000, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
       "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
     }
-    
-  def getFeatures(self, sp, roi, debug=False):
-    sp.setRoi(roi)
-    sp = sp.crop()
-    paramsSIFT = self.paramsSIFT.clone()
-    paramsSIFT.minOctaveSize = min(sp.getWidth(), sp.getHeight())
-    paramsSIFT.maxOctaveSize = max(sp.getWidth(), sp.getHeight())
-    ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
-    features = ArrayList() # of Feature instances
-    ijSIFT.extractFeatures(sp, features)
-    
-    if debug:
-      ip = sp.duplicate()
-      proi = PointRoi()
-      for p in features:
-        proi.addPoint(p.location[0], p.location[1])
-      imp = ImagePlus("", ip)
-      imp.setRoi(proi)
-      imp.show()
-    
-    return features
-    
-  def getPointMatches(self, sp0, roi0, sp1, roi1, offset, mode="SIFT"):
-    """
-    Start off with PhaseCorrelation, fall back to SIFT if needed.
-    Or start right away with SIFT when mode="SIFT"
-    """
-    # Ignoring PhaseCorrelation for now
-    if "PhaseCorrelation" == mode:
-      sp0.setRoi(roi0)
-      spA = sp0.crop()
-      sp1.setRoi(roi1)
-      spB = sp1.crop()
-      spA_img = ArrayImgs.unsignedShorts(spA.getPixels(), spA.getWidth(), spA.getHeight())
-      spB_img = ArrayImgs.unsignedShorts(spB.getPixels(), spB.getWidth(), spB.getHeight())
-      # Thread pool
-      exe = newFixedThreadPool(n_threads=1, name="phase-correlation")
-      try:
-        # PCM: phase correlation matrix
-        pcm = PhaseCorrelation2.calculatePCM(spA_img,
-                                             spB_img,
-                                             ArrayImgFactory(FloatType()),
-                                             FloatType(),
-                                             ArrayImgFactory(ComplexFloatType()),
-                                             ComplexFloatType(),
-                                             exe)
-        # Number of phase correlation peaks to check with cross-correlation
-        nHighestPeaks = 10
-        # Minimum image overlap to consider, in pixels
-        minOverlap = min(spA.getWidth(), spA.getHeight()) / 3
-        # Returns an instance of PhaseCorrelationPeak2
-        peak = PhaseCorrelation2.getShift(pcm, spA_img, spB_img, nHighestPeaks,
-                                          minOverlap, True, True, exe)
-        # Construct a single PointMatch using the computed best x,y shift
-        shift = peak.getSubpixelShift()  
-        dx = shift.getFloatPosition(0)
-        dy = shift.getFloatPosition(1)
-        if 0.0 == dx and 0.0 == dy:
-          # The shift can't be zero
-          # Fall back to SIFT
-          syncPrintQ("shift is zero, fall back to SIFT")
-          mode = "SIFT"
-        else:
-          pointmatches = ArrayList()
-          pointmatches.add(PointMatch(Point([0.0, 0.0]), Point([dx, dy])))
-      except Exception, e:
-        # No peaks found
-        syncPrintQ("No peaks found, fallback to SIFT")
-        printException()
-        mode = "SIFT"
-      finally:
-        exe.shutdown()
-
-    model = TranslationModel2D() # suffices locally
-    
-    if "SIFT" == mode:
-      syncPrintQ("PointMatches by SIFT")
-      features0 = self.getFeatures(sp0, roi0)
-      features1 = self.getFeatures(sp1, roi1)
-      pointmatches = FloatArray2DSIFT.createMatches(features0,
-                                                    features1,
-                                                    self.params.get("max_sd", 1.5), # max_sd: maximal difference in size (ratio max/min)
-                                                    model,
-                                                    self.params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
-                                                    self.params.get("rod", 0.9)) # rod: ratio of best vs second best
-    if 0 == pointmatches.size():
-      return pointmatches
-
-    # Filter matches by geometric consensus
-    inliers = ArrayList()
-    iterations = self.paramsRANSAC.get("iterations", 1000)
-    maxEpsilon = self.paramsRANSAC.get("maxEpsilon", 25) # pixels
-    minInlierRatio = self.paramsRANSAC.get("minInlierRatio", 0.01) # 1%
-    modelFound = model.filterRansac(pointmatches, inliers, iterations, maxEpsilon, minInlierRatio)
-    if modelFound:
-      syncPrintQ("Found model with %i inliers" % inliers.size())
-      pointmatches = inliers
-    else:
-      syncPrintQ("model NOT FOUND")
-      return ArrayList() # empty
-    
-    # Correct pointmatches position: roi0 is on the right or the bottom of the image
-    bounds = roi0.getBounds()
-    x0 = bounds.x
-    y0 = bounds.y
-    for pm in pointmatches:
-      # Correct points on left image for ROI being on its right margin
-      p1 = pm.getP1()
-      l1 = p1.getL()
-      l1[0] += x0
-      l1[1] += y0
-      #w1 = p1.getW()
-      #w1[0] += x0
-      #w1[1] += y0
-      # Correcting for the ~60 to ~100 px on the left margin that are non-linearly deformed
-      p2 = pm.getP2()
-      l2 = p2.getL()
-      l2[0] += offset
-      #w2 = p2.getW()
-      #w2[0] += offset
-    #
-    return pointmatches
 
   def connectTiles(self, sps, tiles, i, j, roi0, roi1, offset):
-    pointmatches = self.getPointMatches(sps[i], roi0, sps[j], roi1, offset)
+    pointmatches = getPointMatches(sps[i], roi0, sps[j], roi1, offset,
+                                   self.paramsSIFT, self.paramsRANSAC, self.params)
     if pointmatches.size() > 0:
       tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
       return True
@@ -200,18 +220,6 @@ class MontageSlice2x2(Callable):
     syncPrintQ("Disconnected tile! No pointmatches found for %i vs %i of section %s" % (i, j, self.groupName))
     return False
     
-  def loadShortProcessors(self):
-    for filepath in self.tilePaths:
-      syncPrintQ("#%s#" % filepath)
-    # Load images
-    return [readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor() for filepath in self.tilePaths]
-    
-  def yieldShortProcessors(self, reverse=False):
-    ls = self.tilePaths if not reverse else reversed(self.tilePaths)
-    for filepath in ls:
-      syncPrintQ("#%s#" % filepath)
-      yield readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
-
   def getMatrices(self):
     # For each section to montage, for each image tile,
     # extract features from the appropriate ROI along the overlapping edges
@@ -221,7 +229,7 @@ class MontageSlice2x2(Callable):
     if matrices is not None:
       return matrices
     
-    sps = self.loadShortProcessors()
+    sps = loadShortProcessors(self.tilePaths)
       
     # Assumes images have the same dimensions
     width = sps[0].getWidth()
@@ -290,7 +298,7 @@ class MontageSlice2x2(Callable):
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
     # Start pasting from the end, to bury the bad left edges
-    for sp, matrix in izip(self.yieldShortProcessors(reverse=True), reversed(matrices)):
+    for sp, matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
       spMontage.insert(process(sp, invert=invert, CLAHE_params=CLAHE_params),  # TODO don't process separately, see above
                        int(sdx + matrix[2] + dx + 0.5),
                        int(sdy + matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
@@ -310,7 +318,7 @@ class MontageSlice2x2(Callable):
     spMontage = ShortProcessor(width, height)
     rois = []
     # Start pasting from the end, to bury the bad left edges
-    for sp, matrix in izip(self.yieldShortProcessors(reverse=True), reversed(matrices)):
+    for sp, matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
       x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
       y = int(sdy + matrix[5] + dy + 0.5)
       spMontage.insert(sp, x, y)
@@ -361,6 +369,9 @@ def process(sp, invert=False, CLAHE_params=None):
     blockRadius, n_bins, slope = CLAHE_params
     CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None)
   return sp
+
+
+
 
 
 class SectionLoader(CacheLoader):
