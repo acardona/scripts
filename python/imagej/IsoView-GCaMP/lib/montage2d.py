@@ -272,6 +272,9 @@ def MontageSlice(Callable):
     tiles = {filepath: Tile(TranslationModel2D()) for filepath in self.tilePaths}
     tc.addTiles(tiles.values())
 
+    # Fix top-left tile at 0,0 position
+    tc.fixTile(tiles[self.rows[0][0]])
+
     sps = loadShortProcessors(self.tilePaths, asDict=True)
 
     # Assumes images have the same dimensions
@@ -331,6 +334,7 @@ def MontageSlice(Callable):
       matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
     saveMatrices(self.groupName, matrices, self.csvDir)
     return matrices
+    # TODO: if a tile is disconnected, place it in its default expected location
   
   def call(self):
     return self.getMatrices()
