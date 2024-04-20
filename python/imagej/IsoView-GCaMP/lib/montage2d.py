@@ -164,10 +164,13 @@ def getPointMatches(self, sp0, roi0, sp1, roi1, offset,
   return pointmatches
 
 
-def loadShortProcessors(tilePaths):
+def loadShortProcessors(tilePaths, asDict=False):
   for filepath in tilePaths:
     syncPrintQ("#%s#" % filepath)
   # Load images
+  if asDict:
+    return {filepath: readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
+            for filepath in tilePaths}
   return [readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor() for filepath in tilePaths]
   
 def yieldShortProcessors(tilePaths, reverse=False):
@@ -177,20 +180,46 @@ def yieldShortProcessors(tilePaths, reverse=False):
     yield readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
 
 
-# TODO: generalise to NxM montages and even arbitrary montages
+def processTo8bit(sp, invert=False, CLAHE_params=None):
+  """ WARNING will alter sp. """
+  # Find min and max of the image yet to be inverted
+  sp.findMinAndMax()
+  maximum = sp.getMax() # even though this is really the min, 16-bit images get inverted within their display range
+                        # so after .invert() this will be the max.
+                        # If it was done after .invert(), the black border would be 65535 and that max is the wrong one.
+  # First invert
+  if invert:
+    sp.invert()
+  # Second determine and set display range
+  #sp.findMinAndMax()
+  sp.setMinAndMax(0, maximum)
+  # Third convert to 8-bit
+  bp = sp.convertToByte(True) # sets the display range into stone
+  sp = None
+  # Fourth run CLAHE (runs equally well on 16-bit as on 8-bit, within +1/-1 difference in pixel values)
+  if CLAHE_params:
+    blockRadius, n_bins, slope = CLAHE_params
+    CLAHE.run(ImagePlus("", bp), blockRadius, n_bins, slope, None)
+  return bp
 
-class MontageSlice2x2(Callable):
+
+
+def process(sp, invert=False, CLAHE_params=None):
+  if invert:
+    sp.invert()
+  if CLAHE_params:
+    blockRadius, n_bins, slope = CLAHE_params
+    CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None)
+  return sp
+
+
+
+def MontageSlice(Callable):
   def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir):
     """
-    groupName:
-    tilePaths:
-    overlap: the amount of pixels that two adjacent tiles should share
-    offset: how many pixels to ignore starting from x=0, given that the left edge of a FIBSEM image is non-linearly stretched and with low signal to noise.
-    paramsSIFT:
-    paramsRANSAC:
-    csvDir: where to store the CSV files, one per montage
+    Generic montager, reads out i,j position from the file name.
     """
-    # EXPECTS 4 filepaths with filenames ending in ["_0-0-0.dat", "_0-0-1.dat", "_0-1-0.dat", "_0-1-1.dat"]
+    # EXPECTS filepaths with filenames ending in ["_0-0-0.dat", "_0-0-1.dat", "_0-1-0.dat", "_0-1-1.dat" ... ], where the last number indicates the column, and the second-to-last the row.
     # ASSUMES all tiles have the same dimensions
     self.groupName = groupName
     self.tilePaths = list(sorted(tilePaths))
@@ -210,31 +239,45 @@ class MontageSlice2x2(Callable):
       "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
     }
 
-  def connectTiles(self, sps, tiles, i, j, roi0, roi1, offset):
-    pointmatches = getPointMatches(sps[i], roi0, sps[j], roi1, offset,
+    # Determine rows and columns
+    self.rows = defaultdict(defaultdict(str))
+    pattern = re.compile("^\d+-(\d+)-(\d+)\.dat$")
+    for filepath in self.tilePaths:
+      # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
+      i_row, i_col = map(int, re.match(pattern, filepath[filepath.rfind('_')+1:]).groups())
+      rows[i_row][icol] = filepath
+
+
+  def connectTiles(self, filepath1, filepath2, sps, tiles, roi0, roi1, offset):
+    pointmatches = getPointMatches(sps[filepath1], roi0, sps[filepath2], roi1, offset,
                                    self.paramsSIFT, self.paramsRANSAC, self.params)
     if pointmatches.size() > 0:
-      tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
+      tiles[filepath1].connect(tiles[filepath2], pointmatches) # reciprocal connection
       return True
     # Else
-    syncPrintQ("Disconnected tile! No pointmatches found for %i vs %i of section %s" % (i, j, self.groupName))
+    syncPrintQ("No pointmatches found for %s vs %s of section %s" % (filepath1, filepath2, self.groupName))
     return False
-    
+
+
   def getMatrices(self):
-    # For each section to montage, for each image tile,
-    # extract features from the appropriate ROI along the overlapping edges
+    # Extract features from the appropriate ROI along the overlapping edges
     
     # Check if matrices exist already:
     matrices = loadMatrices(self.groupName, self.csvDir)
     if matrices is not None:
       return matrices
-    
-    sps = loadShortProcessors(self.tilePaths)
-      
+
+    # Predefine the tiles
+    tc = TileConfiguration()
+    tiles = {filepath: Tile(TranslationModel2D()) for filepath in self.tilePaths}
+    tc.addTiles(tiles.values())
+
+    sps = loadShortProcessors(self.tilePaths, asDict=True)
+
     # Assumes images have the same dimensions
-    width = sps[0].getWidth()
-    height = sps[1].getHeight()
-    
+    width = sps[self.tilePaths[0]].getWidth()
+    height = sps[self.tilePaths[0]].getHeight()
+
     # Define 4 ROIs: (x, y, width, height)
     # left-right
     roiEast = Roi(width - self.overlap, 0, self.overlap, height) # right edge, for tile 0-0-0  (and 0-1-0)
@@ -242,33 +285,37 @@ class MontageSlice2x2(Callable):
     # top-bottom
     roiSouth = Roi(0, height - self.overlap, width, self.overlap) # bottom edge, for tile 0-0-0  (and 0-0-1)
     roiNorth = Roi(0, 0, width, self.overlap)                     # top edge,    for tile 0-1-0  (and 0-1-1)
-    
-    # Declare tile links
-    tc = TileConfiguration()
-    tiles = [Tile(TranslationModel2D()) for _ in self.tilePaths]
-    tc.addTiles(tiles)
-    # ASSUMES that sps is a list of sorted tiles, as [0-0 top left, 0-1 top right, 1-0 bottom left, 1-1 bottom right]
-    a = self.connectTiles(sps, tiles, 0, 1, roiEast, roiWest, self.offset)
-    b = self.connectTiles(sps, tiles, 2, 3, roiEast, roiWest, self.offset)
-    c = self.connectTiles(sps, tiles, 0, 2, roiSouth, roiNorth, 0)
-    d = self.connectTiles(sps, tiles, 1, 3, roiSouth, roiNorth, 0)
-    tc.fixTile(tiles[0]) # top left tile
-    
-    if not a and not b and not c and not d:
+
+    # Link the tiles by image registration
+    booleans = []
+    for i, row in self.rows.items():
+      for j, filepath2 in row.items():
+        # Link each tile with the tile on its left and on top, if any
+        if i > 0:
+          # Link with tile above
+          filepath1 = self.rows[i-1][j]
+          if not filepath1: # an empty string
+            continue # tile is missing from the montage
+          booleans.append(self.connectTiles(filepath1, filepath2, sps, tiles, roiSouth, roiNorth, 0))
+        if j > 0:
+          # Link with tile to the left
+          filepath1 = self.rows[i][j-1]
+          if not filepath1: # an empty string
+            continue # tile is missing from the montage
+          booleans.append(self.connectTiles(filepath1, filepath2, sps, tiles, roiEast, roiWest, self.offset))
+
+    if not any(booleans):
       syncPrintQ("All tiles failed to connect for section %s " % (self.groupName))
       # TODO: either montage them manually, or try to montage by using cross-section correspondances.
       # Store the expected tile positions given the nominal_overlap
-      matrices = [array([1.0, 0.0, 0.0,
-                         0.0, 1.0, 0.0], 'd'),
-                  array([1.0, 0.0, width - self.nominal_overlap,
-                         0.0, 1.0, 0.0], 'd'),
-                  array([1.0, 0.0, 0.0,
-                         0.0, 1.0, height - self.nominal_overlap], 'd'),
-                  array([1.0, 0.0, width - self.nominal_overlap,
-                         0.0, 1.0, height - self.nominal_overlap], 'd')]
+      matrices = []
+      for i, row in self.rows.items():
+        for j, filepath2 in row.items():
+          matrices.append(array([1.0, 0.0, i * (width - self.nominal_overlap),
+                                 0.0, 1.0, j * (height - self.nominal_overlap)], 'd'))
       saveMatrices(self.groupName, matrices, self.csvDir)
       return matrices
-    
+
     # Optimise tile positions
     maxAllowedError = self.paramsTileConfiguration["maxAllowedError"]
     maxPlateauwidth = self.paramsTileConfiguration["maxPlateauwidth"]
@@ -338,41 +385,6 @@ class MontageSlice2x2(Callable):
     return ArrayImgs.unsignedBytes(bpMontage.getPixels(), width, height)
 
 
-def processTo8bit(sp, invert=False, CLAHE_params=None):
-  """ WARNING will alter sp. """
-  # Find min and max of the image yet to be inverted
-  sp.findMinAndMax()
-  maximum = sp.getMax() # even though this is really the min, 16-bit images get inverted within their display range
-                        # so after .invert() this will be the max.
-                        # If it was done after .invert(), the black border would be 65535 and that max is the wrong one.
-  # First invert
-  if invert:
-    sp.invert()
-  # Second determine and set display range
-  #sp.findMinAndMax()
-  sp.setMinAndMax(0, maximum)
-  # Third convert to 8-bit
-  bp = sp.convertToByte(True) # sets the display range into stone
-  sp = None
-  # Fourth run CLAHE (runs equally well on 16-bit as on 8-bit, within +1/-1 difference in pixel values)
-  if CLAHE_params:
-    blockRadius, n_bins, slope = CLAHE_params
-    CLAHE.run(ImagePlus("", bp), blockRadius, n_bins, slope, None)
-  return bp
-
-
-
-def process(sp, invert=False, CLAHE_params=None):
-  if invert:
-    sp.invert()
-  if CLAHE_params:
-    blockRadius, n_bins, slope = CLAHE_params
-    CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None)
-  return sp
-
-
-
-
 
 class SectionLoader(CacheLoader):
   """
@@ -408,15 +420,15 @@ class SectionLoader(CacheLoader):
     matrix = self.matrices[index] if self.matrices else None
     sdx, sdy = self.section_offsets(index) if self.section_offsets else (0, 0)
     #
-    if 4 == len(tilePaths):
-      m2x2 = MontageSlice2x2(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
+    if len(tilePaths) > 1:
+      montage = MontageSlice(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
                              self.paramsSIFT, self.paramsRANSAC, self.csvDir)
       if self.as8bit:
-        aimg = m2x2.montagedImg8bit(self.dimensions[0], self.dimensions[1],
-                                    matrix, sdx=sdx, sdy=sdy, invert=self.invert, CLAHE_params=self.CLAHE_params)
+        aimg = m.montagedImg8bit(self.dimensions[0], self.dimensions[1],
+                                 matrix, sdx=sdx, sdy=sdy, invert=self.invert, CLAHE_params=self.CLAHE_params)
       else:
-        aimg = m2x2.montagedImg(self.dimensions[0], self.dimensions[1],
-                                matrix, sdx=sdx, sdy=sdy, invert=self.invert, CLAHE_params=self.CLAHE_params)
+        aimg = m.montagedImg(self.dimensions[0], self.dimensions[1],
+                             matrix, sdx=sdx, sdy=sdy, invert=self.invert, CLAHE_params=self.CLAHE_params)
     elif 1 == len(tilePaths):
       imp = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=True)[0]
       if self.as8bit:
@@ -445,11 +457,9 @@ class SectionLoader(CacheLoader):
                 aimg.update(None)) # get the underlying DataAccess
 
 
-def ensureMontages2x2(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, nThreads):
+def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, nThreads):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
-  Each group must consist of 1 tile (no montage needed) or 4 tiles, which are assumed to be placed
-  in a barely overlapping 2 x 2 configuration.
   The overlap between tiles is defined by overlap.
   The offset is for ignoring that many pixels from the left edge, which are artifactually
   non-linearly compressed and stretched in FIBSEM images. 
@@ -457,7 +467,7 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, nominal_overlap, offset, 
   groupNames: a list of names, with the common part of the filename of all tiles in a section.
   tileGroups: a list of lists of tile filenames.
           In other words, these two lists are correlated, and each entry represents a section with 1 or 4 image tiles in it.
-  overlap: the amount of pixels of overlap between two tiles in the 2x2 grid.
+  overlap: the amount of pixels of overlap between two tiles.
   offset: the amount of pixels to ignore from the left edge of an image tile.
   paramsSIFT: for montaging using scale invariant feature transform (SIFT).
   csvDir: where to save the matrix CSV files, one per montage and section.
@@ -469,14 +479,9 @@ def ensureMontages2x2(groupNames, tileGroups, overlap, nominal_overlap, offset, 
 
     # Iterate all sections in order and generate the transformation matrices defining a montage for each section
     for groupName, tilePaths in izip(groupNames, tileGroups):
-      # EXPECTING 2x2 tiles or 1
-      if 4 == len(tilePaths):
+      if len(tilePaths) > 1:
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
-        futures.append(exe.submit(MontageSlice2x2(groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir)))
-      elif 1 == len(tilePaths):
-        pass
-      else:
-        syncPrintQ("UNEXPECTED number of tiles in section named %s: %i" % (groupName, len(tilePaths)))
+        futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir)))
 
     # Await them all
     for future in futures:
