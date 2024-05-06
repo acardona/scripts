@@ -498,7 +498,7 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
 
 def makeMontageGroups(filepaths, to_remove, check):
   """
-  ASSUMES montages are 2x2 or just 1 tile
+  Does not assume anything regarding the number of tiles per montage.
   
   Parameters:
   filepaths: list of all file paths to all image tiles
@@ -514,39 +514,35 @@ def makeMontageGroups(filepaths, to_remove, check):
     sectionName = filename[0:-9]
     groups[sectionName].append(filepath)
 
-  # Ensure tilePaths are sorted, and check there's 1 or 4 tiles per group
+  # Ensure tilePaths are sorted,
   # and check that tiles are of the same dimensions and file size within each section:
   for groupName_, tilePaths_ in groups.iteritems():
     tilePaths_.sort() # in place
-    if 1 == len(tilePaths_) or 4 == len(tilePaths_):
-      if not check:
-        continue
-      # Check that all tiles have the same dimensions and the same file size
-      widths = []
-      heights = []
-      fileSizes = []
-      for tilePath in tilePaths_:
-        try:
-          header = readFIBSEMHeader(tilePath)
-          if header is None:
-            to_remove.add(groupName_)
-            print "HEADER: ", type(header)
-          else:
-            widths.append(header.xRes)
-            heights.append(header.yRes)
-            fileSizes.append(os.stat(tilePath).st_size)
-          #syncPrintQ("tilePath: %s\ndimensions: %i, %i" % (tilePath, header.xRes, header.yRes))
-        except:
-          syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
-        if 1 == len(set(widths)) and 1 == len(set(heights)) and 1 == len(set(fileSizes)):
-          # all tiles are the same
-          pass
-        else:
+    if not check:
+      continue
+    # Check that all tiles have the same dimensions and the same file size
+    widths = []
+    heights = []
+    fileSizes = []
+    for tilePath in tilePaths_:
+      try:
+        header = readFIBSEMHeader(tilePath)
+        if header is None:
           to_remove.add(groupName_)
-          syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n%s\n%s" %(groupName_, "\n".join(map(str, izip(widths, heights)))), copy_to_stdout=True)
-    else:
-      syncPrintQ("WARNING:" + groupName_ + " has " + str(len(tilePaths_)) + " tiles", copy_to_stdout=True)
-      to_remove.add(groupName_)
+          print "HEADER: ", type(header)
+        else:
+          widths.append(header.xRes)
+          heights.append(header.yRes)
+          fileSizes.append(os.stat(tilePath).st_size)
+          #syncPrintQ("tilePath: %s\ndimensions: %i, %i" % (tilePath, header.xRes, header.yRes))
+      except:
+        syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
+      if 1 == len(set(widths)) and 1 == len(set(heights)) and 1 == len(set(fileSizes)):
+        # all tiles are the same
+        pass
+      else:
+        to_remove.add(groupName_)
+        syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n%s\n%s" %(groupName_, "\n".join(map(str, izip(widths, heights)))), copy_to_stdout=True)
 
   for groupName_ in to_remove:
     del groups[groupName_]
