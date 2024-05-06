@@ -529,7 +529,7 @@ def makeMontageGroups(filepaths, to_remove, check):
         header = readFIBSEMHeader(tilePath)
         if header is None:
           to_remove.add(groupName_)
-          print "HEADER: ", type(header)
+          syncPrintQ("%s HEADER: %s" % (groupName_, str(type(header))))
         else:
           widths.append(header.xRes)
           heights.append(header.yRes)
