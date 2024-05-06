@@ -1,4 +1,4 @@
-import os
+import os, re
 
 from util import newFixedThreadPool, syncPrintQ, printException
 from registration import saveMatrices, loadMatrices
@@ -38,7 +38,7 @@ from jarray import zeros, array
 
 
 
-def getFeatures(self, sp, roi, paramsSIFT, debug=False):
+def getFeatures(sp, roi, paramsSIFT, debug=False):
   sp.setRoi(roi)
   sp = sp.crop()
   paramsSIFT = paramsSIFT.clone()
@@ -61,7 +61,7 @@ def getFeatures(self, sp, roi, paramsSIFT, debug=False):
 
 
     
-def getPointMatches(self, sp0, roi0, sp1, roi1, offset,
+def getPointMatches(sp0, roi0, sp1, roi1, offset,
                     paramsSIFT, paramsRANSAC, params, mode="SIFT"):
   """
   Start off with PhaseCorrelation, fall back to SIFT if needed.
@@ -214,7 +214,7 @@ def process(sp, invert=False, CLAHE_params=None):
 
 
 
-def MontageSlice(Callable):
+class MontageSlice(Callable):
   def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir):
     """
     Generic montager, reads out i,j position from the file name.
@@ -240,12 +240,12 @@ def MontageSlice(Callable):
     }
 
     # Determine rows and columns
-    self.rows = defaultdict(defaultdict(str))
+    self.rows = defaultdict(partial(defaultdict, str))
     pattern = re.compile("^\d+-(\d+)-(\d+)\.dat$")
     for filepath in self.tilePaths:
       # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
       i_row, i_col = map(int, re.match(pattern, filepath[filepath.rfind('_')+1:]).groups())
-      rows[i_row][icol] = filepath
+      self.rows[i_row][i_col] = filepath
 
 
   def connectTiles(self, filepath1, filepath2, sps, tiles, roi0, roi1, offset):
@@ -328,7 +328,8 @@ def MontageSlice(Callable):
     
     # Save transformation matrices
     matrices = []
-    for tile in tiles:
+    for filepath in self.tilePaths:
+      tile = tiles[filepath]
       a = zeros(6, 'd')
       tile.getModel().toArray(a)
       matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
