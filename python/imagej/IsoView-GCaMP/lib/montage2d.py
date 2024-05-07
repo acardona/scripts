@@ -1,13 +1,13 @@
 import os, re
 
-from util import newFixedThreadPool, syncPrintQ, printException
-from registration import saveMatrices, loadMatrices
+from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause
+from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
 from lib.ui import wrap, addWindowListener
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
 from java.util import ArrayList
-from java.lang import Double, Exception
+from java.lang import Double, Exception, Throwable
 from java.util.concurrent import Callable
 from ij.process import ShortProcessor, ByteProcessor
 from ij.gui import ShapeRoi, PointRoi, Roi
@@ -309,34 +309,45 @@ class MontageSlice(Callable):
 
     if not any(booleans):
       syncPrintQ("All tiles failed to connect for section %s " % (self.groupName))
-      # TODO: either montage them manually, or try to montage by using cross-section correspondances.
-      # Store the expected tile positions given the nominal_overlap
+      return self.defaultPositions(width, height)
+
+    try:
+      # Optimise tile positions
+      maxAllowedError = self.paramsTileConfiguration["maxAllowedError"]
+      maxPlateauwidth = self.paramsTileConfiguration["maxPlateauwidth"]
+      maxIterations   = self.paramsTileConfiguration["maxIterations"]
+      damp            = self.paramsTileConfiguration["damp"]
+      tc.optimize(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp)
+    
+      # Save transformation matrices
       matrices = []
-      for i, row in self.rows.items():
-        for j, filepath2 in row.items():
-          matrices.append(array([1.0, 0.0, i * (width - self.nominal_overlap),
-                                 0.0, 1.0, j * (height - self.nominal_overlap)], 'd'))
+      for filepath in self.tilePaths:
+        tile = tiles[filepath]
+        a = zeros(6, 'd')
+        tile.getModel().toArray(a)
+        matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
       saveMatrices(self.groupName, matrices, self.csvDir)
       return matrices
+    except NotEnoughDataPointsException as e: # Never catches it because jython wraps exceptions
+      syncPrintQ("Failed to find a model for %s: NotEnoughDataPointsException" % (self.groupName, str(e)))
+    except Throwable as t:
+      printExceptionCause(e=t, printFn=syncPrintQ, msg="Failed to find a model for %s"  % self.groupName)
 
-    # Optimise tile positions
-    maxAllowedError = self.paramsTileConfiguration["maxAllowedError"]
-    maxPlateauwidth = self.paramsTileConfiguration["maxPlateauwidth"]
-    maxIterations   = self.paramsTileConfiguration["maxIterations"]
-    damp            = self.paramsTileConfiguration["damp"]
-    tc.optimize(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp)
-    
-    # Save transformation matrices
+    # Else: either some tiles failed to connect or there was a NotEnoughDataPointsException
+    return defaultPositions(width, height)
+
+  def defaultPositions(self, width, height):
+    # TODO: either montage them manually, or try to montage by using cross-section correspondances.
+    # Return the expected tile positions given the nominal_overlap
     matrices = []
-    for filepath in self.tilePaths:
-      tile = tiles[filepath]
-      a = zeros(6, 'd')
-      tile.getModel().toArray(a)
-      matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
+    for i, row in self.rows.items():
+      for j, filepath2 in row.items():
+        matrices.append(array([1.0, 0.0, i * (width - self.nominal_overlap),
+                               0.0, 1.0, j * (height - self.nominal_overlap)], 'd'))
     saveMatrices(self.groupName, matrices, self.csvDir)
     return matrices
-    # TODO: if a tile is disconnected, place it in its default expected location
-  
+
+
   def call(self):
     return self.getMatrices()
 
