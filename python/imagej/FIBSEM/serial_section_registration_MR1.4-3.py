@@ -11,6 +11,7 @@ from itertools import izip
 from net.imglib2 import FinalInterval
 from net.imglib2.util import Intervals
 from net.imglib2.type.numeric.integer import UnsignedByteType
+from java.lang import Runtime
 from ij.gui import Roi
 
 
@@ -92,7 +93,7 @@ groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check)
 #groupNames = groupNames[2206:-167]
 #tileGroups = tileGroups[2206:-167]
 
-fixed_tile_indices = [11000] # A section in the brain, with 2x1 tiles
+fixed_tile_indices = [11000] # A section in the brain, with 1x2 tiles
 
 # Manual offset for sections with a single tile:
 def sectionOffsets(index): # index is 0-based
@@ -118,7 +119,7 @@ syncPrintQ("Number of sections found valid: %i" % len(groupNames))
 
 
 # How many sections to montage in parallel
-nThreadsMontaging = 200 #128
+nThreadsMontaging = Runtime.getRuntime().availableProcessors() / 2 # e.g., 128. Each montage uses 2 threads
 
 # Montage all sections
 ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, nThreadsMontaging)
@@ -177,6 +178,7 @@ paramsTileConfiguration = {
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
+  "nThreadsOptimizer": Runtime.getRuntime().availableProcessors() # as many as CPU cores
 }
 
 
