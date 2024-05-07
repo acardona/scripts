@@ -238,7 +238,7 @@ class MontageSlice(Callable):
       "maxPlateauwidth": 200, # Like in TrakEM2
       "maxIterations": 1000, # Saalfeld recommends at least 1000
       "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
-      "nThreadsOptimizer": 2 # for the TileUtil.optimizeConcurrent
+      "nThreadsOptimizer": 2 # for the TileUtil.optimizeConcurrently
     }
 
     # Determine rows and columns
@@ -322,7 +322,7 @@ class MontageSlice(Callable):
       damp            = self.paramsTileConfiguration["damp"]
       nThreads        = self.paramsTileConfiguration.get("nThreadsOptimizer", 1)
       #tc.optimize(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp)
-      TileUtil.optimizeConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, tiles.values(), tc.getFixedTiles(), nThreads)
+      TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, tiles.values(), tc.getFixedTiles(), nThreads)
     
       # Save transformation matrices
       matrices = []
