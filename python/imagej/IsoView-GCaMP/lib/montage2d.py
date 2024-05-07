@@ -444,7 +444,7 @@ class SectionLoader(CacheLoader):
     #
     if len(tilePaths) > 1:
       montage = MontageSlice(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
-                             self.paramsSIFT, self.paramsRANSAC, self.csvDir)
+                             self.paramsSIFT, self.paramsRANSAC, self.csvDir, Vector())
       if self.as8bit:
         aimg = m.montagedImg8bit(self.dimensions[0], self.dimensions[1],
                                  matrix, sdx=sdx, sdy=sdy, invert=self.invert, CLAHE_params=self.CLAHE_params)
