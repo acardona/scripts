@@ -18,7 +18,7 @@
 import os, sys, traceback, csv
 from os.path import basename
 from mpicbg.ij.blockmatching import BlockMatching
-from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration
+from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration, TileUtil
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
@@ -464,8 +464,10 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   maxPlateauwidth = paramsTileConfiguration["maxPlateauwidth"]
   maxIterations = paramsTileConfiguration["maxIterations"]
   damp = paramsTileConfiguration["damp"]
-  tc.optimizeSilentlyConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
-                                maxIterations, maxPlateauwidth, damp)
+  nThreads = paramsTileConfiguration.get("nThreadsOptimizer", Runtime.getRuntime().availableProcessors())
+  TileUtil.optimizeConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, tiles, tc.getFixedTiles(), nThreads)
+  #tc.optimizeSilentlyConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
+  #        maxIterations, maxPlateauwidth, damp) # uses as many threads as cores: too many.
 
   # TODO problem: can fail when there are 0 inliers
 
