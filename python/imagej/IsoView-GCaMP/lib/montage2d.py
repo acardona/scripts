@@ -25,7 +25,7 @@ from net.imglib2.view import Views
 from net.imglib2.util import Intervals
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.algorithm.math import ImgMath
-from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, Point, NotEnoughDataPointsException, Tile, TileConfiguration
+from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, Point, NotEnoughDataPointsException, Tile, TileConfiguration, TileUtil
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.imagefeatures import FloatArray2DSIFT
@@ -236,8 +236,9 @@ class MontageSlice(Callable):
     self.paramsTileConfiguration = {
       "maxAllowedError": 0, # Saalfeld recommends 0
       "maxPlateauwidth": 200, # Like in TrakEM2
-      "maxIterations": 1000, # Saalfeld recommends 1000 -- here, 2 iterations (!!) shows the lowest mean and max error for dataset FIBSEM_L1116
+      "maxIterations": 1000, # Saalfeld recommends at least 1000
       "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
+      "nThreadsOptimizer": 2 # for the TileUtil.optimizeConcurrent
     }
 
     # Determine rows and columns
@@ -319,7 +320,9 @@ class MontageSlice(Callable):
       maxPlateauwidth = self.paramsTileConfiguration["maxPlateauwidth"]
       maxIterations   = self.paramsTileConfiguration["maxIterations"]
       damp            = self.paramsTileConfiguration["damp"]
-      tc.optimize(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp)
+      nThreads        = self.paramsTileConfiguration.get("nThreadsOptimizer", 1)
+      #tc.optimize(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp)
+      TileUtil.optimizeConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, tiles.values(), tc.getFixedTiles(), nThreads)
     
       # Save transformation matrices
       matrices = []
