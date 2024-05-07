@@ -50,13 +50,19 @@ def syncPrint(msg):
   
 
 def printException(e=None, printFn=syncPrintQ, msg=""):
-  e = sys.exc_info() if e is None else e
+  e = sys.exc_info() if e is None else e # CAUTION: e may be unsubscriptable, i.e., not an array like provided by sys.exc_info()
   printFn(msg + "".join(traceback.format_exception(e[0], e[1], e[2])))
-  
-def printExceptionCause(e, printFn=syncPrintQ, msg=""):
+ 
+def printExceptionCause(e, printFn=syncPrintQ, msg="", trace=True):
+  """
+  For java Exceptions, largely Throwable instances, that often get wrapped in multiple layers of threading and jython exceptions.
+  """
   while e.getCause():
     e = e.getCause()
-  printException(e=e, printFn=printFn, msg=msg)
+  printFn("%s: %s\n%s\n  %s" % (msg,
+                                type(e).getCanonicalName(),
+                                e.getMessage(),
+                                "\n  ".join(map(str, e.getStackTrace())) if trace else ""))
 
 
 class Getter(Future):
