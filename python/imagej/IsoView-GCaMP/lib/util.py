@@ -49,10 +49,15 @@ def syncPrint(msg):
   print(msg)
   
 
-def printException(e=None, printFn=syncPrintQ):
+def printException(e=None, printFn=syncPrintQ, msg=""):
   e = sys.exc_info() if e is None else e
-  printFn("".join(traceback.format_exception(e[0], e[1], e[2])))
+  printFn(msg + "".join(traceback.format_exception(e[0], e[1], e[2])))
   
+def printExceptionCause(e, printFn=syncPrintQ, msg=""):
+  while e.getCause():
+    e = e.getCause()
+  printException(e=e, printFn=printFn, msg=msg)
+
 
 class Getter(Future):
   """ A simulated Future that is ready to deliver its result.
