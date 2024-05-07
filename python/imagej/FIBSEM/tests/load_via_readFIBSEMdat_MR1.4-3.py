@@ -11,8 +11,8 @@ filepaths = [
   # 1x2:
   #"/net/fibserver1/raw/MR1.4-3/M03/D12/Merlin-WEMS_24-03-12_235936_0-0-0.dat",
   #"/net/fibserver1/raw/MR1.4-3/M03/D12/Merlin-WEMS_24-03-12_235936_0-1-0.dat"
-  "/net/fibserver1/raw/MR1.4-3/M03/D01/Merlin-WEMS_24-03-01_141202_0-0-0.dat',
-  "/net/fibserver1/raw/MR1.4-3/M03/D01/Merlin-WEMS_24-03-01_141202_0-1-0.dat'
+  "/net/fibserver1/raw/MR1.4-3/M03/D01/Merlin-WEMS_24-03-01_141202_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M03/D01/Merlin-WEMS_24-03-01_141202_0-1-0.dat"
 ]
 
 
