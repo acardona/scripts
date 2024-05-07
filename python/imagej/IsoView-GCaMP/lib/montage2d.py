@@ -6,7 +6,7 @@ from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCel
 from lib.ui import wrap, addWindowListener
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
-from java.util import ArrayList
+from java.util import ArrayList, Vector
 from java.lang import Double, Exception, Throwable
 from java.util.concurrent import Callable
 from ij.process import ShortProcessor, ByteProcessor
@@ -215,7 +215,7 @@ def process(sp, invert=False, CLAHE_params=None):
 
 
 class MontageSlice(Callable):
-  def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir):
+  def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, failed):
     """
     Generic montager, reads out i,j position from the file name.
     """
@@ -229,6 +229,7 @@ class MontageSlice(Callable):
     self.paramsSIFT = paramsSIFT
     self.paramsRANSAC = paramsRANSAC
     self.csvDir = csvDir
+    self.failed = failed
     self.params = {"max_sd": 1.5, # max_sd: maximal difference in size (ratio max/min)
                    "max_id": Double.MAX_VALUE, # max_id: maximal distance in image space
                    "rod": 0.9} # rod: ratio of best vs second best
@@ -309,6 +310,7 @@ class MontageSlice(Callable):
 
     if not any(booleans):
       syncPrintQ("All tiles failed to connect for section %s " % (self.groupName))
+      self.failed.add(self.groupName)
       return self.defaultPositions(width, height)
 
     try:
@@ -328,13 +330,17 @@ class MontageSlice(Callable):
         matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
       saveMatrices(self.groupName, matrices, self.csvDir)
       return matrices
-    except NotEnoughDataPointsException as e: # Never catches it because jython wraps exceptions
-      syncPrintQ("Failed to find a model for %s: NotEnoughDataPointsException" % (self.groupName, str(e)))
+    #except NotEnoughDataPointsException as e: # Never catches it because jython wraps exceptions
+    #  syncPrintQ("Failed to find a model for %s: NotEnoughDataPointsException" % (self.groupName, str(e)))
     except Throwable as t:
-      printExceptionCause(e=t, printFn=syncPrintQ, msg="Failed to find a model for %s"  % self.groupName)
+      printExceptionCause(e=t,
+                          printFn=syncPrintQ,
+                          msg="Failed to find a model for %s"  % self.groupName,
+                          trace=False)
 
     # Else: either some tiles failed to connect or there was a NotEnoughDataPointsException
-    return defaultPositions(width, height)
+    self.failed.add(self.groupName)
+    return self.defaultPositions(width, height)
 
   def defaultPositions(self, width, height):
     # TODO: either montage them manually, or try to montage by using cross-section correspondances.
@@ -492,16 +498,21 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
   try:
 
     futures = []
+    failed = Vector() # synchronized access
 
     # Iterate all sections in order and generate the transformation matrices defining a montage for each section
     for groupName, tilePaths in izip(groupNames, tileGroups):
       if len(tilePaths) > 1:
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
-        futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir)))
+        futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, failed)))
 
     # Await them all
     for future in futures:
       future.get()
+
+    # Print failed montages
+    syncPrintQ("Montages that failed:\n%s" % "\n".join(map(str, failed)))
+
   finally:
     exe.shutdown()
 
