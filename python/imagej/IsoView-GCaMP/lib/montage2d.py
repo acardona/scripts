@@ -6,7 +6,7 @@ from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCel
 from lib.ui import wrap, addWindowListener
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
-from java.util import ArrayList, Vector, HashSet
+from java.util import ArrayList, Vector
 from java.lang import Double, Exception, Throwable
 from java.util.concurrent import Callable
 from ij.process import ShortProcessor, ByteProcessor
@@ -322,7 +322,7 @@ class MontageSlice(Callable):
       damp            = self.paramsTileConfiguration["damp"]
       nThreads        = self.paramsTileConfiguration.get("nThreadsOptimizer", 1)
       #tc.optimize(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp)
-      TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles.values()), tc.getFixedTiles(), nThreads)
+      TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, tiles.values(), tc.getFixedTiles(), nThreads)
     
       # Save transformation matrices
       matrices = []
@@ -349,8 +349,8 @@ class MontageSlice(Callable):
     # TODO: either montage them manually, or try to montage by using cross-section correspondances.
     # Return the expected tile positions given the nominal_overlap
     matrices = []
-    for i, row in self.rows.items():
-      for j, filepath2 in row.items():
+    for j, row in self.rows.items():
+      for i, filepath2 in row.items():
         matrices.append(array([1.0, 0.0, i * (width - self.nominal_overlap),
                                0.0, 1.0, j * (height - self.nominal_overlap)], 'd'))
     saveMatrices(self.groupName, matrices, self.csvDir)
