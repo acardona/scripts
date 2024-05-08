@@ -6,7 +6,7 @@ from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCel
 from lib.ui import wrap, addWindowListener
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
-from java.util import ArrayList, Vector
+from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable
 from java.util.concurrent import Callable
 from ij.process import ShortProcessor, ByteProcessor
@@ -322,7 +322,7 @@ class MontageSlice(Callable):
       damp            = self.paramsTileConfiguration["damp"]
       nThreads        = self.paramsTileConfiguration.get("nThreadsOptimizer", 1)
       #tc.optimize(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp)
-      TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, tiles.values(), tc.getFixedTiles(), nThreads)
+      TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles.values()), tc.getFixedTiles(), nThreads)
     
       # Save transformation matrices
       matrices = []

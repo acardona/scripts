@@ -23,7 +23,7 @@ from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
-from java.util import ArrayList
+from java.util import ArrayList, HashSet
 from java.lang import Double, System, Runnable
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.view import Views
@@ -465,7 +465,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   maxIterations = paramsTileConfiguration["maxIterations"]
   damp = paramsTileConfiguration["damp"]
   nThreads = paramsTileConfiguration.get("nThreadsOptimizer", Runtime.getRuntime().availableProcessors())
-  TileUtil.optimizeConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, tiles, tc.getFixedTiles(), nThreads)
+  TileUtil.optimizeConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles), tc.getFixedTiles(), nThreads)
   #tc.optimizeSilentlyConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
   #        maxIterations, maxPlateauwidth, damp) # uses as many threads as cores: too many.
 
