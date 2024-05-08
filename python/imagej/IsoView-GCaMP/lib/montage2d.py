@@ -6,7 +6,7 @@ from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCel
 from lib.ui import wrap, addWindowListener
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
-from java.util import ArrayList, Vector
+from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable
 from java.util.concurrent import Callable
 from ij.process import ShortProcessor, ByteProcessor
@@ -215,7 +215,7 @@ def process(sp, invert=False, CLAHE_params=None):
 
 
 class MontageSlice(Callable):
-  def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, failed):
+  def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed):
     """
     Generic montager, reads out i,j position from the file name.
     """
@@ -233,13 +233,7 @@ class MontageSlice(Callable):
     self.params = {"max_sd": 1.5, # max_sd: maximal difference in size (ratio max/min)
                    "max_id": Double.MAX_VALUE, # max_id: maximal distance in image space
                    "rod": 0.9} # rod: ratio of best vs second best
-    self.paramsTileConfiguration = {
-      "maxAllowedError": 0, # Saalfeld recommends 0
-      "maxPlateauwidth": 200, # Like in TrakEM2
-      "maxIterations": 1000, # Saalfeld recommends at least 1000
-      "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
-      "nThreadsOptimizer": 2 # for the TileUtil.optimizeConcurrently
-    }
+    self.paramsTileConfiguration = paramsTileConfiguration
 
     # Determine rows and columns
     self.rows = defaultdict(partial(defaultdict, str))
@@ -322,7 +316,7 @@ class MontageSlice(Callable):
       damp            = self.paramsTileConfiguration["damp"]
       nThreads        = self.paramsTileConfiguration.get("nThreadsOptimizer", 1)
       #tc.optimize(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp)
-      TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, tiles.values(), tc.getFixedTiles(), nThreads)
+      TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles.values()), tc.getFixedTiles(), nThreads)
     
       # Save transformation matrices
       matrices = []
@@ -416,7 +410,7 @@ class SectionLoader(CacheLoader):
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
   def __init__(self, dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset,
-               paramsSIFT, paramsRANSAC, csvDir,
+               paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir,
                section_offsets=None, # A function that given an index returns a tuple of two integers
                matrices=None, invert=False, CLAHE_params=None, as8bit=False):
     """
@@ -430,6 +424,7 @@ class SectionLoader(CacheLoader):
     self.offset = offset
     self.paramsSIFT = paramsSIFT
     self.paramsRANSAC = paramsRANSAC
+    self.paramsTileConfiguration = paramsTileConfiguration
     self.csvDir = csvDir
     self.as8bit = as8bit
     self.section_offsets = section_offsets
@@ -446,8 +441,9 @@ class SectionLoader(CacheLoader):
     sdx, sdy = self.section_offsets(index) if self.section_offsets else (0, 0)
     #
     if len(tilePaths) > 1:
-      montage = MontageSlice(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
-                             self.paramsSIFT, self.paramsRANSAC, self.csvDir, Vector())
+      m = MontageSlice(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
+                       self.paramsSIFT, self.paramsRANSAC, self.paramsTileConfiguration,
+                       self.csvDir, Vector())
       if self.as8bit:
         aimg = m.montagedImg8bit(self.dimensions[0], self.dimensions[1],
                                  matrix, sdx=sdx, sdy=sdy, invert=self.invert, CLAHE_params=self.CLAHE_params)
@@ -482,7 +478,7 @@ class SectionLoader(CacheLoader):
                 aimg.update(None)) # get the underlying DataAccess
 
 
-def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, nThreads):
+def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, nThreads):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
   The overlap between tiles is defined by overlap.
@@ -507,7 +503,7 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
     for groupName, tilePaths in izip(groupNames, tileGroups):
       if len(tilePaths) > 1:
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
-        futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, failed)))
+        futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed)))
 
     # Await them all
     for future in futures:
@@ -590,7 +586,7 @@ def makeMontageGroups(filepaths, to_remove, check):
 
 
 # Define a virtual CellImg expressing all the montages, one per section
-def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
+def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir,
            show=True, matrices=None, section_offsets=None, invert=False, CLAHE_params=None, title=None, cache_size=64):
   dimensions = [section_width, section_height]
   volume_dimensions = dimensions + [len(groupNames)]
@@ -599,7 +595,7 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
   primitiveType = PrimitiveType.BYTE #.SHORT
   
   volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset,
-                                              paramsSIFT, paramsRANSAC, csvDir,
+                                              paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir,
                                               matrices=matrices,
                                               section_offsets=section_offsets,
                                               invert=invert, CLAHE_params=CLAHE_params,

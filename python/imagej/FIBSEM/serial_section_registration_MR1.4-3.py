@@ -68,6 +68,19 @@ paramsRANSAC = {
    "minInlierRatio": 0.01 # 1%
 }
 
+# For intra-section montages:
+paramsTileConf = {
+  "maxAllowedError": 0, # Saalfeld recommends 0
+  "maxPlateauwidth": 200, # Like in TrakEM2
+  "maxIterations": 1000, # Saalfeld recommends at least 1000
+  "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
+  "nThreadsOptimizer": 3 # for the TileUtil.optimizeConcurrently. 2 seems a priori best when running 128 montages in parallel, but 3 ensures full usage of 256 cores
+}
+
+# How many sections to montage in parallel
+nThreadsMontaging = Runtime.getRuntime().availableProcessors() / 2 # e.g., 128. Each montage uses 2 threads
+
+
 # Find all .dat files, as a sorted list
 filepaths = loadFilePaths(srcDir, ".dat", csvDir, "imagefilepaths")
 
@@ -118,15 +131,12 @@ if check:
 syncPrintQ("Number of sections found valid: %i" % len(groupNames))
 
 
-# How many sections to montage in parallel
-nThreadsMontaging = Runtime.getRuntime().availableProcessors() / 2 # e.g., 128. Each montage uses 2 threads
-
 # Montage all sections
-ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir, nThreadsMontaging)
+ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, csvDir, nThreadsMontaging)
 
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 # NOTE: it's 8-bit
-volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
+volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, csvDir,
                                show=True, matrices=None, section_offsets=sectionOffsets, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
 
 
@@ -136,7 +146,7 @@ volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_he
 
 # Some of these aren't needed here
 properties = {
- 'name': "NC_Hypathia",
+ 'name': "MR1.4-3",
  'img_dimensions': Intervals.dimensionsAsLongArray(volumeImgMontaged),
  'srcDir': srcDir,
  'pixelType': UnsignedByteType,
@@ -173,7 +183,7 @@ paramsSIFT.initialSigma = 1.6 # default 1.6
 
 # Parameters for computing the transformation models
 paramsTileConfiguration = {
-  "n_adjacent": 6, # minimum of 1; Number of adjacent sections to pair up
+  "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends 1000
@@ -190,7 +200,7 @@ matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfigur
 cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
 imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
                                   matricesSIFT,
-                                  rotate="right", # None, "right", "left", or "180"
+                                  rotate=None, # None, "right", "left", or "180"
                                   title_addendum=" SIFT+RANSAC")
 
 # To be determined:
@@ -206,7 +216,7 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
 
 # Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
 # NOTE it's 8-bit !
-#volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
+#volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, csvDir,
 #                                  show=True, matrices=matricesSIFT,
 #                                  section_offsets=sectionOffsets,
 #                                  invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC",
@@ -223,7 +233,7 @@ matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfigura
 
 
 # Show the re-aligned volume
-#volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, csvDir,
+#volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, csvDir,
 #                                show=True,
 #                                section_offsets=sectionOffsets,
 #                                matrices=fuseMatrices(matricesSIFT, matricesBM),
