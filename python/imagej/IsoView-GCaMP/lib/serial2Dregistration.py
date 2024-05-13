@@ -24,7 +24,7 @@ from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList, HashSet
-from java.lang import Double, System, Runnable
+from java.lang import Double, System, Runnable, Runtime
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
