@@ -612,6 +612,11 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
     if title:
       imp.setTitle(title)
     imp.show()
+    # Label each slice with the groupName
+    stack = imp.getStack()
+    for i, groupName in enumerate(groupNames):
+      #syncPrintQ("%i: %s" % (i, groupName))
+      stack.setSliceLabel(groupName, i+1) # 1-based
   
   return volumeImg
 
