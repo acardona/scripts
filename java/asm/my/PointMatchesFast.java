@@ -3,12 +3,17 @@ package my;
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
 import my.ConstellationFast;
+import my.ParsePointMatchFunction;
 import net.imglib2.RealPoint;
 import net.imglib2.KDTree;
 import net.imglib2.neighborsearch.RadiusNeighborSearchOnKDTree;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.stream.Collectors;
+import java.io.IOException;
 
 public final class PointMatchesFast
 {
@@ -105,6 +110,15 @@ public final class PointMatchesFast
 			for (int i=0; i<n; ++i) d2[i] = Double.parseDouble(row.get(n+i));
 			pointmatches.add(new PointMatch(new Point(d1), new Point(d2)));
 		}
+		return new PointMatchesFast(pointmatches);
+	}
+
+	static public final PointMatchesFast fromPath(final String path) throws IOException
+	{
+		final List<PointMatch> pointmatches = Files.lines(Paths.get(path))
+			.skip(3) // The header
+			.map(new ParsePointMatchFunction())
+			.collect(Collectors.toList());
 		return new PointMatchesFast(pointmatches);
 	}
 
