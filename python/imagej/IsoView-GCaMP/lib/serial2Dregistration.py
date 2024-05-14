@@ -49,7 +49,7 @@ from java.util.concurrent import Executors, TimeUnit
 # From lib
 from io import lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException
-from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures
+from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures, PointMatches
 from registration import loadMatrices, saveMatrices
 from ui import showStack, wrap, showTable, ExecutorCloser
 from converter import convert2
@@ -398,11 +398,14 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
 
 
 def loadPointMatchesPlus(filepaths, i, j, csvDir, params):
-  return i, j, loadPointMatches(os.path.basename(filepaths[i]),
-                                os.path.basename(filepaths[j]),
-                                csvDir,
-                                params,
-                                verbose=False)
+  #return i, j, loadPointMatches(os.path.basename(filepaths[i]),
+  #                              os.path.basename(filepaths[j]),
+  #                              csvDir,
+  #                              params,
+  #                              verbose=False)
+  # DOES NOT check header params
+  return i, j, PointMatches.fromPath(os.path.join(csvDir, os.path.basename(filepaths[i]) + "." + os.path.basename(filepaths[j]) + ".pointmatches.csv")).pointmatches
+
 
 def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
   for i in xrange(max(1, len(filepaths) - n_adjacent)):
@@ -413,17 +416,19 @@ def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
 def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties, loaderImp=None):
   if properties.get("precompute", True):
     ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties, loaderImp=loaderImp)
+  tiles = [Tile(TranslationModel2D()) for _ in filepaths]
+  syncPrintQ("Loading all pointmatches.")
+  if properties.get("use_SIFT"):
+    params = {"rod": params["rod"]}
   try:
-    tiles = [Tile(TranslationModel2D()) for _ in filepaths]
     # FAILS when running in parallel, for mysterious reasons related to jython internals, perhaps syncPrint fails
-    #w = ParallelTasks("loadPointMatches")
-    #for i, j, pointmatches in w.chunkConsume(properties["n_threads"], loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
-    syncPrintQ("Loading all pointmatches.")
-    if properties.get("use_SIFT"):
-      params = {"rod": params["rod"]}
+    w = ParallelTasks("loadPointMatches")
     last = -1
-    for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
-      i, j, pointmatches = task.call()
+    #for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
+    #  i, j, pointmatches = task.call()
+    for task in w.chunkConsume(properties["n_threads"] * 2,
+                               loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
+      i, j, pointmatches = task
       #syncPrintQ("%i, %i : %i" % (i, j, len(pointmatches)))
       if pointmatches is None or 0 == len(pointmatches):
         syncPrintQ("%i, %i : %i from files:\n%s\n%s" % (i, j, len(pointmatches) if pointmatches else 0, filepaths[i], filepaths[j]))
@@ -434,10 +439,9 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
     syncPrintQ("Finished loading all pointmatches.")
     return tiles
   except Exception as e:
-    print i, j
     print e
   finally:
-    #w.destroy()
+    w.destroy()
     pass
 
 
