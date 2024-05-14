@@ -432,7 +432,9 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
       #syncPrintQ("%i, %i : %i" % (i, j, len(pointmatches)))
       if pointmatches is None or 0 == len(pointmatches):
         syncPrintQ("%i, %i : %i from files:\n%s\n%s" % (i, j, len(pointmatches) if pointmatches else 0, filepaths[i], filepaths[j]))
-      tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
+      else:
+        # Only if there are more than 0 pointmatches!
+        tiles[i].connect(tiles[j], pointmatches) # reciprocal connection
       if 0 == i % 1000 and i != last:
         last = i
         syncPrintQ("Completed loading %i/%i pointmatches" % (i, len(filepaths)))
