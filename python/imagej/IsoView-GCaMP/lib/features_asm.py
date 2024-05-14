@@ -1,6 +1,6 @@
 from org.objectweb.asm import ClassWriter, Opcodes, Label
 from lib.asm import CustomClassLoader
-from java.lang import Double
+from java.lang import Double, Long
 
 
 def createNativeConstellationClass(classloader=None):
@@ -501,8 +501,113 @@ def createNativeConstellationClass(classloader=None):
   return classloader.defineClass("my/ConstellationFast", cw.toByteArray())
 
 
+def createNativeParsePointMatchFunction(classloader=None):
+  # Class my/ParsePointMatchFunction
+  cw = ClassWriter(0)
+  cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER, "my/ParsePointMatchFunction", "Ljava/lang/Object;Ljava/util/function/Function<Ljava/lang/String;Lmpicbg/models/PointMatch;>;", "java/lang/Object", [ "java/util/function/Function" ])
+
+  mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", None, None)
+  mv.visitCode()
+  label0 = Label()
+  mv.visitLabel(label0)
+  mv.visitLineNumber(7, label0)
+  mv.visitVarInsn(Opcodes.ALOAD, 0)
+  mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", False)
+  mv.visitInsn(Opcodes.RETURN)
+  mv.visitMaxs(1, 1)
+  mv.visitEnd()
+  
+  
+  mv = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, "apply", "(Ljava/lang/String;)Lmpicbg/models/PointMatch;", None, None)
+  mv.visitCode()
+  label0 = Label()
+  mv.visitLabel(label0)
+  mv.visitLineNumber(10, label0)
+  mv.visitVarInsn(Opcodes.ALOAD, 1)
+  mv.visitLdcInsn(",")
+  mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/String", "split", "(Ljava/lang/String;)[Ljava/lang/String;", False)
+  mv.visitVarInsn(Opcodes.ASTORE, 2)
+  label1 = Label()
+  mv.visitLabel(label1)
+  mv.visitLineNumber(11, label1)
+  mv.visitTypeInsn(Opcodes.NEW, "mpicbg/models/PointMatch")
+  mv.visitInsn(Opcodes.DUP)
+  mv.visitTypeInsn(Opcodes.NEW, "mpicbg/models/Point")
+  mv.visitInsn(Opcodes.DUP)
+  mv.visitInsn(Opcodes.ICONST_2)
+  mv.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_DOUBLE)
+  mv.visitInsn(Opcodes.DUP)
+  mv.visitInsn(Opcodes.ICONST_0)
+  mv.visitVarInsn(Opcodes.ALOAD, 2)
+  mv.visitInsn(Opcodes.ICONST_0)
+  mv.visitInsn(Opcodes.AALOAD)
+  label2 = Label()
+  mv.visitLabel(label2)
+  mv.visitLineNumber(12, label2)
+  mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Double", "parseDouble", "(Ljava/lang/String;)D", False)
+  mv.visitInsn(Opcodes.DASTORE)
+  mv.visitInsn(Opcodes.DUP)
+  mv.visitInsn(Opcodes.ICONST_1)
+  mv.visitVarInsn(Opcodes.ALOAD, 2)
+  mv.visitInsn(Opcodes.ICONST_1)
+  mv.visitInsn(Opcodes.AALOAD)
+  mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Double", "parseDouble", "(Ljava/lang/String;)D", False)
+  mv.visitInsn(Opcodes.DASTORE)
+  mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "mpicbg/models/Point", "<init>", "([D)V", False)
+  mv.visitTypeInsn(Opcodes.NEW, "mpicbg/models/Point")
+  mv.visitInsn(Opcodes.DUP)
+  mv.visitInsn(Opcodes.ICONST_2)
+  mv.visitIntInsn(Opcodes.NEWARRAY, Opcodes.T_DOUBLE)
+  mv.visitInsn(Opcodes.DUP)
+  mv.visitInsn(Opcodes.ICONST_0)
+  mv.visitVarInsn(Opcodes.ALOAD, 2)
+  mv.visitInsn(Opcodes.ICONST_2)
+  mv.visitInsn(Opcodes.AALOAD)
+  label3 = Label()
+  mv.visitLabel(label3)
+  mv.visitLineNumber(13, label3)
+  mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Double", "parseDouble", "(Ljava/lang/String;)D", False)
+  mv.visitInsn(Opcodes.DASTORE)
+  mv.visitInsn(Opcodes.DUP)
+  mv.visitInsn(Opcodes.ICONST_1)
+  mv.visitVarInsn(Opcodes.ALOAD, 2)
+  mv.visitInsn(Opcodes.ICONST_3)
+  mv.visitInsn(Opcodes.AALOAD)
+  mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Double", "parseDouble", "(Ljava/lang/String;)D", False)
+  mv.visitInsn(Opcodes.DASTORE)
+  mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "mpicbg/models/Point", "<init>", "([D)V", False)
+  mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "mpicbg/models/PointMatch", "<init>", "(Lmpicbg/models/Point;Lmpicbg/models/Point;)V", False)
+  label4 = Label()
+  mv.visitLabel(label4)
+  mv.visitLineNumber(11, label4)
+  mv.visitInsn(Opcodes.ARETURN)
+  mv.visitMaxs(10, 3)
+  mv.visitEnd()
+  
+  
+  mv = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;", None, None)
+  mv.visitCode()
+  label0 = Label()
+  mv.visitLabel(label0)
+  mv.visitLineNumber(7, label0)
+  mv.visitVarInsn(Opcodes.ALOAD, 0)
+  mv.visitVarInsn(Opcodes.ALOAD, 1)
+  mv.visitTypeInsn(Opcodes.CHECKCAST, "java/lang/String")
+  mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "my/ParsePointMatchFunction", "apply", "(Ljava/lang/String;)Lmpicbg/models/PointMatch;", False)
+  mv.visitInsn(Opcodes.ARETURN)
+  mv.visitMaxs(2, 2)
+  mv.visitEnd()
+  
+  cw.visitEnd()
+  
+  if not classloader:
+    classloader = CustomClassLoader()
+  return classloader.defineClass("my/ParsePointMatchFunction", cw.toByteArray())
+
+
+
 def createNativePointMatchesClass(classloader=None):
-	# Class my/PointMatchesFast
+  # Class my/PointMatchesFast
   cw = ClassWriter(0)
   
   cw.visit(52, Opcodes.ACC_PUBLIC + Opcodes.ACC_FINAL + Opcodes.ACC_SUPER, "my/PointMatchesFast", None, "java/lang/Object", None)
@@ -906,6 +1011,48 @@ def createNativePointMatchesClass(classloader=None):
   mv.visitMaxs(7, 7)
   mv.visitEnd()
 
+
+  methodVisitor = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_STATIC, "fromPath", "(Ljava/lang/String;)Lmy/PointMatchesFast;", None, [ "java/io/IOException" ])
+  methodVisitor.visitCode()
+  label0 = Label()
+  methodVisitor.visitLabel(label0)
+  methodVisitor.visitLineNumber(118, label0)
+  methodVisitor.visitVarInsn(Opcodes.ALOAD, 0)
+  methodVisitor.visitInsn(Opcodes.ICONST_0)
+  methodVisitor.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/String")
+  methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "java/nio/file/Paths", "get", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;", False)
+  methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "java/nio/file/Files", "lines", "(Ljava/nio/file/Path;)Ljava/util/stream/Stream;", False)
+  methodVisitor.visitLdcInsn(Long(3))
+  label1 = Label()
+  methodVisitor.visitLabel(label1)
+  methodVisitor.visitLineNumber(119, label1)
+  methodVisitor.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/util/stream/Stream", "skip", "(J)Ljava/util/stream/Stream;", True)
+  methodVisitor.visitTypeInsn(Opcodes.NEW, "my/ParsePointMatchFunction")
+  methodVisitor.visitInsn(Opcodes.DUP)
+  methodVisitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "my/ParsePointMatchFunction", "<init>", "()V", False)
+  label2 = Label()
+  methodVisitor.visitLabel(label2)
+  methodVisitor.visitLineNumber(120, label2)
+  methodVisitor.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/util/stream/Stream", "map", "(Ljava/util/function/Function;)Ljava/util/stream/Stream;", True)
+  label3 = Label()
+  methodVisitor.visitLabel(label3)
+  methodVisitor.visitLineNumber(121, label3)
+  methodVisitor.visitMethodInsn(Opcodes.INVOKESTATIC, "java/util/stream/Collectors", "toList", "()Ljava/util/stream/Collector;", False)
+  methodVisitor.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/util/stream/Stream", "collect", "(Ljava/util/stream/Collector;)Ljava/lang/Object;", True)
+  methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, "java/util/List")
+  methodVisitor.visitVarInsn(Opcodes.ASTORE, 1)
+  label4 = Label()
+  methodVisitor.visitLabel(label4)
+  methodVisitor.visitLineNumber(122, label4)
+  methodVisitor.visitTypeInsn(Opcodes.NEW, "my/PointMatchesFast")
+  methodVisitor.visitInsn(Opcodes.DUP)
+  methodVisitor.visitVarInsn(Opcodes.ALOAD, 1)
+  methodVisitor.visitMethodInsn(Opcodes.INVOKESPECIAL, "my/PointMatchesFast", "<init>", "(Ljava/util/List;)V", False)
+  methodVisitor.visitInsn(Opcodes.ARETURN)
+  methodVisitor.visitMaxs(3, 2)
+  methodVisitor.visitEnd()
+
+
   
   mv = cw.visitMethod(Opcodes.ACC_PUBLIC + Opcodes.ACC_FINAL + Opcodes.ACC_STATIC, "csvHeader", "(Lmpicbg/models/PointMatch;)[Ljava/lang/String;", None, None)
   mv.visitCode()
@@ -1047,5 +1194,6 @@ def createNativePointMatchesClass(classloader=None):
 def initNativeClasses():
   classloader = CustomClassLoader()
   ConstellationFast = createNativeConstellationClass(classloader=classloader)
+  ParsePointMatchFunction = createNativeParsePointMatchFunction(classloader=classloader)
   PointMatchesFast = createNativePointMatchesClass(classloader=classloader)
   return ConstellationFast, PointMatchesFast
