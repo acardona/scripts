@@ -21,6 +21,23 @@ filepaths = [
   #"/net/fibserver1/raw/MR1.4-3/M03/D05/Merlin-WEMS_24-03-05_125417_0-1-0.dat",
   "/net/fibserver1/raw/MR1.4-3/M03/D05/Merlin-WEMS_24-03-05_134004_0-0-0.dat", # fourth of 4 montages that failed
   "/net/fibserver1/raw/MR1.4-3/M03/D05/Merlin-WEMS_24-03-05_134004_0-1-0.dat"
+  #"/net/fibserver1/raw/MR1.4-3/M02/D27/Merlin-WEMS_24-02-27_165658_0-1-0.dat", # truncated
+  #"/net/zstore1/FIBSEM/MR1.4-3/repaired/Merlin-WEMS_24-02-27_165658_0-1-0.dat" # repaired
+  #"/net/fibserver1/raw/MR1.4-3/M03/D01/Merlin-WEMS_24-03-01_171102_0-0-0.dat",
+  #"/net/fibserver1/raw/MR1.4-3/M03/D01/Merlin-WEMS_24-03-01_171102_0-1-0.dat",
+  #"/net/fibserver1/raw/MR1.4-3/M02/D24/Merlin-WEMS_24-02-24_000002_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D24/Merlin-WEMS_24-02-24_000050_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D23/Merlin-WEMS_24-02-23_213034_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D23/Merlin-WEMS_24-02-23_213122_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D23/Merlin-WEMS_24-02-23_213209_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D23/Merlin-WEMS_24-02-23_213256_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D23/Merlin-WEMS_24-02-23_213344_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D23/Merlin-WEMS_24-02-23_213431_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D23/Merlin-WEMS_24-02-23_213519_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D24/Merlin-WEMS_24-02-24_000002_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D24/Merlin-WEMS_24-02-24_000050_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D24/Merlin-WEMS_24-02-24_000137_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D24/Merlin-WEMS_24-02-24_000224_0-0-0.dat",
 ]
 
 
