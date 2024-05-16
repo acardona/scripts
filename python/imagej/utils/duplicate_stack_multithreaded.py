@@ -38,13 +38,13 @@ def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=
 
 imp = IJ.getImage()
 # NC_Hypathia transition from 2x2 tiles to single tile
-copy = duplicateInParallel(imp, range(3490, 3493), n_threads=10, shallow=True)
+#copy = duplicateInParallel(imp, range(3490, 3493), n_threads=10, shallow=True)
 
 #copy = duplicateInParallel(imp, range(3470, 3520), n_threads=50, shallow=True, show=True)
 
 #copy = duplicateInParallel(imp, range(1990, 2010), n_threads=50, shallow=True, show=True)
 
-copy = duplicateInParallel(imp, range(10590, 10610), n_threads=50, shallow=True, show=True)
+#copy = duplicateInParallel(imp, range(10590, 10610), n_threads=50, shallow=True, show=True)
 
 #copy = duplicateInParallel(imp, range(8980, 9000), n_threads=50, shallow=True)
 
@@ -53,6 +53,15 @@ copy = duplicateInParallel(imp, range(10590, 10610), n_threads=50, shallow=True,
 
 #copy = duplicateInParallel(imp, range(8880, 8902), n_threads=50, shallow=True)
 
-copy = duplicateInParallel(imp, range(8700, 9000), n_threads=50, shallow=True)
+#copy = duplicateInParallel(imp, range(8700, 9000), n_threads=50, shallow=True)
 
 #copy = duplicateInParallel(imp, range(11885, 12054), n_threads=50, shallow=True, show=True)
+
+# MR1.4-3
+#copy = duplicateInParallel(imp, range(2725, 2731), n_threads=50, shallow=True, show=True)
+
+copy = duplicateInParallel(imp, range(963, 1000), n_threads=50, shallow=True, show=True)
+
+
+
+
