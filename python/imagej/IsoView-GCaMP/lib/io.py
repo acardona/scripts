@@ -1,18 +1,19 @@
-from java.io import RandomAccessFile
+import operator, sys, os
+from java.io import RandomAccessFile, File, FileInputStream
 from java.io import Serializable, FileOutputStream, ObjectOutputStream, FileInputStream, ObjectInputStream
-from net.imglib2.img.array import ArrayImgs
 from jarray import zeros, array
 from java.nio import ByteBuffer, ByteOrder
 from java.math import BigInteger
 from java.util import Arrays
 from java.lang import System, Long
-from sc.fiji.io import FIBSEM_Reader
-from java.io import File, FileInputStream
-import operator, sys, os
+from sc.fiji.io import FIBSEM_Reader 
 from net.imglib2 import RandomAccessibleInterval, IterableInterval
 from net.imglib2.view import Views
-from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.img import ImgView
+from net.imglib2.img.display.imagej import ImageJFunctions as IL
+from net.imglib2.img.array import ArrayImgs
+from net.imglib2.img.cell import CellGrid, Cell
+from net.imglib2.img.basictypeaccess import AccessFlags, ArrayDataAccessFactory
 from net.imglib2.cache import CacheLoader
 from net.imglib2.realtransform import RealViews
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
@@ -22,13 +23,11 @@ from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.type.logic import BitType
 from net.imglib2.type import PrimitiveType
 from net.imglib2.util import Intervals
-from net.imglib2.img.cell import CellGrid, Cell
-from net.imglib2.img.basictypeaccess import AccessFlags, ArrayDataAccessFactory
 from net.imglib2.cache.ref import SoftRefLoaderCache, BoundedSoftRefLoaderCache
 from net.imglib2.cache.img import CachedCellImg
 from ij.io import FileSaver, ImageReader, FileInfo
 from ij import ImagePlus, IJ
-from ij.process import ShortProcessor
+from ij.process import ShortProcessor, ByteProcessor
 from synchronize import make_synchronized
 from util import syncPrint, syncPrintQ, newFixedThreadPool, printException
 from ui import showStack, showBDV
@@ -297,6 +296,118 @@ def readFIBSEMHeader(filepath):
       fis.close()
       fis = None
   return header
+
+
+def repairTruncatedDAT(goodFilePath, badFilePath, repairedFilePath, header=1024, overwrite=False):
+  # ASSUMES 16-bit pixels
+  if not overwrite and File(repairedFilePath).exists():
+    print "repairTruncatedDAT: target file exists at %s" % repairedFilePath
+    return
+
+  # Copy header and trailer from the good file
+  raGood = RandomAccessFile(goodFilePath, 'r')
+  try:
+    # Find out the number of channels
+    raGood.seek(32)
+    numChannels = raGood.readByte() & 0xff # a single byte as unsigned integer
+    # Parse width and height
+    raGood.seek(100)
+    width = raGood.readInt()
+    raGood.seek(104)
+    height = raGood.readInt()
+    nPixels = width * height * 2 * numChannels  # 16-bit hence x2
+    # Copy header
+    headerBytes = zeros(header, 'b')
+    raGood.seek(0)
+    raGood.read(headerBytes)
+    # Copy trailer
+    goodLength = raGood.length()
+    start_of_trailer = header + nPixels
+    raGood.seek(start_of_trailer)
+    trailerBytes = zeros(goodLength - start_of_trailer, 'b')
+    raGood.read(trailerBytes)
+  finally:
+    raGood.close()
+  
+  # From the bad file, copy as many pixels as there are.
+  # The assumption is that the file writing was truncated, so the header exists (but may be corrupted)
+  # and the pixels array is truncated, and the trailer is not there.
+  raBad = RandomAccessFile(badFilePath, 'r')
+  raRepaired = RandomAccessFile(repairedFilePath, 'rw')
+  try:
+    repairedBytes = zeros(header + nPixels + len(trailerBytes), 'b')
+    System.arraycopy(headerBytes, 0, repairedBytes, 0, header)
+    badLength = File(badFilePath).length()
+    raBad.seek(header)
+    raBad.read(repairedBytes, header, badLength - header)
+    System.arraycopy(trailerBytes, 0, repairedBytes, goodLength - len(trailerBytes), len(trailerBytes)) 
+    raRepaired.write(repairedBytes)
+    raRepaired.getFD().sync() # Ensure file is written to disk
+  finally:
+    raBad.close()
+    raRepaired.close()
+
+
+def blankROIDAT(sourcePath, repairedPath, rois, header=1024, overwrite=False):
+  """
+  ASSUMES the file is smaller than 2 GB and fits in a java byte[] array.
+  sourcePath: file path to the original DAT file.
+  repairedPath: file path to the file to write.
+  rois: a list of lists, each specifying in integers the x,y,width,height ROI to set to zero values.
+  header: defaults to 1024
+  overwrite: defaults to False.
+  """
+  if not overwrite and File(repairedPath).exists():
+    print "blankROIDAT: target file exists at %s" % repairedPath
+    return
+  # Copy header and trailer from the source file
+  raS = RandomAccessFile(sourcePath, 'r')
+  try:
+    # Find out the number of channels
+    raS.seek(32)
+    numChannels = raS.readByte() & 0xff # a single byte as unsigned integer
+    # Parse width and height
+    raS.seek(100)
+    width = raS.readInt()
+    raS.seek(104)
+    height = raS.readInt()
+    nPixels = width * height * 2 * numChannels  # 16-bit hence x2
+    # Copy header
+    headerBytes = zeros(header, 'b')
+    raS.seek(0)
+    raS.read(headerBytes)
+    # Copy pixels
+    raS.seek(1024)
+    pixels = zeros(nPixels, 'b')
+    raS.read(pixels)
+    # Copy trailer
+    sourceLength = raS.length()
+    start_of_trailer = header + nPixels
+    print width, height, sourceLength, nPixels, start_of_trailer
+    raS.seek(start_of_trailer)
+    trailerBytes = zeros(sourceLength - start_of_trailer, 'b')
+    raS.read(trailerBytes)
+  finally:
+    raS.close()
+
+  # Edit the pixels (assumes the file is smaller than 2GB)
+  bp = ByteProcessor(width * 2 * numChannels, height, bytes, None)
+  bp.setValue(0)
+  for roi in rois:
+    bp.setRoi(roi[0], roi[1], roi[2] * 2 * numChannels, roi[3])
+    bp.fill()
+  
+  # Compose a repaired file
+  raRepaired = RandomAccessFile(repairedFilePath, 'rw')
+  try:
+    repairedBytes = zeros(header + nPixels + len(trailerBytes), 'b')
+    System.arraycopy(headerBytes, 0, repairedBytes, 0, header)
+    System.arraycopy(pixels, 0, repairedBytes, header, nPixels)
+    System.arraycopy(trailerBytes, 0, repairedBytes, start_of_trailer, len(trailerBytes))
+    raRepaired.write(repairedBytes)
+    raRepaired.getFD().sync() # Ensure file is written to disk
+  finally:
+    raRepaired.close()
 
 
 
