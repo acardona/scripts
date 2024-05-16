@@ -18,7 +18,7 @@
 import os, sys, traceback, csv
 from os.path import basename
 from mpicbg.ij.blockmatching import BlockMatching
-from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, NotEnoughDataPointsException, Tile, TileConfiguration, TileUtil
+from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, Point, NotEnoughDataPointsException, Tile, TileConfiguration, TileUtil
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
@@ -431,6 +431,10 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
       i, j, pointmatches = task
       #syncPrintQ("%i, %i : %i" % (i, j, len(pointmatches)))
       if pointmatches is None or 0 == len(pointmatches):
+        fn = properties.get("handleNoPointMatchesFn", None)
+        if fn:
+          pointmatches = fn(filepaths, i, j)
+      if pointmatches is None or 0 == len(pointmatches):
         syncPrintQ("%i, %i : %i from files:\n%s\n%s" % (i, j, len(pointmatches) if pointmatches else 0, filepaths[i], filepaths[j]))
       else:
         # Only if there are more than 0 pointmatches!
@@ -445,6 +449,14 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
   finally:
     w.destroy()
     pass
+
+
+def handleNoPointMatches(filepaths, i, j):
+  """
+  Defaults to returning a single correspondance.
+  """
+  syncPrintQ("No pointmatches. Using zero translation for %i, %i" % (i, j))
+  return [PointMatch(Point(zeros(2, 'd')), Point(zeros(2, 'd')))]
 
 
 def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
