@@ -4,7 +4,7 @@ sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths
 from lib.util import syncPrintQ
-from lib.serial2Dregistration import align
+from lib.serial2Dregistration import align, handleNoPointMatches
 from lib.montage2d import ensureMontages, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices, fuseTranslationMatrices
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
@@ -25,6 +25,7 @@ tgtDir = "/net/zstore1/FIBSEM/" + name + "/registration/"
 csvDir = tgtDir + "csv/" # for in-section montaging
 csvDirZ = tgtDir + "csvZ/" # for cross-section alignment with SIFT+RANSAC
 csvDirBM = tgtDir + "csvBM/" # for cross-section alignment with BlockMatching
+repairedDir = "/net/zstore1/FIBSEM/" + name + "/repaired/" # Folder with repaired images, if any
 
 # Ensure tgtDir and csvDir exist
 for csvD in [csvDir, csvDirZ, csvDirBM]:
@@ -74,7 +75,7 @@ paramsTileConf = {
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 1000, # Saalfeld recommends at least 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
-  "nThreadsOptimizer": 3 # for the TileUtil.optimizeConcurrently. 2 seems a priori best when running 128 montages in parallel, but 3 ensures full usage of 256 cores
+  "nThreadsOptimizer": 10 # for the TileUtil.optimizeConcurrently. 2 seems a priori best when running 128 montages in parallel, but 3 ensures full usage of 256 cores
 }
 
 # How many sections to montage in parallel
@@ -87,19 +88,29 @@ filepaths = loadFilePaths(srcDir, ".dat", csvDir, "imagefilepaths")
 
 # Sections known to have problems (found via check = True above)
 to_remove = set([
-"Merlin-WEMS_24-02-27_170732_",
-"Merlin-WEMS_24-03-15_130137_",
-"Merlin-WEMS_24-03-05_062018_",
-"Merlin-WEMS_24-02-27_165658_",
-"Merlin-WEMS_24-03-13_235528_",
-"Merlin-WEMS_24-03-01_171102_",
-"Merlin-WEMS_24-03-10_054103_",
-"Merlin-WEMS_24-02-27_201135_"
+#"Merlin-WEMS_24-02-27_170732_", # added 0-0-0 tile to ignore: truncated, no pixels, only header
+#"Merlin-WEMS_24-03-15_130137_", # repaired truncated
+#"Merlin-WEMS_24-03-05_062018_", # added 0-1-0 tile to ignore
+#"Merlin-WEMS_24-02-27_165658_", # repaired truncated
+#"Merlin-WEMS_24-03-13_235528_", # repaired truncated
+#"Merlin-WEMS_24-03-01_171102_", # no problems found manually with readFIBSEMdat
+#"Merlin-WEMS_24-03-10_054103_", # repaired truncated
+#"Merlin-WEMS_24-02-27_201135_", # repaired truncated
+#"Merlin-WEMS_24-02-23_213519_", # repair truncated, was opening funny with a duplicated bottom
 ])
 
+ignore_images = set([
+ "Merlin-WEMS_24-02-27_170732_0-0-0.dat", # only header, whole image truncated
+ "Merlin-WEMS_24-03-05_062018_0-0-0.dat"  # partial truncation without sample in it, would occlude the 0-1-0 tile
+])
 
 # Sorted group names, one per section
-groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check)
+# TODO create a way to get images from an alternative folder: the repaired folder
+# or to ignore images (e.g., 062018 for 0-0-0)
+groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
+                                           alternative_dir=repairedDir,
+                                           ignore_images=ignore_images,
+                                           writeDir=csvDir)
 
 
 # Don't skip any sections
@@ -158,7 +169,8 @@ properties = {
  'RANSAC_iterations': 1000,
  'RANSAC_maxEpsilon': 25, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
  'RANSAC_minInlierRatio': 0.01,
- 'preload': 64 # 64 sections, matching the export as N5 Z axis
+ 'preload': 64, # 64 sections, matching the export as N5 Z axis
+ 'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
 }
 
 # Parameters for blockmatching
@@ -202,6 +214,8 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
                                   matricesSIFT,
                                   rotate=None, # None, "right", "left", or "180"
                                   title_addendum=" SIFT+RANSAC")
+
+
 
 # To be determined:
 #impSIFT.setRoi(Roi(8, 252, 11992, 12096))
