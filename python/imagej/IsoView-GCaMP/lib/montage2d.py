@@ -1,3 +1,4 @@
+from __future__ import with_statement
 import os, re
 
 from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause
@@ -9,6 +10,7 @@ from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable
 from java.util.concurrent import Callable
+from java.io import File
 from ij.process import ShortProcessor, ByteProcessor
 from ij.gui import ShapeRoi, PointRoi, Roi
 from ij import ImagePlus
@@ -518,13 +520,16 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
 
 
 
-def makeMontageGroups(filepaths, to_remove, check):
+def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_images=set(), writeDir=None):
   """
   Does not assume anything regarding the number of tiles per montage.
   
   Parameters:
   filepaths: list of all file paths to all image tiles
   to_remove: a set of sections to ignore because they have data inconsistency problems like missing tiles or truncated tiles
+  check: whether to check the header and file sizes for issues.
+  alternative_dir: if a file fails to open, try to find it in this directory.
+  ignore_images: a set of image filenames to ignore and leave out of the montages.
   
   Returns groupNames, tileGroups
   """
@@ -536,22 +541,54 @@ def makeMontageGroups(filepaths, to_remove, check):
     sectionName = filename[0:-9]
     groups[sectionName].append(filepath)
 
+  # Find files under alternative_dir
+  alternative_filenames = set()
+  if alternative_dir:
+    alt = File(alternative_dir)
+    if alt.exists() and alt.isDirectory():
+      alternative_filenames = set(alt.list()) # all filenames
+  for af in alternative_filenames:
+      syncPrintQ("Available alternative: %s" % af)
+
   # Ensure tilePaths are sorted,
   # and check that tiles are of the same dimensions and file size within each section:
   for groupName_, tilePaths_ in groups.iteritems():
     tilePaths_.sort() # in place
+
+    # Replace and remove filepaths as needed
+    if alternative_dir or len(ignore_images) > 0:
+      drop = []
+      for i, tilePath in enumerate(tilePaths_):
+        filename = os.path.basename(tilePath)
+        # Check if tilePath is to be ignored and remove it from the group
+        if filename in ignore_images:
+          drop.append(i)
+        # Check if tilePath has to be replaced
+        if filename in alternative_filenames:
+          tilePaths_[i] = os.path.join(alternative_dir, filename)
+          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
+      # Remove from group any tilePath to ignore
+      for i in drop:
+        syncPrintQ("Will ignore image %s" % tilePaths_[i])
+        del tilePaths_[i]
+      # If no tiles left, remove section
+      if 0 == len(tilePaths_):
+        to_remove.add(groupName_)
+
     if not check:
       continue
+
     # Check that all tiles have the same dimensions and the same file size
     widths = []
     heights = []
     fileSizes = []
-    for tilePath in tilePaths_:
+    drop = set()
+    for i, tilePath in enumerate(tilePaths_):
       try:
         header = readFIBSEMHeader(tilePath)
         if header is None:
-          to_remove.add(groupName_)
-          syncPrintQ("%s HEADER: %s" % (groupName_, str(type(header))))
+            drop.add(i)
+            syncPrintQ("%s HEADER: %s" % (groupName_, str(type(header))))
         else:
           widths.append(header.xRes)
           heights.append(header.yRes)
@@ -559,12 +596,17 @@ def makeMontageGroups(filepaths, to_remove, check):
           #syncPrintQ("tilePath: %s\ndimensions: %i, %i" % (tilePath, header.xRes, header.yRes))
       except:
         syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
+        drop.add(i)
       if 1 == len(set(widths)) and 1 == len(set(heights)) and 1 == len(set(fileSizes)):
         # all tiles are the same
         pass
       else:
         to_remove.add(groupName_)
         syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n%s\n%s" %(groupName_, "\n".join(map(str, izip(widths, heights)))), copy_to_stdout=True)
+
+    # If all tiles were removed, then:
+    if len(drop) == len(tilePaths_):
+      to_remove.add(groupName_)
 
   for groupName_ in to_remove:
     del groups[groupName_]
@@ -580,6 +622,12 @@ def makeMontageGroups(filepaths, to_remove, check):
   for groupName in keys:
     groupNames.append(groupName)
     tileGroups.append(groups[groupName])
+
+  if writeDir:
+    path = os.path.join(writeDir, "groupNames")
+    if not os.path.exists(path):
+      with open(path, 'w') as fh:
+        fh.write("\n".join("%s = [%s]" % (groupName, ", ".join(groups[groupName])) for groupName in groupNames))
 
   return groupNames, tileGroups
 
