@@ -455,10 +455,13 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
 
 def handleNoPointMatches(filepaths, i, j):
   """
-  Defaults to returning a single correspondance.
+  Defaults to returning a single pointmatch correspondence, at coordinate 1.0,1.0.
   """
   syncPrintQ("No pointmatches. Using zero translation for %i, %i" % (i, j))
-  return [PointMatch(Point(zeros(2, 'd')), Point(zeros(2, 'd')))]
+  pm = PointMatch(Point(array([1.0, 1.0], 'd')), Point(array([1.0,1.0], 'd')))
+  a = ArrayList()
+  a.add(pm)
+  return a
 
 
 def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
