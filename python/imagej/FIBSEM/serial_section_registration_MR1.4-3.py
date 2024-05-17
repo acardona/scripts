@@ -47,6 +47,9 @@ section_width = 16000 # pixels, after section-wise montaging
 section_height = 16000
 # So a canvas of 256,000,000 pixels: just 256 MB
 
+# Image contrast parameters
+CLAHE_params = [200, 255, 2.0] # blockRadius, n_bins, and slope in stdDevs
+
 # CHECK whether some sections have problems
 # SOME IMAGES fail to open for reading the header with readFIBSEMHeader
 check = False # To be used only the first time that the script is run
@@ -113,17 +116,17 @@ groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
                                            writeDir=csvDir)
 
 
-# Don't skip any sections
-#groupNames = groupNames[2206:-167]
-#tileGroups = tileGroups[2206:-167]
+# Skip sections 1-961: no sample in them, just resin
+groupNames = groupNames[964:]
+tileGroups = tileGroups[964:]
 
 fixed_tile_indices = [7000] # A section in the brain, with 1x2 tiles
 
 # Manual offset for sections with a single tile:
 def sectionOffsets(index): # index is 0-based
   # Must always return a tuple with two integers
-  #if index >= 10598:
-  #  return (4748, 2368)
+  if index >= 0 and index < (2869 - 964 -1): # All single-tile slices, with first 1x2 tiles being Merlin-WEMS_24-02-25_214509_
+    return (1282, 608)
   # TODO any shifts needed? Or correct in a different way after SIFT registration.
   return (0, 0)
 
@@ -148,7 +151,7 @@ ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsS
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 # NOTE: it's 8-bit
 volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, csvDir,
-                               show=True, matrices=None, section_offsets=sectionOffsets, invert=True, CLAHE_params=[200, 255, 3.0], title="Montages")
+                               show=True, matrices=None, section_offsets=sectionOffsets, invert=True, CLAHE_params=CLAHE_params, title="Montages")
 
 
 # Start section registration
@@ -171,6 +174,7 @@ properties = {
  'RANSAC_minInlierRatio': 0.01,
  'preload': 64, # 64 sections, matching the export as N5 Z axis
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
+ 'max_n_pointmatches': 1000, # When loading, keep only a sensible subset
 }
 
 # Parameters for blockmatching
@@ -198,7 +202,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 1000, # Saalfeld recommends 1000
+  "maxIterations": 2000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
   "nThreadsOptimizer": Runtime.getRuntime().availableProcessors() # as many as CPU cores
 }
@@ -218,12 +222,8 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
 
 
 # To be determined:
-#impSIFT.setRoi(Roi(8, 252, 11992, 12096))
+impSIFT.setRoi(Roi(352, 352, 13776, 15408))
 
-
-# From NC_Hypathia volume: Below: blockmatching always looks worse than 6-adjacent SIFT
-# SIFT has under 6 pixel error, whereas blockmatching gets 11.2
-# This is likely because section thickness is large for this volume.
 
 
 """
