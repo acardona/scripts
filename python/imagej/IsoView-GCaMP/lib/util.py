@@ -202,6 +202,9 @@ class ParallelTasks:
       if len(self.futures) > chunk_size:
         while len(self.futures) > 0:
           yield self.futures.pop(0).get()
+    # yield any remaining
+    while len(self.futures) > 0:
+      yield self.futures.pop(0).get()
   def awaitAll(self):
     while len(self.futures) > 0:
       self.futures.pop(0).get()
