@@ -1,23 +1,24 @@
 from time import time
-from net.imglib2.img.display.imagej import ImageJFunctions as IL
-from net.imglib2.view import Views
-from net.imglib2 import FinalInterval
-from net.imglib2.util import ImgUtil
-from bdv.util import BdvFunctions, Bdv
-from ij import ImagePlus, CompositeImage, VirtualStack
-from java.awt.event import KeyAdapter, KeyEvent
 from lib.util import syncPrintQ, printException
 from lib.converter import createConverter, convert
+from net.imglib2 import FinalInterval
 from net.imglib2.img.array import ArrayImgs
-from ij.process import FloatProcessor
+from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.type.numeric.real import FloatType
-from ij import IJ
-from java.lang import Number
+from net.imglib2.util import ImgUtil
+from net.imglib2.view import Views
+from bdv.util import BdvFunctions, Bdv
+from ij import ImagePlus, CompositeImage, VirtualStack
+from ij.process import FloatProcessor
 from java.awt import Dimension
+from java.awt.event import KeyAdapter, KeyEvent, WindowAdapter
+from java.lang import Number, Runtime
 from java.util import Comparator
+from java.util.concurrent import Callable, Future, Executors
 from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
 from javax.swing.table import AbstractTableModel, TableRowSorter
-from java.awt.event import WindowAdapter
+from ij import IJ, ImagePlus, ImageStack
+
 
 
 def wrap(img, title="", n_channels=1):
@@ -329,6 +330,38 @@ def addWindowListener(window, fn, methods=["windowClosed"]):
 
 
 
+class CopyStackSlice(Callable):
+  def __init__(self, stack, slice_index, shallow=False):
+    self.stack = stack
+    self.slice_index = slice_index # 1-based
+    self.shallow = shallow
+  def call(self):
+    ip = self.stack.getProcessor(self.slice_index)
+    return ip if self.shallow else ip.duplicate()
+
+# Duplicate a stack in parallel
+def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=True):
+  """ imp: defaults to None, meaning get the current image.
+      slices: defaults to None, meaning all. Otherwise a list of 1-based indices.
+      n_threads: defaults to 0, meaning as many as possible.
+      shallow: defaults to False, meaning don't share the pixel data.
+  """
+  imp = imp if imp else IJ.getImage()
+  slices = slices if slices else range(1, imp.getNSlices() + 1)
+  stack = imp.getStack()
+  exe = Executors.newFixedThreadPool(n_threads if n_threads > 0 else min(Runtime.getRuntime().availableProcessors(), stack.getSize()))
+  try:
+    stack2 = ImageStack(imp.getWidth(), imp.getHeight())
+    futures = [(i, exe.submit(CopyStackSlice(stack, i, shallow))) for i in slices]
+    for i, fu in futures:
+      label = stack.getSliceLabel(i)
+      stack2.addSlice(label if label else str(i), fu.get())
+    imp = ImagePlus("%s - [%i, %i]" % (imp.getTitle(), slices[0], slices[-1]), stack2)
+    if show:
+      imp.show()
+    return imp
+  finally:
+    exe.shutdown()
 
 
 
