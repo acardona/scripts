@@ -416,3 +416,4 @@ def ensureFeaturesForAll(img_filenames, img_loader, getCalibration, csv_dir, par
   # Wait until all complete
   for f in futures:
     f.get()
+
