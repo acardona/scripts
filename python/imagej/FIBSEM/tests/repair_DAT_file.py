@@ -28,6 +28,8 @@ pairs = [
    "bad" : "M03/D15/Merlin-WEMS_24-03-15_130137_0-1-0.dat"}, # truncated
   {"good": "M02/D23/Merlin-WEMS_24-02-23_213431_0-0-0.dat",
    "bad" : "M02/D23/Merlin-WEMS_24-02-23_213519_0-0-0.dat"}, # truncated
+  {"good": "M02/D24/Merlin-WEMS_24-02-24_015441_0-0-0.dat",
+   "bad" : "M02/D24/Merlin-WEMS_24-02-24_015620_0-0-0.dat"}, # truncated
 ]
 
 # List of images with ROIs to blank out
