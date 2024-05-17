@@ -117,7 +117,7 @@ groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
 #groupNames = groupNames[2206:-167]
 #tileGroups = tileGroups[2206:-167]
 
-fixed_tile_indices = [11000] # A section in the brain, with 1x2 tiles
+fixed_tile_indices = [7000] # A section in the brain, with 1x2 tiles
 
 # Manual offset for sections with a single tile:
 def sectionOffsets(index): # index is 0-based
