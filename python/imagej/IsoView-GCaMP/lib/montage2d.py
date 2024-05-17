@@ -193,15 +193,30 @@ def processTo8bit(sp, invert=False, CLAHE_params=None):
   if invert:
     sp.invert()
   # Second determine and set display range
-  #sp.findMinAndMax()
-  sp.setMinAndMax(0, maximum)
-  # Third convert to 8-bit
-  bp = sp.convertToByte(True) # sets the display range into stone
-  sp = None
-  # Fourth run CLAHE (runs equally well on 16-bit as on 8-bit, within +1/-1 difference in pixel values)
+  # Find first histogram bin that has a count higher than 500
+  h = sp.getHistogram()
+  minimum = 0
+  for i, count in enumerate(h):
+    if 0 == i:
+      continue # ignore zero
+    if count > 500: # TODO hardcoded
+      minimum = i
+      break
+  for i in xrange(maximum -1, 0, -1): # ignore max so "maximum -1" is the first index to consider
+    if h[i] > 1000: # TODO hardcoded
+      maximum = i
+      break
+  #print minimum, maximum
+  # CLAHE runs within the min-max range, so set it first
+  sp.setMinAndMax(minimum, maximum)
+  # Third run CLAHE (runs equally well on 16-bit as on 8-bit, within +1/-1 difference in pixel values)
+  # But running it before the mapping to 8-bit eases a lot the conversion to 8-bit because it spreads the histogram
   if CLAHE_params:
     blockRadius, n_bins, slope = CLAHE_params
-    CLAHE.run(ImagePlus("", bp), blockRadius, n_bins, slope, None)
+    CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None)
+  # Fourth convert to 8-bit
+  bp = sp.convertToByte(True) # sets the display range into stone
+  sp = None
   return bp
 
 
