@@ -17,6 +17,7 @@
 
 import os, sys, traceback, csv
 from os.path import basename
+from operator import itemgetter
 from mpicbg.ij.blockmatching import BlockMatching
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, Point, NotEnoughDataPointsException, Tile, TileConfiguration, TileUtil
 from mpicbg.imagefeatures import FloatArray2DSIFT
@@ -397,20 +398,24 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
     w.destroy()
 
 
-def loadPointMatchesPlus(filepaths, i, j, csvDir, params):
+def loadPointMatchesPlus(filepaths, i, j, csvDir, params, properties):
   #return i, j, loadPointMatches(os.path.basename(filepaths[i]),
   #                              os.path.basename(filepaths[j]),
   #                              csvDir,
   #                              params,
   #                              verbose=False)
   # DOES NOT check header params
-  return i, j, PointMatches.fromPath(os.path.join(csvDir, os.path.basename(filepaths[i]) + "." + os.path.basename(filepaths[j]) + ".pointmatches.csv")).pointmatches
+  pointmatches = PointMatches.fromPath(os.path.join(csvDir, os.path.basename(filepaths[i]) + "." + os.path.basename(filepaths[j]) + ".pointmatches.csv")).pointmatches
+  max_n_pointmatches = properties.get("max_n_pointmatches", 0)
+  if max_n_pointmatches > 0:
+    pointmatches = samplePointMatches(pointmatches, maximum=max_n_pointmatches)
+  return i, j, pointmatches
 
 
-def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
+def loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent, properties):
   for i in xrange(max(1, len(filepaths) - n_adjacent)):
     for inc in xrange(1, min(n_adjacent + 1, len(filepaths))):
-      yield Task(loadPointMatchesPlus, filepaths, i, i + inc, csvDir, params)
+      yield Task(loadPointMatchesPlus, filepaths, i, i + inc, csvDir, params, properties)
 
 # When done, optimize tile pose globally
 def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties, loaderImp=None):
@@ -427,7 +432,7 @@ def makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, n_adjacent, propertie
     #for task in loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent):
     #  i, j, pointmatches = task.call()
     for task in w.chunkConsume(properties["n_threads"] * 2,
-                               loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent)):
+                               loadPointMatchesTasks(filepaths, csvDir, params, n_adjacent, properties)):
       i, j, pointmatches = task
       #syncPrintQ("%i, %i : %i" % (i, j, len(pointmatches)))
       if pointmatches is None or 0 == len(pointmatches):
@@ -902,7 +907,7 @@ def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguratio
   # Same, in parallel:
   w = ParallelTasks("loadPointMatches")
   for i, j, pointmatches in w.chunkConsume(properties["n_threads"],
-                                           loadPointMatchesTasks(filepaths, csvDir, params, paramsTileConfiguration["n_adjacent"])):
+                                           loadPointMatchesTasks(filepaths, csvDir, params, paramsTileConfiguration["n_adjacent"]), properties):
     rows.append([i, j, len(pointmatches)])
     syncPrintQ("Counting pointmatches for sections %i::%i = %i" % (i, j, len(pointmatches)))
   w.awaitAll()
@@ -931,14 +936,27 @@ def qualityControl(filepaths, csvDir, params, properties, paramsTileConfiguratio
 
   return table, frame
  
+
+def samplePointMatches(pointmatches, maximum=1000):
+  """
+  For TranslationModel2D, even just 1 PointMatch suffices, if correct.
+  Reduce collections of PointMatch instances by measuring the Euclidian distance
+  between correspondences P1 and P2, sort them all by that distance,
+  and return the subset (up to maximum pointmatches) around the median distance.
+  """
   
-    
-
-
-
-
-
-
+  if len(pointmatches) < maximum:
+    return pointmatches
+  
+  # Else sort by distance, and pick the middle range of points
+  ls = []
+  for pm in pointmatches:
+    ls.append((Point.squareDistance(pm.getP1(), pm.getP2()), pm))
+  ls.sort(key=itemgetter(0))
+  
+  # Take the middle chunk
+  trim = int((len(ls) - maximum) / 2)
+  return map(itemgetter(1), ls[trim:trim+maximum])
 
 
 
