@@ -488,7 +488,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   maxIterations = paramsTileConfiguration["maxIterations"]
   damp = paramsTileConfiguration["damp"]
   nThreads = paramsTileConfiguration.get("nThreadsOptimizer", Runtime.getRuntime().availableProcessors())
-  TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles), tc.getFixedTiles(), nThreads)
+  TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles), tc.getFixedTiles(), nThreads, True) # True: verbose
   #tc.optimizeSilentlyConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
   #        maxIterations, maxPlateauwidth, damp) # uses as many threads as cores: too many.
 
