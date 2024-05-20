@@ -15,7 +15,10 @@ from ij.process import ShortProcessor, ByteProcessor
 from ij.gui import ShapeRoi, PointRoi, Roi
 from ij import ImagePlus
 from net.imglib2.img.array import ArrayImgs
-from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
+try:
+  from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
+except:
+  print "MISSING: class PhaseCorrelation2, from the BigStitcher update site."
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.type.numeric.complex import ComplexFloatType
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
