@@ -123,12 +123,36 @@ tileGroups = tileGroups[964:]
 fixed_tile_indices = [7000] # A section in the brain, with 1x2 tiles
 
 # Manual offset for sections with a single tile:
-def sectionOffsets(index): # index is 0-based
+def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
   # Must always return a tuple with two integers
   if index >= 0 and index < (2869 - 964 -1): # All single-tile slices, with first 1x2 tiles being Merlin-WEMS_24-02-25_214509_
-    return (1282, 608)
-  # TODO any shifts needed? Or correct in a different way after SIFT registration.
-  return (0, 0)
+    dx = 1282
+    dy = 608
+    if index <= 1057:
+      dy += 248
+    if index <= 1815:
+      dx -= 128
+      dy += 875
+    return (dx, dy)
+  
+  dx = 0
+  dy = 0
+  if index >= 17004:
+    dx += 13 + 1
+    dy + 2 + 1
+  if index >= 17005:
+    dx += -3
+    dy += -6
+  if index >= 17008:
+    dx += -622 + 3
+    dy += 6
+  if index >= 17009:
+    dx += 11
+    dy += -8 -1
+  
+  return (dx, dy)
+
+
 
 
 # DEBUG: print groups
@@ -222,7 +246,7 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
 
 
 # To be determined:
-impSIFT.setRoi(Roi(352, 352, 13776, 15408))
+impSIFT.setRoi(Roi(352, 152, 13776, 15608))
 
 
 
