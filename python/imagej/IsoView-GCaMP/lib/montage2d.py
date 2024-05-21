@@ -185,28 +185,43 @@ def yieldShortProcessors(tilePaths, reverse=False):
     yield readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
 
 
-def processTo8bit(sp, invert=False, CLAHE_params=None):
-  """ WARNING will alter sp. """
+def processTo8bit(sp, params_pixels):
+  """ WARNING will alter sp.
+  
+  sp: the ShortProcessor to process.
+  params_pixels is a dictionary with:
+    invert: whether to invert the image.
+    CLAHE_params: defaults to None, otherwise a list of 3 values: the blockRadius, the number of histogram bins, and the slope. Sensible values are 200, 255, 2.0.
+    contrast: a pair of values defining the thresholds in pixel counts for finding the minimum and the maximum.
+    roi: None, or a function to create a rectangular ROI from an ImageProcessor argument to use for finding the minimum and the maximum.
+  """
   # Find min and max of the image yet to be inverted
   sp.findMinAndMax()
   maximum = sp.getMax() # even though this is really the min, 16-bit images get inverted within their display range
                         # so after .invert() this will be the max.
                         # If it was done after .invert(), the black border would be 65535 and that max is the wrong one.
   # First invert
-  if invert:
+  if params_pixels["invert"]:
     sp.invert()
   # Second determine and set display range
   # Find first histogram bin that has a count higher than 500
-  h = sp.getHistogram()
+  roiFn = params_pixels.get("roiFn", None)
+  if roiFn:
+    sp.setRoi(roiFn(sp))
+  h = sp.getHistogram() # of the whole image or of the ROI only if present
+  if roiFn:
+    sp.resetRoi() # cleanup
+    
   minimum = 0
+  left_count, right_count = params_pixels.get("contrast", (500, 1000))
   for i, count in enumerate(h):
     if 0 == i:
       continue # ignore zero
-    if count > 500: # TODO hardcoded
+    if count > left_count:
       minimum = i
       break
   for i in xrange(maximum -1, 0, -1): # ignore max so "maximum -1" is the first index to consider
-    if h[i] > 1000: # TODO hardcoded
+    if h[i] > right_count:
       maximum = i
       break
   #print minimum, maximum
@@ -214,8 +229,8 @@ def processTo8bit(sp, invert=False, CLAHE_params=None):
   sp.setMinAndMax(minimum, maximum)
   # Third run CLAHE (runs equally well on 16-bit as on 8-bit, within +1/-1 difference in pixel values)
   # But running it before the mapping to 8-bit eases a lot the conversion to 8-bit because it spreads the histogram
-  if CLAHE_params:
-    blockRadius, n_bins, slope = CLAHE_params
+  if params_pixels.get("CLAHE_params", None):
+    blockRadius, n_bins, slope = params_pixels["CLAHE_params"]
     CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None)
   # Fourth convert to 8-bit
   bp = sp.convertToByte(True) # sets the display range into stone
@@ -224,11 +239,11 @@ def processTo8bit(sp, invert=False, CLAHE_params=None):
 
 
 
-def process(sp, invert=False, CLAHE_params=None):
-  if invert:
+def process(sp, params_pixels):
+  if params_pixels("invert"):
     sp.invert()
-  if CLAHE_params:
-    blockRadius, n_bins, slope = CLAHE_params
+  if params_pixels("CLAHE_params"):
+    blockRadius, n_bins, slope = params_pixels("CLAHE_params")
     CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None)
   return sp
 
@@ -374,7 +389,7 @@ class MontageSlice(Callable):
   def call(self):
     return self.getMatrices()
 
-  def montagedImg(self, width, height, section_matrix, sdx=0, sdy=0, invert=False, CLAHE_params=None):
+  def montagedImg(self, width, height, section_matrix, params_pixels, sdx=0, sdy=0):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
@@ -385,7 +400,7 @@ class MontageSlice(Callable):
     spMontage = ShortProcessor(width, height)
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
-      spMontage.insert(process(sp, invert=invert, CLAHE_params=CLAHE_params),  # TODO don't process separately, see above
+      spMontage.insert(process(sp, params_pixels),  # TODO don't process separately, see above
                        int(sdx + matrix[2] + dx + 0.5),
                        int(sdy + matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
     
@@ -393,7 +408,7 @@ class MontageSlice(Callable):
 
 
 
-  def montagedImg8bit(self, width, height, section_matrix, sdx=0, sdy=0, invert=False, CLAHE_params=None):
+  def montagedImg8bit(self, width, height, section_matrix, params_pixels, sdx=0, sdy=0):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
@@ -410,9 +425,9 @@ class MontageSlice(Callable):
       spMontage.insert(sp, x, y)
       rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     sps = None
-    bpMontage = processTo8bit(spMontage, invert=invert, CLAHE_params=CLAHE_params)
+    bpMontage = processTo8bit(spMontage, params_pixels)
     spMontage = None
-    if invert:
+    if params_pixels["invert"]:
       # paint white background as black
       # (Can't invert earlier as the min, max wouldn't match, leading to uneven illumination across tiles)
       sp = ShapeRoi(rois[0])
@@ -430,9 +445,9 @@ class SectionLoader(CacheLoader):
   A CacheLoader where each cell is a section made from loading and transforming multiple tiles or just one tile
   """
   def __init__(self, dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset,
-               paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir,
+               paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, params_pixels,
                section_offsets=None, # A function that given an index returns a tuple of two integers
-               matrices=None, invert=False, CLAHE_params=None, as8bit=False):
+               matrices=None):
     """
     csvDir: the directory specifying the montages, one matrices file per section.
     """
@@ -446,43 +461,44 @@ class SectionLoader(CacheLoader):
     self.paramsRANSAC = paramsRANSAC
     self.paramsTileConfiguration = paramsTileConfiguration
     self.csvDir = csvDir
-    self.as8bit = as8bit
+    self.params_pixels = params_pixels
     self.section_offsets = section_offsets
     self.matrices = matrices # for alignment in Z
     if self.matrices and len(self.groupNames) != len(self.matrices):
       raise Exception("Lengths of groupNames and rows in the matrices file don't match!")
-    self.invert = invert
-    self.CLAHE_params = CLAHE_params
   
   def get(self, index):
     groupName = self.groupNames[index]
     tilePaths = self.tileGroups[index]
     matrix = self.matrices[index] if self.matrices else None
     sdx, sdy = self.section_offsets(index) if self.section_offsets else (0, 0)
+    as8bit = self.params_pixels["as8bit"]
     #
     if len(tilePaths) > 1:
       m = MontageSlice(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
                        self.paramsSIFT, self.paramsRANSAC, self.paramsTileConfiguration,
                        self.csvDir, Vector())
-      if self.as8bit:
+      if as8bit:
         aimg = m.montagedImg8bit(self.dimensions[0], self.dimensions[1],
-                                 matrix, sdx=sdx, sdy=sdy, invert=self.invert, CLAHE_params=self.CLAHE_params)
+                                 matrix, self.params_pixels,
+                                 sdx=sdx, sdy=sdy)
       else:
         aimg = m.montagedImg(self.dimensions[0], self.dimensions[1],
-                             matrix, sdx=sdx, sdy=sdy, invert=self.invert, CLAHE_params=self.CLAHE_params)
+                             matrix, self.params_pixels,
+                             sdx=sdx, sdy=sdy)
     elif 1 == len(tilePaths):
       imp = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=True)[0]
-      if self.as8bit:
-        ipTile = processTo8bit(imp.getProcessor(), invert=self.invert, CLAHE_params=self.CLAHE_params)
+      if as8bit:
+        ipTile = processTo8bit(imp.getProcessor(), self.params_pixels)
         ip = ByteProcessor(self.dimensions[0], self.dimensions[1])
       else:
-        ipTile = imp.getProcessor()
+        ipTile = process(imp.getProcessor(), self.params_pixels)
         ip = ShortProcessor(self.dimensions[0], self.dimensions[1])
       dx, dy = (matrix[2], matrix[5]) if matrix else (0, 0)
       ip.insert(ipTile,
                 int(sdx + dx + 0.5),
                 int(sdy + dy + 0.5))
-      fn = ArrayImgs.unsignedBytes if self.as8bit else ArrayImgs.unsignedShorts
+      fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
       aimg = fn(ip.getPixels(), self.dimensions)
       imp.flush()
       imp = None
@@ -490,7 +506,7 @@ class SectionLoader(CacheLoader):
     else:
       # return empty Cell
       syncPrintQ("WARNING: number of tiles isn't 4 or 1")
-      fn = ArrayImgs.unsignedBytes if self.as8bit else ArrayImgs.unsignedShorts
+      fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
       aimg = fn(self.dimensions) # TODO this should be a constant DataAccess
 
     return Cell(self.dimensions + [1], # cell dimensions
@@ -652,8 +668,9 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
 
 
 # Define a virtual CellImg expressing all the montages, one per section
-def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir,
-           show=True, matrices=None, section_offsets=None, invert=False, CLAHE_params=None, title=None, cache_size=64):
+def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
+               paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, params_pixels,
+               show=True, matrices=None, section_offsets=None, title=None, cache_size=64):
   dimensions = [section_width, section_height]
   volume_dimensions = dimensions + [len(groupNames)]
   cell_dimensions = dimensions + [1]
@@ -661,11 +678,9 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
   primitiveType = PrimitiveType.BYTE #.SHORT
   
   volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset,
-                                              paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir,
+                                              paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, params_pixels,
                                               matrices=matrices,
-                                              section_offsets=section_offsets,
-                                              invert=invert, CLAHE_params=CLAHE_params,
-                                              as8bit=True),
+                                              section_offsets=section_offsets),
                                 volume_dimensions,
                                 cell_dimensions,
                                 pixelType,
