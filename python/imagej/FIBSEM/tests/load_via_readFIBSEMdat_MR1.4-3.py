@@ -40,7 +40,11 @@ filepaths = [
   #"/net/fibserver1/raw/MR1.4-3/M02/D24/Merlin-WEMS_24-02-24_000224_0-0-0.dat",
   #"/net/fibserver1/raw/MR1.4-3/M03/D11/Merlin-WEMS_24-03-11_112605_0-0-0.dat", # section 18000 after removing first 964 
   #"/net/fibserver1/raw/MR1.4-3/M03/D11/Merlin-WEMS_24-03-11_112605_0-1-0.dat",
-  "/net/fibserver1/raw/MR1.4-3/M02/D24/Merlin-WEMS_24-02-24_015620_0-0-0.dat",
+  #"/net/fibserver1/raw/MR1.4-3/M02/D24/Merlin-WEMS_24-02-24_015620_0-0-0.dat",
+  #"/net/fibserver1/raw/MR1.4-3/M03/D02/Merlin-WEMS_24-03-02_124827_0-0-0.dat",
+  #"/net/fibserver1/raw/MR1.4-3/M03/D02/Merlin-WEMS_24-03-02_124827_0-0-0.dat",
+  "/net/fibserver1/raw/MR1.4-3/M02/D28/Merlin-WEMS_24-02-28_074427_0-1-0.dat",  # problematic contrast given lower edge rind of saturated pixels
+  "/net/fibserver1/raw/MR1.4-3/M02/D28/Merlin-WEMS_24-02-28_075740_0-1-0.dat",  # idem
 ]
 
 
