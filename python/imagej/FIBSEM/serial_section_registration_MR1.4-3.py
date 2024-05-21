@@ -48,7 +48,13 @@ section_height = 16000
 # So a canvas of 256,000,000 pixels: just 256 MB
 
 # Image contrast parameters
-CLAHE_params = [200, 255, 2.0] # blockRadius, n_bins, and slope in stdDevs
+params_pixels = {
+  "invert": True,
+  "CLAHE_params": [200, 255, 2.0], # blockRadius, n_bins, and slope in stdDevs
+  "as8bit": True,
+  "contrast": (500, 1000), # thresholds in pixel counts per histogram bin
+  "roiFn": lambda sp: Roi(sp.width / 3, sp.height / 3, 2 * sp.width / 3, 2 * sp.height / 3), # middle 2/3rds to discard edges
+}
 
 # CHECK whether some sections have problems
 # SOME IMAGES fail to open for reading the header with readFIBSEMHeader
@@ -174,8 +180,9 @@ ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsS
 
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 # NOTE: it's 8-bit
-volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, csvDir,
-                               show=True, matrices=None, section_offsets=sectionOffsets, invert=True, CLAHE_params=CLAHE_params, title="Montages")
+volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
+                               paramsSIFT, paramsRANSAC, paramsTileConf, csvDir, params_pixels,
+                               show=True, matrices=None, section_offsets=sectionOffsets, title="Montages")
 
 
 # Start section registration
@@ -244,58 +251,6 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
                                   title_addendum=" SIFT+RANSAC")
 
 
-
 # To be determined:
 impSIFT.setRoi(Roi(352, 152, 13776, 15608))
 
-
-
-"""
-
-# Show the volume aligned by SIFT+RANSAC, inverted and processed with CLAHE:
-# NOTE it's 8-bit !
-#volumeImgAlignedSIFT = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, csvDir,
-#                                  show=True, matrices=matricesSIFT,
-#                                  section_offsets=sectionOffsets,
-#                                  invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC",
-#                                  cache_size=properties["n_threads"] + paramsTileConfiguration["n_adjacent"] + 1) # Cache of SoftReference entries anyway
-
-
-# Further refine the alignment by aligning the SIFT+RANSAC-aligned volume using blockmatching:
-properties["use_SIFT"] = False # Will still fall back to SIFT if blockmatching fails
-properties["n_threads"] = 64 # for scale=0.2 use 128
-paramsTileConfiguration["n_adjacent"] = 3
-matricesBM = align(groupNames, csvDirBM, params, paramsSIFT, paramsTileConfiguration, properties,
-                   loaderImp=makeSliceLoader(groupNames, imgSIFT),
-                   fixed_tile_indices=fixed_tile_indices)
-
-
-# Show the re-aligned volume
-#volumeImgAlignedBM = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, csvDir,
-#                                show=True,
-#                                section_offsets=sectionOffsets,
-#                                matrices=fuseMatrices(matricesSIFT, matricesBM),
-#                                invert=True, CLAHE_params=[100, 255, 3.0], title="SIFT+RANSAC+BlockMatching")
-
-
-# Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment,
-# ready for exporting to N5 (has preloader threads switched on)
-cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
-img, imp = showAlignedImg(imgSIFT, cropInterval, groupNames, properties,
-                          matricesBM,
-                          rotate="180",
-                          title_addendum=" BM")
-
-
-# Also directly from the montages to avoid interpolation of an interpolated image
-img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
-                          fuseTranslationMatrices(matricesSIFT, matricesBM),
-                          rotate="180",
-                          title_addendum=" single interpolation")
-imp.setTitle(imp.getTitle() + )
-
-
-# Roi for cropping when exporting
-# to be determined # imp.setRoi(Roi(432, 480, 24672, 23392))
-
-"""
