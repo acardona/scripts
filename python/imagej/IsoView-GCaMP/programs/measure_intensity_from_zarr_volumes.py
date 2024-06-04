@@ -16,6 +16,7 @@ from java.util.function import Function, BinaryOperator
 from java.util.concurrent import Executors, Callable
 from org.janelia.saalfeldlab.n5.imglib2 import N5Utils
 from org.janelia.saalfeldlab.n5.universe import N5Factory
+from itertools import imap
 
 
 # Number of parallel threads to use:
@@ -159,6 +160,7 @@ def measure(zarrsDir, zarr, dataset, csvDir, resultsDir, rX, rY, rZ, exe, n_thre
   
   # Load 4D lazy CellImg of the ZARR volume
   img4D = load(os.path.join(zarrsDir, zarr), dataset)
+  print img4D
   
   # Open new CSV file for writing the measurements
   with open(os.path.join(resultsDir, name + ".measurements.csv"), 'w') as f:
