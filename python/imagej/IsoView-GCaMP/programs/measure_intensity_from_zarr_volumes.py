@@ -9,6 +9,7 @@ from net.imglib2.roi.geom import GeomMasks
 from net.imglib2.roi import Regions
 from net.imglib2.view import Views
 from net.imglib2.util import Intervals
+from net.imglib2.type.numeric.integer import UnsignedShortType
 from java.lang import Double
 from java.util.stream import StreamSupport
 from java.util.function import Function, BinaryOperator
@@ -21,8 +22,10 @@ from org.janelia.saalfeldlab.n5.universe import N5Factory
 n_threads = 128
 
 # Volumes to measure in:
-zarrsDir = "/ceph.groups/mzlatic.grp/code/LS_analysis/data/Nadine/"
+ceph = "/net/ceph.mzlatic.grp/"
+zarrsDir = ceph + "code/LS_analysis/data/Nadine/"
 dataset = "volumes" # same for each ZARR 4D volume
+pixelType = UnsignedShortType
 zarrs = [
   "a_38042/a_38042_1_20240428_112123/merged_registered.zarr",
   "a_38042/a_38042_2_20240428_145317/merged_registered.zarr",
@@ -45,10 +48,10 @@ zarrs = [
 ]
 
 # Directory with CSV files with 3D coordinates, one for each ZARR volume:
-csvDir = "/home/albert/lab/projects/20240531_Nadine_Randel_fluorescence_measurements/"
+csvDir = "/lmb/home/acardona/lab/projects/20240531_Nadine_Randel_fluorescence_measurements/"
 
 # Directory to write measurement CSV files
-resultsDir = "/home/albert/lab/projects/20240531_Nadine_Randel_fluorescence_measurements/measurements/"
+resultsDir = csvDir + "measurements/"
 
 # Calibration
 pixelWidth = 325.0 # nanometers per pixel
@@ -114,7 +117,7 @@ class Measure(Callable):
     img3D = Views.hyperSlice(self.img4D, 3, self.t)
     # Assumes the ROI is small enough that the sum won't lose accuracy
     measurements = []
-    for roi in rois:
+    for roi in self.rois:
       nucleus = Regions.sample(roi, img3D) # IterableInterval over the voxels of the spheroid
       count = Intervals.numElements(nucleus) # number of pixels
       sumOfVoxels = StreamSupport.stream(nucleus.spliterator(), False).map(GetValue()).reduce(0, DoubleSum())
@@ -144,7 +147,7 @@ def measure(zarrsDir, zarr, dataset, csvDir, resultsDir, rX, rY, rZ, exe, n_thre
   # Find the CSV file with 3D coordinates to measure
   name = zarr[zarr.find('/') + 1 : zarr.rfind('/')]
   csvPath = os.path.join(csvDir, name + ".csv")
-  if not os.path.exists(cscPath):
+  if not os.path.exists(csvPath):
     "Cannot process " + zarr + ": no CSV file with coordinates at " + csvDir
     return
   
@@ -164,7 +167,7 @@ def measure(zarrsDir, zarr, dataset, csvDir, resultsDir, rX, rY, rZ, exe, n_thre
     f.write(", ".join(header))
     f.write("\n")
     futures = []
-    for t, path in xrange(img4D.dimension(3)):
+    for t in xrange(img4D.dimension(3)):
       futures.append(exe.submit(Measure(img4D, t, rois)))
       # Write to the CSV file when twice as many jobs have been submitted than threads
       if len(futures) >= n_threads * 2:
