@@ -53,7 +53,7 @@ params_pixels = {
   "CLAHE_params": [200, 255, 2.0], # blockRadius, n_bins, and slope in stdDevs
   "as8bit": True,
   "contrast": (500, 1000), # thresholds in pixel counts per histogram bin
-  "roiFn": lambda sp: Roi(sp.width / 3, sp.height / 3, 2 * sp.width / 3, 2 * sp.height / 3), # middle 2/3rds to discard edges
+  "roiFn": lambda sp: Roi(sp.width / 6, sp.height / 6, 2 * sp.width / 3, 2 * sp.height / 3), # middle 2/3rds to discard edges
 }
 
 # CHECK whether some sections have problems
