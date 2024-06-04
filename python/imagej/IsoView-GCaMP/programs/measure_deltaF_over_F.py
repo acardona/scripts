@@ -158,7 +158,7 @@ class Measure(Callable):
     img3D = Views.hyperSlice(self.img4D, 3, self.t)
     # Assumes the ROI is small enough that the sum won't lose accuracy
     measurements = []
-    for roi in rois:
+    for roi in self.rois:
       nucleus = Regions.sample(roi, img3D) # IterableInterval over the voxels of the spheroid
       count = Intervals.numElements(nucleus) # number of pixels
       sumOfVoxels = StreamSupport.stream(nucleus.spliterator(), False).map(GetValue()).reduce(0, DoubleSum())
