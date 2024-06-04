@@ -960,8 +960,21 @@ def samplePointMatches(pointmatches, maximum=1000):
 
 
 
-
-
+def computeShifts(groupNames, csvDir, threshold, max_n_pointmatches):
+  """
+  For each groupName,
+  reads the pointmatches file in csvDir with its subsequent section only (ignoring the rest),
+  takes the median subset via samplePointMatches,
+  then computes the translation via fitting a TransformModel2D,
+  determines whether the translation is bigger than threshold,
+  and returns a list of cummulative translations for each section to be used as section shifts.
+  
+  These shifts are useful for re-rendering images prior to re-extracting features,
+  to avoid large shifts that the optimizer would need a lot of iterations to resolve.
+  """
+  
+  # TODO
+  pass
 
 
 
