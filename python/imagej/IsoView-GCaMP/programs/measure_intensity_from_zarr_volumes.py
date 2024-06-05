@@ -10,7 +10,7 @@ from net.imglib2.roi import Regions
 from net.imglib2.view import Views
 from net.imglib2.util import Intervals
 from net.imglib2.type.numeric.integer import UnsignedShortType
-from java.lang import Double
+from java.lang import Double, System
 from java.util.stream import StreamSupport
 from java.util.function import Function, BinaryOperator
 from java.util.concurrent import Executors, Callable
@@ -101,6 +101,20 @@ def parseCSVCoordinates(csvPath):
                      float(row[5])])
   return points
 
+# Adapted from lib.util
+def printExceptionCause(e, msg="", trace=True):
+  """
+  For java Exceptions, largely Throwable instances, that often get wrapped in multiple layers of threading and jython exceptions.
+  """
+  while e.getCause():
+    e = e.getCause()
+  text = "%s: %s\n%s\n  %s" % (msg,
+                               type(e).getCanonicalName(),
+                               e.getMessage(),
+                               "\n  ".join(map(str, e.getStackTrace())) if trace else "")
+  System.out.println(text)
+  print text
+
 # Work around jython limitations: can't use a static method as a Stream Function
 class GetValue(Function):
   apply = pixelType.getDeclaredMethod("get").invoke # 'get' returns a floating-point number
@@ -109,20 +123,26 @@ class DoubleSum(BinaryOperator):
   apply = Double.sum
 
 class Measure(Callable):
-  def __init__(self, img4D, t, rois):
+  def __init__(self, img4D, t, rois, name):
     self.img4D = img4D
     self.t = t
     self.rois = rois
+    self.name = name
   def call(self):
     # Grab the 3D volume at timepoint t
     img3D = Views.hyperSlice(self.img4D, 3, self.t)
+    # Extend: cope with ROIs on the borders of the image
+    img3De = Views.extendZero(img3D)
     # Assumes the ROI is small enough that the sum won't lose accuracy
     measurements = []
     for roi in self.rois:
-      nucleus = Regions.sample(roi, img3D) # IterableInterval over the voxels of the spheroid
-      count = Intervals.numElements(nucleus) # number of pixels
-      sumOfVoxels = StreamSupport.stream(nucleus.spliterator(), False).map(GetValue()).reduce(0, DoubleSum())
-      measurements.append(sumOfVoxels / float(count))
+      try:
+        nucleus = Regions.sample(roi, img3De) # IterableInterval over the voxels of the spheroid
+        count = Intervals.numElements(nucleus) # number of pixels
+        sumOfVoxels = StreamSupport.stream(nucleus.spliterator(), False).map(GetValue()).reduce(0, DoubleSum())
+        measurements.append(sumOfVoxels / float(count))
+      except e:
+        printExceptionCause(e, msg="Failed to measure one roi for time %i of dataset %s" % (self.t, self.name))
     return self.t, measurements
 
 def writeToCSV(f, future):
@@ -151,6 +171,12 @@ def measure(zarrsDir, zarr, dataset, csvDir, resultsDir, rX, rY, rZ, exe, n_thre
   if not os.path.exists(csvPath):
     "Cannot process " + zarr + ": no CSV file with coordinates at " + csvDir
     return
+
+  # Results CSV file
+  resultsCSV = os.path.join(resultsDir, name + ".measurements.csv")
+  if os.path.exists(resultsCSV):
+    print "Results CSV file exists: skipping volume %s" % zarr
+    return
   
   # Parse 3D coordinates from CSV file
   points = parseCSVCoordinates(csvPath) # in pixel coordinates
@@ -163,14 +189,14 @@ def measure(zarrsDir, zarr, dataset, csvDir, resultsDir, rX, rY, rZ, exe, n_thre
   print img4D
   
   # Open new CSV file for writing the measurements
-  with open(os.path.join(resultsDir, name + ".measurements.csv"), 'w') as f:
+  with open(resultsCSV, 'w') as f:
     # Write the header of the CSV file
     header = ["timepoint"] + ['"%f::%f::%f"' % (x,y,z) for (x,y,z) in points] # each point is a 3d list
     f.write(", ".join(header))
     f.write("\n")
     futures = []
     for t in xrange(img4D.dimension(3)):
-      futures.append(exe.submit(Measure(img4D, t, rois)))
+      futures.append(exe.submit(Measure(img4D, t, rois, zarr)))
       # Write to the CSV file when twice as many jobs have been submitted than threads
       if len(futures) >= n_threads * 2:
         # await and write up to n_threads of the presently submitted
