@@ -85,14 +85,14 @@ paths = {int(p[p.rfind('t_')+2:-5]): p for p in timepoint_paths}
 timepoint_paths = [paths[k] for k in sorted(paths.keys())]
 
 # Debug: print the first 1000 timepoints to check sorting order
-for tp in timepoint_paths[0:1000]:
-  print tp
+#for tp in timepoint_paths[0:1000]:
+#  print tp
 
 
 # Copied from lib.io
 class ImageJLoader(CacheLoader):
   def get(self, i):
-    System.out.println(i)
+    #System.out.println(i)
     imgPlanar = self.load(timepoint_paths[i])
     cell_dimensions = [imgPlanar.dimension(i) for i in xrange(imgPlanar.numDimensions())] + [1]
     # Copy to ArrayImg
@@ -154,10 +154,11 @@ class Measure(Callable):
   def call(self):
     # Grab the 3D volume at timepoint t
     img3D = Views.hyperSlice(self.img4D, 3, self.t)
+    img3De = Views.extendZero(img3D) # Will impact averages when measuring outside
     # Assumes the ROI is small enough that the sum won't lose accuracy
     measurements = []
     for roi in rois:
-      nucleus = Regions.sample(roi, img3D) # IterableInterval over the voxels of the spheroid
+      nucleus = Regions.sample(roi, img3De) # IterableInterval over the voxels of the spheroid
       count = Intervals.numElements(nucleus) # number of pixels
       sumOfVoxels = StreamSupport.stream(nucleus.spliterator(), False).map(GetValue()).reduce(0, DoubleSum())
       measurements.append(sumOfVoxels / count)
@@ -172,7 +173,7 @@ def writeToCSV(f, future):
   f.write(", ".join(imap(str, measurements)))
   f.write("\n")
 
-with open(os.path.join(srcCSV, "measurements.csv"), 'w') as f:
+with open(os.path.join(srcCSV, measurements_filename), 'w') as f:
   # Write the header of the CSV file
   header = ["timepoint"] + ['"%f::%f::%f"' % (x,y,z) for (x,y,z) in points] # each point is a 3d list
   f.write(", ".join(header))
