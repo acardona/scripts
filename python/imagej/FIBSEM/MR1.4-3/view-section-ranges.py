@@ -15,13 +15,20 @@ imp = IJ.getImage()
 
 
 ranges = [
+  #(7100, 7112), # top tile has the wrong magnification TODO
   #(16768, 17170), # displacement, may need manual shift
-  (17000, 17020),
+  #(17000, 17020), # displacement, needs manual shift at 17014 (1-based)
   #(21548, 21724), # displacement, may need manual shift: only somas, stems from multiple montage failures. IGNORE
   #(1810, 1825), # displacement, may need manual shift
   # All good (1530, 1623), # displacement between 1030 and 1623, may need manual shift
   #(1030, 1200)
   #(1053, 1061)
+  #(17010, 18000),
+  #(17999, 19000),
+  #(18999, 20000),
+  #(19999, 21000),
+  #(20999, 22000),
+  (17000, 17200),
 ]
 
 for r in ranges:

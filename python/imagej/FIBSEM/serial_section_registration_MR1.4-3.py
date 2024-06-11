@@ -122,9 +122,10 @@ groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
                                            writeDir=csvDir)
 
 
-# Skip sections 1-961: no sample in them, just resin
-groupNames = groupNames[964:]
-tileGroups = tileGroups[964:]
+# Skip sections 1-963: no sample in them, just resin
+# Skip sections beyond 20964: less milling, overstretched, and full of curtains
+groupNames = groupNames[964:20000+964]
+tileGroups = tileGroups[964:20000+964]
 
 fixed_tile_indices = [7000] # A section in the brain, with 1x2 tiles
 
@@ -155,7 +156,30 @@ def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
   if index >= 17009:
     dx += 11
     dy += -8 -1
-  
+  if index >= 17013:
+    dx += 602
+    dx += 0
+  if index >= 18486:
+    dx += 25
+    dy += 8
+  if index >= 18903:
+    dx += 48
+    dy += 18
+  if index >= 19298:
+    dx += 22
+    dy += 0
+  if index >= 19630:
+    dx += 69
+    dy += 30
+  #if index >= 20444:
+  #  dx += 45
+  #  dy += 1
+  #if index >= 20895:
+  #  dx += 52
+  #  dy += -7
+  #if index >= 21497: 
+  #  dx += 61
+  #  dy += 24
   return (dx, dy)
 
 
