@@ -1062,7 +1062,7 @@ def computeShifts(groupNames, csvDir, threshold, params, properties, shifts_file
   These shifts are useful for re-rendering images prior to re-extracting features,
   to avoid large shifts that the optimizer would need a lot of iterations to resolve.
   """
-  with open(os.path.join(csvDir, shifts_filename) as f):
+  with open(os.path.join(csvDir, shifts_filename), 'w') as f:
     for j in xrange(len(groupNames)):
       if 0 == j:
         continue
