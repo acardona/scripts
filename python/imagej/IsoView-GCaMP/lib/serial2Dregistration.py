@@ -45,9 +45,10 @@ from net.imglib2.converter import RealUnsignedByteConverter
 from net.imglib2.loops import LoopBuilder
 from net.imglib2.algorithm.math import ImgMath
 from java.awt.event import KeyAdapter, KeyEvent
+from java.util.concurrent import Executors, TimeUnit
 from jarray import zeros, array
 from functools import partial
-from java.util.concurrent import Executors, TimeUnit
+from collections import defaultdict
 # From lib
 from io import lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException
