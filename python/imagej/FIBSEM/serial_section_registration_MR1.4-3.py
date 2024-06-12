@@ -4,7 +4,7 @@ sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths
 from lib.util import syncPrintQ
-from lib.serial2Dregistration import align, handleNoPointMatches
+from lib.serial2Dregistration import align, handleNoPointMatches, computeShifts
 from lib.montage2d import ensureMontages, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices, fuseTranslationMatrices
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
@@ -263,6 +263,12 @@ paramsTileConfiguration = {
 }
 
 
+# Print all shifts larger than 1 pixel
+threshold = 1.4
+computeShifts(groupNames, csvDirZ, threshold, params, properties, "shifts")
+
+
+"""
 
 matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
                      loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
@@ -278,3 +284,5 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
 # To be determined:
 impSIFT.setRoi(Roi(352, 152, 13776, 15608))
 
+
+"""
