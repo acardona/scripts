@@ -553,7 +553,7 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   for i in xrange(0, len(filepaths) - overlap, overlap): # ASSUMES overlap is larger than len(filepaths)
     start = i
     end = min(start + chunk_size, len(filepaths))
-    fixed = min(overlap, end - start -1)
+    fixed = min(overlap -1, end - start -1) # -1 because it's 0-based.
     print start, end, fixed, overlap
     name_i = "%s_%i-%i" % (name, start, end)
     matrices = loadMatrices(name_i, csvDir)
