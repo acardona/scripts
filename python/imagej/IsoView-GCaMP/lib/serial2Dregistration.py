@@ -540,11 +540,11 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
     
   # Determine fixed tile
   if fixed_tile_index is None:
-    fixed_tile_index = len(filepaths) / 2
+    fixed_tile_index = int(len(filepaths) / 2)
   
   # Compute alignment for overlapping chunks
   chunk_size = paramsTileConfiguration.get("chunk_size", 400)
-  overlap = chunk_size / 2
+  overlap = int(chunk_size / 2)
   
   # Each element is a list of matrices, one for each section in the chunk
   chunks = []
@@ -553,10 +553,14 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   for i in xrange(0, len(filepaths) - overlap, overlap): # ASSUMES overlap is larger than len(filepaths)
     start = i
     end = min(start + chunk_size, len(filepaths))
-    fixed = [min(start + overlap, len(filepaths))]
+    fixed = min(overlap, end - start -1)
+    print start, end, fixed, overlap
     name_i = "%s_%i-%i" % (name, start, end)
     matrices = loadMatrices(name_i, csvDir)
-    if not matrices:
+    if matrices:
+      print "Loaded", name_i
+    else:
+      print "Computing", name_i
       matrices = align(filepaths[start:end], csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
                        loaderImp=loaderImp, fixed_tile_indices=[fixed], io=False, verboseOptimize=True)
     chunks.append(matrices)
