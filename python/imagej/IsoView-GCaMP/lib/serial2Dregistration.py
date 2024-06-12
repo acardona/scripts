@@ -15,6 +15,7 @@
 # 2. Register each section to its adjacent, 2nd adjacent, 3rd adjacent ...
 # 3. Jointly optimize the pose of every section.
 
+from __future__ import with_statement
 import os, sys, traceback, csv
 from os.path import basename
 from operator import itemgetter
@@ -960,7 +961,7 @@ def samplePointMatches(pointmatches, maximum=1000):
 
 
 
-def computeShifts(groupNames, csvDir, threshold, params, properties):
+def computeShifts(groupNames, csvDir, threshold, params, properties, shifts_filename):
   """
   For each groupName,
   reads the pointmatches file in csvDir with its subsequent section only (ignoring the rest),
@@ -972,27 +973,26 @@ def computeShifts(groupNames, csvDir, threshold, params, properties):
   These shifts are useful for re-rendering images prior to re-extracting features,
   to avoid large shifts that the optimizer would need a lot of iterations to resolve.
   """
-  
-  for j in xrange(len(groupNames)):
-    if 0 == j:
-      continue
-    # Load pointmatches
-    i, j, pointmatches = loadPointMatchesPlus(groupNames, j-1, j, csvDir, params, properties):
-    # Compute translation model
-    model = TranslationModel2D()
-    modelFound = model.fit(pointmatches)
-    # Extract translation
-    matrix = zeros('d', )
-    model.toArray(matrix)
-    dx = a[4]
-    dy = a[5]
-    # If larger than 1 pixel in X or Y, consider this a shift
-    if dx > threshold or dy > threshold:
-      syncPrintQ("[%i, %j, %d, %d, '%s.%s']," % (i, j, dx, dy, groupNames[i], groupNames[j]))
-
-
-
-
+  with open(os.path.join(csvDir, shifts_filename) as f):
+    for j in xrange(len(groupNames)):
+      if 0 == j:
+        continue
+      # Load pointmatches
+      i, j, pointmatches = loadPointMatchesPlus(groupNames, j-1, j, csvDir, params, properties)
+      # Compute translation model
+      model = TranslationModel2D()
+      modelFound = model.fit(pointmatches)
+      # Extract translation
+      matrix = zeros(6, 'd')
+      model.toArray(matrix)
+      dx = matrix[4]
+      dy = matrix[5]
+      # If larger than 1 pixel in X or Y, consider this a shift
+      if dx > threshold or dy > threshold:
+        s = "[%i, %i, %.1f, %.1f, '%s.%s']," % (i, j, dx, dy, groupNames[i], groupNames[j])
+        syncPrintQ(s)
+        f.write(s)
+        f.write('\n')
 
 
 
