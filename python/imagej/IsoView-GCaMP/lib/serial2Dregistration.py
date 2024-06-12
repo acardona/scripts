@@ -471,13 +471,15 @@ def handleNoPointMatches(filepaths, i, j):
 
 
 def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-          loaderImp=None, fixed_tile_indices=None):
+          loaderImp=None, fixed_tile_indices=None, io=True):
   if not os.path.exists(csvDir):
     os.makedirs(csvDir) # recursively
   name = "matrices"
-  matrices = loadMatrices(name, csvDir)
-  if matrices:
-    return matrices
+  
+  if io:
+    matrices = loadMatrices(name, csvDir)
+    if matrices:
+      return matrices
   
   # Optimize
   tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties, loaderImp=loaderImp)
@@ -512,6 +514,86 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
     tile.getModel().toArray(a)
     matrices.append(array([a[0], a[2], a[4], a[1], a[3], a[5]], 'd'))
 
+  if io:
+    saveMatrices(name, matrices, csvDir)
+  
+  return matrices
+  
+  
+def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+                  loaderImp=None, fixed_tile_index=None):
+  """
+  Align overlapping chunks of serial sections independently, and then interpolate the alignments.
+  This approach helps the optimizer do a good job and fast.
+  The size of the chunks should be small, like 400, and the overlap between consecutive chunks should be 50%.
+  Needs only one fixed section (tile) for the overall; when aligning each chunk, the middle tile is kept fixed.
+  """
+  if not os.path.exists(csvDir):
+    os.makedirs(csvDir) # recursively
+  name = "matrices"
+  matrices = loadMatrices(name, csvDir)
+  if matrices:
+    return matrices
+    
+  # Determine fixed tile
+  if fixed_tile_index is None:
+    fixed_tile_index = len(filepaths) / 2
+  
+  # Compute alignment for overlapping chunks
+  chunk_size = paramsTileConfiguration.get("chunk_size", 400)
+  overlap = chunk_size / 2
+  
+  # Each element is a list of matrices, one for each section in the chunk
+  chunks = []
+  
+  # The last overlap shouldn't be created, since it's half the size as chunk_size, so subtract overlap from len(filepaths)
+  for i in xrange(0, len(filepaths) - overlap, overlap): # ASSUMES overlap is larger than len(filepaths)
+    start = i
+    end = min(start + chunk_size, len(filepaths))
+    fixed = [min(start + overlap, len(filepaths))]
+    name_i = "%s_%i-%i" % (name, start, end)
+    matrices = loadMatrices(name_i, csvDir)
+    if not matrices:
+      matrices = align(filepaths[start:end], csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+                       loaderImp=loaderImp, fixed_tile_indices=[fixed], io=False)
+    chunks.append(matrices)
+    saveMatrices(name_i, matrices, csvDir)
+  
+  # Interpolate matrices across overlapping regions
+  # There is one chunk for sections [0, overlap],
+  # two chunks for sections [>overlap, last chunk -1]
+  # and one chunk for sections on the second half of the last chunk, about [> n - overlap, n]
+  matrices = []
+  for i in xrange(len(filepaths)):
+    k = i % overlap # index on the list of chunks
+    # Handle beginning when there's only one chunk
+    if 0 == k:
+      matrix = chunks[0][i]
+    # Handle end, when there isn't an ending chunk beyond the middle tile of the actual last chunk
+    elif k == len(chunks): # k is beyond the start+overlap section of the last chunk
+      matrix = chunks[k-1][i - (k-1) * overlap]
+    # Else, there are two chunks overlapping, at k and at k-1
+    else:
+      i1 = i - (k-1) * overlap
+      i2 = i -  k    * overlap
+      # weights: 1.0 at the center of the chunk, 0.0 at the start or end of a chunk.
+      w1 = 1.0 - (abs(i1 - overlap) / float(overlap))
+      w2 = 1.0 - (abs(i2 - overlap) / float(overlap))
+      m1 = chunks[k-1][i1]
+      m2 = chunks[k  ][i2]
+      matrix = [1, 0, m1[3] * w1 + m2[3] * w2,
+                0, 1, m1[5] * w1 + m2[5] * w2]
+    #
+    matrices.append(matrix)
+  
+  # All matrices are relative translations. Make them relative to the global fixed tile,
+  # so that the global fixed tile has a 0, 0 translation:
+  m_fixed = matrices[fixed_tile_index]
+  offset_x, offset_y = -m_fixed[2], -m_fixed[5]
+  for m in matrices:
+    m[2] += offset_x
+    m[5] += offset_y
+  
   saveMatrices(name, matrices, csvDir)
   
   return matrices
