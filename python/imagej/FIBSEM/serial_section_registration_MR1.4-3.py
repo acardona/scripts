@@ -4,7 +4,7 @@ sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths
 from lib.util import syncPrintQ
-from lib.serial2Dregistration import align, handleNoPointMatches, computeShifts
+from lib.serial2Dregistration import align, alignInChunks, handleNoPointMatches, computeShifts
 from lib.montage2d import ensureMontages, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices, fuseTranslationMatrices
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
@@ -206,7 +206,7 @@ ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsS
 # NOTE: it's 8-bit
 volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
                                paramsSIFT, paramsRANSAC, paramsTileConf, csvDir, params_pixels,
-                               show=True, matrices=None, section_offsets=sectionOffsets, title="Montages")
+                               show=False, matrices=None, section_offsets=sectionOffsets, title="Montages")
 
 
 # Start section registration
@@ -259,20 +259,21 @@ paramsTileConfiguration = {
   "maxPlateauwidth": 200, # Like in TrakEM2
   "maxIterations": 2000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
-  "nThreadsOptimizer": Runtime.getRuntime().availableProcessors() # as many as CPU cores
+  "nThreadsOptimizer": Runtime.getRuntime().availableProcessors(), # as many as CPU cores
+  "chunk_size": 400 # Will align in 50% overlapping chunks for best use of the optimizer
 }
 
 
 # Print all shifts larger than 1 pixel
-threshold = 1.4
-computeShifts(groupNames, csvDirZ, threshold, params, properties, "shifts")
+#threshold = 1.4
+#computeShifts(groupNames, csvDirZ, threshold, params, properties, "shifts")
 
 
-"""
 
-matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
+
+matricesSIFT = alignInChunks(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
                      loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
-                     fixed_tile_indices=fixed_tile_indices)
+                     fixed_tile_index=fixed_tile_indices[0])
 
 cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
 imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
@@ -285,4 +286,4 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
 impSIFT.setRoi(Roi(352, 152, 13776, 15608))
 
 
-"""
+
