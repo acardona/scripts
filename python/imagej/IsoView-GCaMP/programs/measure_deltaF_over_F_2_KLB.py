@@ -25,7 +25,7 @@ from java.util.concurrent import Executors, Callable
 from org.janelia.simview.klb import KLB # Needs 'SiMView' Fiji update site enabled
 
 
-n_threads = 128
+n_threads = 32
 
 # The KLB folder contains 1477 LSM stacks in .klb format
 srcLSM = "/net/zstore1/data_WillBishop/KLB/"
