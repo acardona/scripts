@@ -988,7 +988,7 @@ def computeShifts(groupNames, csvDir, threshold, params, properties, shifts_file
       dx = matrix[4]
       dy = matrix[5]
       # If larger than 1 pixel in X or Y, consider this a shift
-      if dx > threshold or dy > threshold:
+      if abs(dx) > threshold or abs(dy) > threshold:
         s = "[%i, %i, %.1f, %.1f, '%s.%s']," % (i, j, dx, dy, groupNames[i], groupNames[j])
         syncPrintQ(s)
         f.write(s)
