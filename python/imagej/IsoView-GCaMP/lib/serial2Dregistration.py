@@ -472,7 +472,7 @@ def handleNoPointMatches(filepaths, i, j):
 
 
 def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-          loaderImp=None, fixed_tile_indices=None, io=True):
+          loaderImp=None, fixed_tile_indices=None, io=True, verboseOptimize=True):
   if not os.path.exists(csvDir):
     os.makedirs(csvDir) # recursively
   name = "matrices"
@@ -497,7 +497,9 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   maxIterations = paramsTileConfiguration["maxIterations"]
   damp = paramsTileConfiguration["damp"]
   nThreads = paramsTileConfiguration.get("nThreadsOptimizer", Runtime.getRuntime().availableProcessors())
-  TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError, maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles), tc.getFixedTiles(), nThreads, True) # True: verbose
+  TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
+                                maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles),
+                                tc.getFixedTiles(), nThreads, verboseOptimize)
   #tc.optimizeSilentlyConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
   #        maxIterations, maxPlateauwidth, damp) # uses as many threads as cores: too many.
 
@@ -556,7 +558,7 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
     matrices = loadMatrices(name_i, csvDir)
     if not matrices:
       matrices = align(filepaths[start:end], csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-                       loaderImp=loaderImp, fixed_tile_indices=[fixed], io=False)
+                       loaderImp=loaderImp, fixed_tile_indices=[fixed], io=False, verboseOptimize=True)
     chunks.append(matrices)
     saveMatrices(name_i, matrices, csvDir)
   
