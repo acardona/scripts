@@ -588,8 +588,8 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
     for m1, m2 in izip(islice(cmatrices1, overlap, None), # from overlap to the end
                        islice(cmatrices2, 0, overlap)):   # from 0 to overlap
       # Apply each transform to the center point: since it's just a Translation, simply add it
-      pointmatches.append(Point(array([px + m1[2], py + m1[5]], 'd')),
-                          Point(array([px + m2[2], py + m2[5]], 'd')))
+      pointmatches.append(PointMatch(Point(array([px + m1[2], py + m1[5]], 'd')),
+                                     Point(array([px + m2[2], py + m2[5]], 'd'))))
     tile1.connect(tile2, pointmatches) # reciprocal
   
   # Fix one of the chunks (there can be two) that contains the fixed_tile_index
@@ -597,14 +597,14 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   ifix = [fixed_tile_index % overlap] if fixed_tile_index is not None else None
   
   optimize([tile for _, tile in chunk_tiles],
-            paramsTileConfiguration, fixed_tile_indices=ifix)
+            paramsTileConfiguration, fixed_tile_indices=ifix, verbose=True)
   
   # Now use the matrices from the chunk-wise registration to offset the local registrations within each chunk.
   
   # Apply the chunk_tile translation to the matrix
   def toChunkCoordinates(chunk_tile, matrix):
     tx, ty = chunk_tile.getModel().getTranslation() # TranslationModel2D
-    m = matrix[:] # clone (works for both arrays and lists
+    m = matrix[:] # clone (works for both arrays and lists)
     m[2] += tx
     m[5] += ty
     return m
@@ -628,13 +628,13 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
       w2 = 1.0 - w1
       m1 = toChunkCoordinates(chunk_tile1, cmatrices1[overlap + i]) # the second half of the chunk
       m2 = toChunkCoordinates(chunk_tile2, cmatrices2[i]) # the first half, up to the middle section
-      matrix = [1, 0, m1[3] * w1 + m2[3] * w2,
+      matrix = [1, 0, m1[2] * w1 + m2[2] * w2,
                 0, 1, m1[5] * w1 + m2[5] * w2]
       matrices.append(matrix)
   
   # The last set of sections up to len(filepaths)
   cmatrices, chunk_tile = chunk_tiles[-1]
-  for i in xrange(min(overlap, len(filepaths) % overlap)):
+  for i in xrange(len(cmatrices) - overlap):
     matrices.append(toChunkCoordinates(chunk_tile, cmatrices[overlap + i]))
     
   # matrices are now all relative to the fixed tile
