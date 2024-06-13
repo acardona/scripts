@@ -471,19 +471,7 @@ def handleNoPointMatches(filepaths, i, j):
   return a
 
 
-def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-          loaderImp=None, fixed_tile_indices=None, io=True, verboseOptimize=True):
-  if not os.path.exists(csvDir):
-    os.makedirs(csvDir) # recursively
-  name = "matrices"
-  
-  if io:
-    matrices = loadMatrices(name, csvDir)
-    if matrices:
-      return matrices
-  
-  # Optimize
-  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties, loaderImp=loaderImp)
+def optimize(tiles, paramsTileConfiguration, fixed_tile_indices=None):
   tc = TileConfiguration()
   tc.addTiles(tiles)
   if not fixed_tile_indices:
@@ -500,10 +488,22 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
                                 maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles),
                                 tc.getFixedTiles(), nThreads, verboseOptimize)
-  #tc.optimizeSilentlyConcurrent(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
-  #        maxIterations, maxPlateauwidth, damp) # uses as many threads as cores: too many.
+  
 
-  # TODO problem: can fail when there are 0 inliers
+def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+          loaderImp=None, fixed_tile_indices=None, io=True, verboseOptimize=True):
+  if not os.path.exists(csvDir):
+    os.makedirs(csvDir) # recursively
+  name = "matrices"
+  
+  if io:
+    matrices = loadMatrices(name, csvDir)
+    if matrices:
+      return matrices
+  
+  # Optimize
+  tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties, loaderImp=loaderImp)
+  optimize(tiles, paramsTileConfiguration, fixed_tile_indices)
 
   # Return model matrices as double[] arrays with 6 values
   matrices = []
