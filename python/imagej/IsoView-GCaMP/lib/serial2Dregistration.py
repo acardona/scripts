@@ -472,7 +472,7 @@ def handleNoPointMatches(filepaths, i, j):
   return a
 
 
-def optimize(tiles, paramsTileConfiguration, fixed_tile_indices=None):
+def optimize(tiles, paramsTileConfiguration, fixed_tile_indices=None, verbose=False):
   tc = TileConfiguration()
   tc.addTiles(tiles)
   if not fixed_tile_indices:
@@ -488,7 +488,7 @@ def optimize(tiles, paramsTileConfiguration, fixed_tile_indices=None):
   nThreads = paramsTileConfiguration.get("nThreadsOptimizer", Runtime.getRuntime().availableProcessors())
   TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
                                 maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles),
-                                tc.getFixedTiles(), nThreads, verboseOptimize)
+                                tc.getFixedTiles(), nThreads, verbose)
   
 
 def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
@@ -504,7 +504,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   
   # Optimize
   tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties, loaderImp=loaderImp)
-  optimize(tiles, paramsTileConfiguration, fixed_tile_indices)
+  optimize(tiles, paramsTileConfiguration, fixed_tile_indices, verbose=verboseOptimize)
 
   # Return model matrices as double[] arrays with 6 values
   matrices = []
@@ -581,7 +581,7 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   # towards computing a TranslationModel2D for each tile (each chunk is tile).
   dims = properties["img_dimensions"]
   px, py = dims[0] / 2, dims[1] / 2
-  chunk_tiles = [(chunk, Tile(TranslationModel2D()) for chunk in chunks]
+  chunk_tiles = [(chunk, Tile(TranslationModel2D())) for chunk in chunks]
   for (tile1, cmatrices1), (tile2, cmatrices2) in izip(chunk_tiles, islice(chunk_tiles, 1, None)):
     pointmatches = []
     for m1, m2 in izip(islice(cmatrices1, overlap, None), # from overlap to the end
