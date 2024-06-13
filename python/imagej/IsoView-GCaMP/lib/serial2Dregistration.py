@@ -583,7 +583,7 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   dims = properties["img_dimensions"]
   px, py = dims[0] / 2, dims[1] / 2
   chunk_tiles = [(chunk, Tile(TranslationModel2D())) for chunk in chunks]
-  for (tile1, cmatrices1), (tile2, cmatrices2) in izip(chunk_tiles, islice(chunk_tiles, 1, None)):
+  for (cmatrices1, tile1), (cmatrices2, tile2) in izip(chunk_tiles, islice(chunk_tiles, 1, None)):
     pointmatches = []
     for m1, m2 in izip(islice(cmatrices1, overlap, None), # from overlap to the end
                        islice(cmatrices2, 0, overlap)):   # from 0 to overlap
