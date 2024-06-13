@@ -592,12 +592,17 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
                                      Point(array([px + m2[2], py + m2[5]], 'd'))))
     tile1.connect(tile2, pointmatches) # reciprocal
   
-  # Fix one of the chunks (there can be two) that contains the fixed_tile_index
-  # (The other one will have had its fixed tile at the same section)
-  ifix = [fixed_tile_index % overlap] if fixed_tile_index is not None else None
+  # Fix the chunks (there can be two) that contain the fixed_tile_index:
+  # (Both will have had its fixed tile at the same section)
+  i = fixed_tile_index / overlap
+  if i > 0 and i < len(chunks) - 1: # if it's not the first or last chunk
+    ifix = [i -1, i]
+  else:
+    ifix = [i]
   
+  maxIterations = paramsTileConfiguration.get("chunk_maxIterations", 10000)
   optimize([tile for _, tile in chunk_tiles],
-            paramsTileConfiguration, fixed_tile_indices=ifix, verbose=True)
+            paramsTileConfiguration, fixed_tile_indices=ifix, verbose=True, maxIterations=maxIterations)
   
   # Now use the matrices from the chunk-wise registration to offset the local registrations within each chunk.
   
