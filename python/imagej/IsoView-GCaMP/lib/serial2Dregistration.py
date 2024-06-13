@@ -551,14 +551,15 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   chunks = []
   
   # The last overlap shouldn't be created, since it's half the size as chunk_size, so subtract overlap from len(filepaths)
+  k, localindex = divmod(fixed_tile_index, overlap) # k is the chunk index, and localindex (the remainder) is the index within the chunk
   for i in xrange(0, len(filepaths) - overlap, overlap): # ASSUMES overlap is larger than len(filepaths)
     start = i
     end = min(start + chunk_size, len(filepaths))
+    chunk_index = len(chunks)
     # If the fixed_tile_index is in this chunk, use that as the fixed tile instead of the middle one
-    k, localindex = divmod(fixed_tile_index, overlap) # k is the chunk index, and localindex (the remainder) is the index within the chunk
-    if k == i:
+    if k == chunk_index:
       fixed = localindex # in the first half of the chunk
-    elif k == i + 1:
+    elif k == chunk_index + 1:
       fixed = overlap + localindex # in the second half of the chunk
     else:
       # Use the middle tile
