@@ -260,7 +260,8 @@ paramsTileConfiguration = {
   "maxIterations": 2000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
   "nThreadsOptimizer": Runtime.getRuntime().availableProcessors(), # as many as CPU cores
-  "chunk_size": 400 # Will align in 50% overlapping chunks for best use of the optimizer
+  "chunk_size": 400, # Will align in 50% overlapping chunks for best use of the optimizer
+  "chunk_maxIterations": 10000
 }
 
 

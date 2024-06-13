@@ -472,7 +472,7 @@ def handleNoPointMatches(filepaths, i, j):
   return a
 
 
-def optimize(tiles, paramsTileConfiguration, fixed_tile_indices=None, verbose=False):
+def optimize(tiles, paramsTileConfiguration, fixed_tile_indices=None, verbose=False, maxIterations=None):
   tc = TileConfiguration()
   tc.addTiles(tiles)
   if not fixed_tile_indices:
@@ -483,7 +483,7 @@ def optimize(tiles, paramsTileConfiguration, fixed_tile_indices=None, verbose=Fa
   
   maxAllowedError = paramsTileConfiguration["maxAllowedError"]
   maxPlateauwidth = paramsTileConfiguration["maxPlateauwidth"]
-  maxIterations = paramsTileConfiguration["maxIterations"]
+  maxIterations = paramsTileConfiguration["maxIterations"] if maxIterations is None else maxIterations
   damp = paramsTileConfiguration["damp"]
   nThreads = paramsTileConfiguration.get("nThreadsOptimizer", Runtime.getRuntime().availableProcessors())
   TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
