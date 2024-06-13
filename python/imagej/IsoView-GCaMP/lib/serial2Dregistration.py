@@ -573,8 +573,8 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
       print "Computing", name_i
       matrices = align(filepaths[start:end], csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
                        loaderImp=loaderImp, fixed_tile_indices=[fixed], io=False, verboseOptimize=True)
+      saveMatrices(name_i, matrices, csvDir)
     chunks.append(matrices)
-    saveMatrices(name_i, matrices, csvDir)
     
   # Now register the overlapping chunks, considering each chunk as a tile
   # Given that the subset of sections is the same, use for pointmatches across tiles one point per section,
