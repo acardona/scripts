@@ -48,6 +48,7 @@ from java.awt.event import KeyAdapter, KeyEvent
 from java.util.concurrent import Executors, TimeUnit
 from jarray import zeros, array
 from functools import partial
+from itertools import izip, islice
 from collections import defaultdict
 # From lib
 from io import lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
@@ -553,7 +554,15 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   for i in xrange(0, len(filepaths) - overlap, overlap): # ASSUMES overlap is larger than len(filepaths)
     start = i
     end = min(start + chunk_size, len(filepaths))
-    fixed = min(overlap -1, end - start -1) # -1 because it's 0-based.
+    # If the fixed_tile_index is in this chunk, use that as the fixed tile instead of the middle one
+    k, localindex = divmod(fixed_tile_index, overlap) # k is the chunk index, and localindex (the remainder) is the index within the chunk
+    if k == i:
+      fixed = localindex # in the first half of the chunk
+    elif k == i + 1:
+      fixed = overlap + localindex # in the second half of the chunk
+    else:
+      # Use the middle tile
+      fixed = min(overlap -1, end - start -1) # -1 because it's 0-based.
     print start, end, fixed, overlap
     name_i = "%s_%i-%i" % (name, start, end)
     matrices = loadMatrices(name_i, csvDir)
@@ -565,6 +574,40 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
                        loaderImp=loaderImp, fixed_tile_indices=[fixed], io=False, verboseOptimize=True)
     chunks.append(matrices)
     saveMatrices(name_i, matrices, csvDir)
+    
+  # Now register the overlapping chunks, considering each chunk as a tile
+  # Given that the subset of sections is the same, use for pointmatches across tiles one point per section,
+  # transformed by the transform of that section in that chunk,
+  # towards computing a TranslationModel2D for each tile (each chunk is tile).
+  dims = properties["img_dimensions"]
+  px, py = dims[0] / 2, dims[1] / 2
+  chunk_tiles = [(chunk, Tile(TranslationModel2D()) for chunk in chunks]
+  for (tile1, cmatrices1), (tile2, cmatrices2) in izip(chunk_tiles, islice(chunk_tiles, 1, None)):
+    pointmatches = []
+    for m1, m2 in izip(islice(cmatrices1, overlap, None), # from overlap to the end
+                       islice(cmatrices2, 0, overlap)):   # from 0 to overlap
+      # Apply each transform to the center point: since it's just a Translation, simply add it
+      pointmatches.append(Point(array([px + m1[2], py + m1[5]], 'd')),
+                          Point(array([px + m2[2], py + m2[5]], 'd')))
+    tile1.connect(tile2, pointmatches) # reciprocal
+  
+  # Fix one of the chunks (there can be two) that contains the fixed_tile_index
+  # (The other one will have had its fixed tile at the same section)
+  ifix = [fixed_tile_index % overlap] if fixed_tile_index is not None else None
+  
+  optimize([tile for _, tile in chunk_tiles],
+            paramsTileConfiguration, fixed_tile_indices=ifix)
+  
+  # Now use the matrices from the chunk-wise registration to offset the local registrations within each chunk.
+  # TODO
+  
+  # Apply the chunk_tile translation to the matrix
+  def toChunkCoordinates(chunk_tile, matrix):
+    tx, ty = chunk_tile.getModel().getTranslation() # TranslationModel2D
+    m = matrix[:] # clone
+    m[2] += tx
+    m[5] += ty
+    return m
   
   # Interpolate matrices across overlapping regions
   # There is one chunk for sections [0, overlap],
@@ -572,13 +615,14 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   # and one chunk for sections on the second half of the last chunk, about [> n - overlap, n]
   matrices = []
   for i in xrange(len(filepaths)):
-    k = i % overlap # index on the list of chunks
+    k = int(i / overlap) # index on the list of chunks
+    chunk_tile = chunk_tiles[k][1]
     # Handle beginning when there's only one chunk
     if 0 == k:
-      matrix = chunks[0][i]
+      matrix = toChunkCoordinates(chunk_tile, chunks[0][i])
     # Handle end, when there isn't an ending chunk beyond the middle tile of the actual last chunk
     elif k == len(chunks): # k is beyond the start+overlap section of the last chunk
-      matrix = chunks[k-1][i - (k-1) * overlap]
+      matrix = toChunkCoordinates(chunk_tile, chunks[k-1][i - (k-1) * overlap])
     # Else, there are two chunks overlapping, at k and at k-1
     else:
       i1 = i - (k-1) * overlap
@@ -586,8 +630,8 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
       # weights: 1.0 at the center of the chunk, 0.0 at the start or end of a chunk.
       w1 = 1.0 - (abs(i1 - overlap) / float(overlap))
       w2 = 1.0 - (abs(i2 - overlap) / float(overlap))
-      m1 = chunks[k-1][i1]
-      m2 = chunks[k  ][i2]
+      m1 = toChunkCoordinates(chunk_tile, chunks[k-1][i1])
+      m2 = toChunkCoordinates(chunk_tile, chunks[k  ][i2])
       matrix = [1, 0, m1[3] * w1 + m2[3] * w2,
                 0, 1, m1[5] * w1 + m2[5] * w2]
     #
