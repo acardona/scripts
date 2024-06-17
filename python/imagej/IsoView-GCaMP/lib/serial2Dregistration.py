@@ -99,7 +99,7 @@ def setupImageLoader(loader=loadImp):
   loadImp = loader
 
 
-def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, csvDir, exeload, load, loaderImp=None):
+def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, properties, csvDir, exeload, load, loaderImp=None):
   """
   filepath1: the file path to an image of a section.
   filepath2: the file path to an image of another section.
@@ -109,10 +109,14 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
 
   return False if the CSV file already exists, True if it has to be computed.
   """
+  
+  filepath1 = filepaths[index1]
+  filepath2 = filepaths[index2]
 
   # Skip if pointmatches CSV file exists already:
-  csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepath2) + ".pointmatches.csv")
-  if os.path.exists(csvpath):
+  csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepaths2) + ".pointmatches.csv")
+  ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: return False)
+  if os.path.exists(csvpath) and (not ignoreCacheFn(index1) or not ignoreCacheFn(index2)):
     return False
 
   try:
@@ -239,7 +243,7 @@ def extractBlockMatches(filepath1, filepath2, params, paramsSIFT, properties, cs
     printException()
 
 
-def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateByFileExists=False, loaderImp=None):
+def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validateByFileExists=False, loaderImp=None):
   """
      filepath: to the image from which SIFT features have been or have to be extracted.
      params: dict of registration parameters, including the key "scale".
@@ -253,12 +257,13 @@ def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateByFileE
      Returns the ArrayList of Feature instances.
   """
   path = os.path.join(csvDir, os.path.basename(filepath) + ".SIFT-features.obj")
-  if validateByFileExists:
+  ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: return False)
+  if validateByFileExists and not ignoreCacheFn(index):
     if os.path.exists(path):
       return True
   # An ArrayList whose last element is a mpicbg.imagefeatures.FloatArray2DSIFT.Param
   # and all other elements are mpicbg.imagefeatures.Feature
-  features = deserialize(path) if os.path.exists(path) else None
+  features = deserialize(path) if os.path.exists(path) and not ignoreCacheFn(index) else None
   if features:
     if features.get(features.size() -1).equals(paramsSIFT):
       features.remove(features.size() -1) # removes the Params
@@ -289,16 +294,19 @@ def ensureSIFTFeatures(filepath, paramsSIFT, properties, csvDir, validateByFileE
   return features
 
 
-def extractSIFTMatches(filepath1, filepath2, params, paramsSIFT, properties, csvDir, loaderImp=None):
+def extractSIFTMatches(filepaths, index1, index2, params, paramsSIFT, properties, csvDir, loaderImp=None):
   # Skip if pointmatches CSV file exists already:
-  csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepath2) + ".pointmatches.csv")
-  if os.path.exists(csvpath):
+  csvpath = os.path.join(csvDir, basename(filepaths[index1]) + '.' + basename(filepaths[index2]) + ".pointmatches.csv")
+  ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: return False)
+  if os.path.exists(csvpath) and (not ignoreCacheFn(index1) or not ignoreCacheFn(index2)):
     return False
 
   try:
+    filepath1 = filepaths[index1]
+    filepath2 = filepaths[index2]
     # Load from CSV files or extract features de novo
-    features1 = ensureSIFTFeatures(filepath1, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
-    features2 = ensureSIFTFeatures(filepath2, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
+    features1 = ensureSIFTFeatures(filepath1, index1, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
+    features2 = ensureSIFTFeatures(filepath2, index2, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
     #syncPrintQ("Loaded %i features for %s\n       %i features for %s" % (features1.size(), os.path.basename(filepath1),
     #                                                                     features2.size(), os.path.basename(filepath2)))
     # Vector of PointMatch instances
@@ -347,13 +355,13 @@ def pointmatchingTasks(filepaths, csvDir, params, paramsSIFT, n_adjacent, exeloa
   for i in xrange(len(filepaths) - n_adjacent):
     for inc in xrange(1, n_adjacent + 1):
       #syncPrintQ("Preparing extractBlockMatches for: \n  1: %s\n  2: %s" % (filepaths[i], filepaths[i+inc]))
-      yield Task(extractBlockMatches, filepaths[i], filepaths[i + inc], params, paramsSIFT, properties, csvDir, exeload, loadFPMem, loaderImp=loaderImp)
+      yield Task(extractBlockMatches, filepaths, i, i + inc, params, paramsSIFT, properties, csvDir, exeload, loadFPMem, loaderImp=loaderImp)
 
 def generateSIFTMatches(filepaths, n_adjacent, params, paramsSIFT, properties, csvDir, loaderImp=None):
   paramsRod = {"rod": params["rod"]} # only this parameter is needed for SIFT pointmatches
   for i in xrange(max(1, len(filepaths) - n_adjacent)):
     for inc in xrange(1, min(n_adjacent + 1, len(filepaths))):
-      yield Task(extractSIFTMatches, filepaths[i], filepaths[i + inc], paramsRod, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
+      yield Task(extractSIFTMatches, filepaths, i, i + inc, paramsRod, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
 
 
 def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, properties, loaderImp=None):
@@ -369,8 +377,8 @@ def ensurePointMatches(filepaths, csvDir, params, paramsSIFT, n_adjacent, proper
       chunk_size = properties["n_threads"] * 2
       count = 1
       for result in w.chunkConsume(chunk_size, # tasks to submit before starting to wait for futures
-                                   (Task(ensureSIFTFeatures, filepath, paramsSIFT, properties, csvDir, validateByFileExists=properties.get("SIFT_validateByFileExists"), loaderImp=loaderImp)
-                                    for filepath in filepaths)):
+                                   (Task(ensureSIFTFeatures, filepath, index, paramsSIFT, properties, csvDir, validateByFileExists=properties.get("SIFT_validateByFileExists"), loaderImp=loaderImp)
+                                    for index, filepath in enumerate(filepaths))):
         count += 1
         if 0 == count % chunk_size:
           syncPrintQ("Completed extracting or validating SIFT features for %i images." % count)
