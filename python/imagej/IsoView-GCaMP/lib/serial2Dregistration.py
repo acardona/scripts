@@ -243,6 +243,13 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
     printException()
 
 
+def loadSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validateByFileExists=False, loaderImp=None):
+  # Do not ignore the cache
+  properties = dict{properties.items()}
+  properties["ignoreCacheFn"] = lambda index: False # disabled
+  return ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validateByFileExists=validateByFileExists, loaderImp=loaderImp)
+
+
 def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validateByFileExists=False, loaderImp=None):
   """
      filepath: to the image from which SIFT features have been or have to be extracted.
@@ -305,8 +312,8 @@ def extractSIFTMatches(filepaths, index1, index2, params, paramsSIFT, properties
     filepath1 = filepaths[index1]
     filepath2 = filepaths[index2]
     # Load from CSV files or extract features de novo
-    features1 = ensureSIFTFeatures(filepath1, index1, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
-    features2 = ensureSIFTFeatures(filepath2, index2, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
+    features1 = loadSIFTFeatures(filepath1, index1, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
+    features2 = loadSIFTFeatures(filepath2, index2, paramsSIFT, properties, csvDir, loaderImp=loaderImp)
     #syncPrintQ("Loaded %i features for %s\n       %i features for %s" % (features1.size(), os.path.basename(filepath1),
     #                                                                     features2.size(), os.path.basename(filepath2)))
     # Vector of PointMatch instances
