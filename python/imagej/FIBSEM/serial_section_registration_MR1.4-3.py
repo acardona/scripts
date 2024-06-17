@@ -222,7 +222,7 @@ properties = {
  'n_threads': 200, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
  'invert': False, # Processing is done already
  'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
- 'use_SIFT': True,
+ 'use_SIFT': False,
  'SIFT_validateByFileExists': True, # Avoid loading and parsing SIFT features just to make sure they are fine.
  'RANSAC_iterations': 1000,
  'RANSAC_maxEpsilon': 25, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
@@ -230,11 +230,12 @@ properties = {
  'preload': 64, # 64 sections, matching the export as N5 Z axis
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
  'max_n_pointmatches': 1000, # When loading, keep only a sensible subset
+ 'ignoreCacheFn': lambda index: True if index > 17000 else False,
 }
 
 # Parameters for blockmatching
 params = {
- 'scale': 0.2, # 20%
+ 'scale': 0.1, # 20%
  'meshResolution': 20, # 20x20 = 400 points
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
@@ -257,7 +258,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 2000, # Saalfeld recommends 1000
+  "maxIterations": 4000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
   "nThreadsOptimizer": Runtime.getRuntime().availableProcessors(), # as many as CPU cores
   "chunk_size": 400, # Will align in 50% overlapping chunks for best use of the optimizer
