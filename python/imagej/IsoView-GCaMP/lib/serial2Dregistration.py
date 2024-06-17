@@ -114,8 +114,8 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
   filepath2 = filepaths[index2]
 
   # Skip if pointmatches CSV file exists already:
-  csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepaths2) + ".pointmatches.csv")
-  ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: return False)
+  csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepath2) + ".pointmatches.csv")
+  ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: False)
   if os.path.exists(csvpath) and (not ignoreCacheFn(index1) or not ignoreCacheFn(index2)):
     return False
 
@@ -257,7 +257,7 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
      Returns the ArrayList of Feature instances.
   """
   path = os.path.join(csvDir, os.path.basename(filepath) + ".SIFT-features.obj")
-  ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: return False)
+  ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: False)
   if validateByFileExists and not ignoreCacheFn(index):
     if os.path.exists(path):
       return True
@@ -297,7 +297,7 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
 def extractSIFTMatches(filepaths, index1, index2, params, paramsSIFT, properties, csvDir, loaderImp=None):
   # Skip if pointmatches CSV file exists already:
   csvpath = os.path.join(csvDir, basename(filepaths[index1]) + '.' + basename(filepaths[index2]) + ".pointmatches.csv")
-  ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: return False)
+  ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: False)
   if os.path.exists(csvpath) and (not ignoreCacheFn(index1) or not ignoreCacheFn(index2)):
     return False
 
