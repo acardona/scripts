@@ -219,7 +219,7 @@ properties = {
  'img_dimensions': Intervals.dimensionsAsLongArray(volumeImgMontaged),
  'srcDir': srcDir,
  'pixelType': UnsignedByteType,
- 'n_threads': 200, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
+ 'n_threads': 64, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
  'invert': False, # Processing is done already
  'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': False,
@@ -230,7 +230,7 @@ properties = {
  'preload': 64, # 64 sections, matching the export as N5 Z axis
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
  'max_n_pointmatches': 1000, # When loading, keep only a sensible subset
- 'ignoreCacheFn': lambda index: True if index > 17000 else False,
+ 'ignoreCacheFn': lambda index: False, # lambda index: True if index > 17000 else False,
 }
 
 # Parameters for blockmatching
