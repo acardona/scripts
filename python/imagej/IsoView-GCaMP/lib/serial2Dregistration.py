@@ -116,8 +116,12 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
   # Skip if pointmatches CSV file exists already:
   csvpath = os.path.join(csvDir, basename(filepath1) + '.' + basename(filepath2) + ".pointmatches.csv")
   ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: False)
-  if os.path.exists(csvpath) and (not ignoreCacheFn(index1) or not ignoreCacheFn(index2)):
-    return False
+  if os.path.exists(csvpath):
+    if ignoreCacheFn(index1) or ignoreCacheFn(index2):
+      # Remove the file since it's present
+      os.remove(csvpath)
+    else:
+      return False
 
   try:
 
@@ -268,6 +272,8 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
   if validateByFileExists and not ignoreCacheFn(index):
     if os.path.exists(path):
       return True
+    else:
+      os.remove(path)
   # An ArrayList whose last element is a mpicbg.imagefeatures.FloatArray2DSIFT.Param
   # and all other elements are mpicbg.imagefeatures.Feature
   features = deserialize(path) if os.path.exists(path) and not ignoreCacheFn(index) else None
