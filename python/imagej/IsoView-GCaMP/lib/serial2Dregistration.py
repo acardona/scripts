@@ -26,7 +26,7 @@ from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList, HashSet
-from java.lang import Double, System, Runnable, Runtime
+from java.lang import Double, System, Runnable, Runtime, Exception, Throwable
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor
@@ -249,7 +249,7 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
 
 def loadSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validateByFileExists=False, loaderImp=None):
   # Do not ignore the cache
-  properties = dict{properties.items()}
+  properties = dict(properties.items())
   properties["ignoreCacheFn"] = lambda index: False # disabled
   return ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validateByFileExists=validateByFileExists, loaderImp=loaderImp)
 
@@ -429,7 +429,13 @@ def loadPointMatchesPlus(filepaths, i, j, csvDir, params, properties):
   #                              params,
   #                              verbose=False)
   # DOES NOT check header params
-  pointmatches = PointMatches.fromPath(os.path.join(csvDir, os.path.basename(filepaths[i]) + "." + os.path.basename(filepaths[j]) + ".pointmatches.csv")).pointmatches
+  path = os.path.join(csvDir, os.path.basename(filepaths[i]) + "." + os.path.basename(filepaths[j]) + ".pointmatches.csv")
+  try:
+    pointmatches = PointMatches.fromPath(path).pointmatches
+  except Throwable, e:
+    syncPrintQ("Failed to load file:\n" + path)
+    print "Failed to load file:\n" + path
+    raise e
   max_n_pointmatches = properties.get("max_n_pointmatches", 0)
   if max_n_pointmatches > 0:
     pointmatches = samplePointMatches(pointmatches, maximum=max_n_pointmatches)
