@@ -29,9 +29,9 @@ def run():
 
   for ID in WindowManager.getIDList():
     imp = WindowManager.getImage(ID)
-    if title.endswith(titleSuffix1):
+    if imp.getTitle().endswith(titleSuffix1):
       imp1 = imp
-    elif title.endswith(titleSuffix2):
+    elif imp.getTitle().endswith(titleSuffix2):
       imp2 = imp
 
   if imp1 is None:
