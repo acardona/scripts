@@ -15,12 +15,12 @@ lastIndexZ1 = 16999
 firstIndexZ2 = 17000
 
 # Text tags on the title of the open images
-titleSuffix1 = "bad"
-titleSuffix2 = "good"
+titleSuffix1 = "bad" # the old one, to keep from 0 to 16999
+titleSuffix2 = "good" # the new one, to appeld from 17000 to the end
 
 # Translation in 2D of the second image
-dx2 = 0
-dy2 = 0
+dx2 = 279 # 278.5
+dy2 = 67 # 66.6
 
 
 def run():
