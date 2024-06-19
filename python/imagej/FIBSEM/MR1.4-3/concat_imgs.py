@@ -6,6 +6,7 @@
 import sys, os
 sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from net.imglib2.view import Views
+from net.imglib2.img.display.imagej import ImageJVirtualStack
 from ij import WindowManager
 from lib.ui import wrap
 
@@ -42,8 +43,15 @@ def run():
     print "Missing imp2 with suffix", titleSuffix2
     return
 
-  img1 = imp1.getStack().getSource()
-  img2 = imp2.getStack().getSource()
+  # getSource() is not yet available in the version of imglib2-ij I have installed
+  #img1 = imp1.getStack().getSource()
+  #img2 = imp2.getStack().getSource()
+  
+  # Hack it instead
+  f = ImageJVirtualStack.getDeclaredField("source")
+  f.setAccessible(True)
+  img1 = f.get(imp1.getStack())
+  img2 = f.get(imp2.getStack())
 
   maxCoords2D = [img1.dimension(i) -1 for i in xrange(2)]
 
