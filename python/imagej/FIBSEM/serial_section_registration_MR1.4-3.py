@@ -206,7 +206,7 @@ ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsS
 # NOTE: it's 8-bit
 volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
                                paramsSIFT, paramsRANSAC, paramsTileConf, csvDir, params_pixels,
-                               show=True, matrices=None, section_offsets=sectionOffsets, title="Montages")
+                               show=False, matrices=None, section_offsets=sectionOffsets, title="Montages")
 
 
 # Start section registration
@@ -230,7 +230,7 @@ properties = {
  'preload': 64, # 64 sections, matching the export as N5 Z axis
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
  'max_n_pointmatches': 1000, # When loading, keep only a sensible subset
- 'ignoreCacheFn': lambda index: False, # lambda index: True if index > 17000 else False,
+ 'ignoreCacheFn': lambda index: False, # True if index > 17000 else False,
 }
 
 # Parameters for blockmatching
