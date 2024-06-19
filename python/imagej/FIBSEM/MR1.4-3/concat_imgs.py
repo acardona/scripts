@@ -59,12 +59,11 @@ def run():
                              Views.interval(img1,
                                             [0, 0, 0],
                                             maxCoords2D + [lastIndexZ1]),
-                             Views.zeroMin(
-                               Views.translate(
-                                 Views.interval(img2,
-                                                [0, 0, firstIndexZ2],
-                                                maxCoords2D + [img2.dimension(2) -1]),
-                                 [dx2, dy2])))
+                             Views.translate(
+                               Views.interval(Views.extendZero(img2),
+                                              [0, 0, firstIndexZ2],
+                                              maxCoords2D + [img2.dimension(2) -1]),
+                               [dx2, dy2, 0]))
 
   imp3 = wrap(merged)
   imp3.show()
