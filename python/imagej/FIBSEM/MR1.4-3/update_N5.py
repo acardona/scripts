@@ -23,7 +23,7 @@ missing = Views.interval(imgOld,
                           imgOld.dimension(1) -1,
                           16399])
              
-n5writeNew = N5Factory().openWriter(os.path.join(n5pathNew, n5pathNew))
+n5writeNew = N5Factory().openWriter(os.path.join(n5pathNew, n5nameNew))
 N5Utils.saveRegion(missing, n5writeNew, "/") # path is relative
 
 impNew.setNSlice(16400)
