@@ -271,7 +271,7 @@ paramsTileConfiguration = {
 #computeShifts(groupNames, csvDirZ, threshold, params, properties, "shifts")
 
 
-
+"""
 
 matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
                      loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
@@ -282,6 +282,41 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
                                   matricesSIFT,
                                   rotate=None, # None, "right", "left", or "180"
                                   title_addendum=" SIFT+RANSAC")
+
+"""
+
+
+# Open a combined volume after realignment, preserving the first 16400 sections:
+
+# First image: from 0 to lastIndexZ1 (0-based)
+lastIndexZ1 = 16399
+# Second image: from firstIndexZ2 to the last section (0-based)
+firstIndexZ2 = 16400
+
+# Translation in 2D of the second image
+dx2 = -1 # -0.975
+dy2 = 0 # -0.179
+
+# Load and combine matrices
+matricesOld = loadMatrices("matrices.csv-old", csvDirZ)
+matricesNew = loadMatrices("matrices.csv-good", csvDirZ)
+
+matrices = matricesOld[0:lastIndexZ1+1] + matricesNew[firstIndexZ2:]
+
+# Adjust translation
+for m in matricesNew[firstIndexZ2:]:
+  m[2] += dx2
+  m[5] += dy2
+
+# Save combination matrices
+saveMatrices("matrices.csv-combined", matrices, csvDirZ)
+
+cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
+img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
+                          matrices,
+                          rotate=None, # None, "right", "left", or "180"
+                          title_addendum=" combined")
+
 
 
 # To be determined:
