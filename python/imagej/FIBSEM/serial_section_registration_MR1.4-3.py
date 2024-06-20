@@ -298,8 +298,8 @@ dx2 = -1 # -0.975
 dy2 = 0 # -0.179
 
 # Load and combine matrices
-matricesOld = loadMatrices("matrices.csv-old", csvDirZ)
-matricesNew = loadMatrices("matrices.csv-good", csvDirZ)
+matricesOld = loadMatrices("matrices-old", csvDirZ)
+matricesNew = loadMatrices("matrices-good", csvDirZ)
 
 matrices = matricesOld[0:lastIndexZ1+1] + matricesNew[firstIndexZ2:]
 
@@ -320,7 +320,7 @@ img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertie
 
 
 # To be determined:
-impSIFT.setRoi(Roi(352, 152, 13776, 15608))
+imp.setRoi(Roi(352, 152, 13776, 15608))
 
 
 
