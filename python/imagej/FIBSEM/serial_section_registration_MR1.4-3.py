@@ -123,14 +123,16 @@ groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
 
 
 # Skip sections 1-963: no sample in them, just resin
+# Skip sections 964-1904: mostly somas and huge gap between 1903 and 1904
 # Skip sections beyond 20964: less milling, overstretched, and full of curtains
-groupNames = groupNames[964:20000+964]
-tileGroups = tileGroups[964:20000+964]
+groupNames = groupNames[964+1904:20000+964]
+tileGroups = tileGroups[964+1904:20000+964]
 
-fixed_tile_indices = [7000] # A section in the brain, with 1x2 tiles
+fixed_tile_indices = [7000-1904] # A section in the brain, with 1x2 tiles
 
 # Manual offset for sections with a single tile:
 def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
+  index -= 1904 # removed 964 to 1904+964 afterwards
   # Must always return a tuple with two integers
   if index >= 0 and index < (2869 - 964 -1): # All single-tile slices, with first 1x2 tiles being Merlin-WEMS_24-02-25_214509_
     dx = 1282
@@ -206,7 +208,7 @@ ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsS
 # NOTE: it's 8-bit
 volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
                                paramsSIFT, paramsRANSAC, paramsTileConf, csvDir, params_pixels,
-                               show=False, matrices=None, section_offsets=sectionOffsets, title="Montages")
+                               show=True, matrices=None, section_offsets=sectionOffsets, title="Montages")
 
 
 # Start section registration
@@ -235,12 +237,12 @@ properties = {
 
 # Parameters for blockmatching
 params = {
- 'scale': 0.1, # 20%
+ 'scale': 0.1, # 10%
  'meshResolution': 20, # 20x20 = 400 points
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 100, # has to account for the montages shifting about ~100 pixels in any direction
+ 'searchRadius': 50, # has to account for the montages shifting about ~100 pixels in any direction
  'blockRadius': 100, # small, yet enough
 }
 
@@ -271,7 +273,7 @@ paramsTileConfiguration = {
 #computeShifts(groupNames, csvDirZ, threshold, params, properties, "shifts")
 
 
-"""
+
 
 matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
                      loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
@@ -283,8 +285,11 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
                                   rotate=None, # None, "right", "left", or "180"
                                   title_addendum=" SIFT+RANSAC")
 
+imp = impSIFT
+
 """
 
+# For csvZ-2 and n5-2:
 
 # Open a combined volume after realignment, preserving the first 16400 sections:
 
@@ -317,10 +322,9 @@ img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertie
                           rotate=None, # None, "right", "left", or "180"
                           title_addendum=" combined")
 
-
+"""
 
 # To be determined:
-imp.setRoi(Roi(352, 152, 13776, 15608))
 
 
 
