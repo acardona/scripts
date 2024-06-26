@@ -6,6 +6,7 @@ from lib.io import loadFilePaths
 from lib.util import syncPrintQ
 from lib.serial2Dregistration import align, alignInChunks, handleNoPointMatches, computeShifts
 from lib.montage2d import ensureMontages, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices, fuseTranslationMatrices
+from lib.segmentation_em import classifyImageTWS, loadClassifier
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
 from net.imglib2 import FinalInterval
@@ -13,6 +14,8 @@ from net.imglib2.util import Intervals
 from net.imglib2.type.numeric.integer import UnsignedByteType
 from java.lang import Runtime
 from ij.gui import Roi
+from ij import ImagePlus
+from ij.process import ImageProcessor
 
 
 # MR1.4-3 volume
@@ -208,22 +211,23 @@ ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsS
 # NOTE: it's 8-bit
 volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
                                paramsSIFT, paramsRANSAC, paramsTileConf, csvDir, params_pixels,
-                               show=True, matrices=None, section_offsets=sectionOffsets, title="Montages")
+                               show=False, matrices=None, section_offsets=sectionOffsets, title="Montages")
 
 
 # Function to filter out features outside the tissue
 model_path = os.path.join(tgtDir, "classifier_1+6000.model") # from the Trainable Weka Segmentation
-ws = createWekaSegmentation(model_path)
+classifier = loadClassifier(model_path)
 model_width = 400
 
 
 def filterFeatures(section_ip, positions, points=False):
   """ If points=False, assume features contain Feature instances, otherwise Point instances. """
-  global ws, model_width
+  global classifier, model_width
   n_threads = 1
   section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
   resized_imp = ImagePlus("", section_ip.resize(model_width))
-  labels_imp = ws.applyClassifier(resized_imp, n_threads, False) # False for labels in 8-bit, True for probability maps in floating-point
+  syncPrintQ("resized_imp: " + str(resized_imp))
+  labels_imp = classifyImageTWS(resized_imp, classifier=classifier)
   mask = labels_imp.getProcessor() # with 0 for background (resin) and 1 for tissue
   ps = ArrayList()
   scale = float(model_width) / section_ip.getWidth()
@@ -300,7 +304,9 @@ paramsTileConfiguration = {
 #threshold = 1.4
 #computeShifts(groupNames, csvDirZ, threshold, params, properties, "shifts")
 
-
+# DEBUG:
+groupNames = groupNames[0:4]
+tileGroups = tileGroups[0:4]
 
 
 matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
