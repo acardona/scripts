@@ -2,6 +2,9 @@ package my;
 
 import mpicbg.models.Point;
 import mpicbg.models.PointMatch;
+import mpicbg.models.AbstractModel;
+import mpicbg.imagefeatures.Feature;
+import mpicbg.imagefeatures.FloatArray2DSIFT;
 import my.ConstellationFast;
 import my.ParsePointMatchFunction;
 import net.imglib2.RealPoint;
@@ -82,6 +85,73 @@ public final class PointMatchesFast
 			}
 		}
 		return new PointMatchesFast(pointmatches);
+	}
+
+	/**
+	 * Use a KDTree for nearest neighbor search, to avoid all-to-all matching
+	 * when using SIFT features.
+	 * Note the need for removing ambiguous matches, which, while it is done
+	 * for every call to FloatArray2DSIFT.createMatches, it has to be done again
+	 * for all features since we don't know which ones overlap. It's a fast inexpensive match,
+	 * albeit one that is N*N. Could also be done with a KDTRee but there's no need,
+	 * there are less matching features than the input features, and the comparison
+	 * is extremely cheap.
+	 *
+	 * The issue here is that FloatArray2DSIFT.createMatches still has a "TODO implement the spatial constraints" and therefore does not make use of the model or the max_id.
+	 */
+	static public final List<PointMatch> matchNearbyFeatures(
+			final double radius,
+			final List<Feature> features1,
+			final List<Feature> features2,
+			final double max_sd, // maximal difference in size (ratio max/min)
+			final AbstractModel< ? > model, // NOT USED
+			final double max_id, // NOT USED, would be the same as radius
+			final float rod) // ratio of distances (closest/next closest match)
+	{
+		final List<PointMatch> matches = new ArrayList<PointMatch>();
+		if (0 == features1.size() || 0 == features2.size()) return matches;
+		final List<RealPoint> positions2 = new ArrayList<RealPoint>();
+		for (final Feature f2 : features2) {
+			positions2.add(RealPoint.wrap(f2.location));
+		}
+		final RadiusNeighborSearchOnKDTree<Feature> search2 =
+			new RadiusNeighborSearchOnKDTree<Feature>(new KDTree<Feature>(features2, positions2));
+		final List<Feature> single1 = new ArrayList<Feature>(1);
+		single1.add(features1.get(0)); // to make the list be of size 1
+		final List<Feature> neighbors2 = new ArrayList<Feature>(Math.max(1, features2.size() / 10));
+		for (final Feature f1 : features1) {
+			single1.set(0, f1); // replace the one and only element
+			search2.search(RealPoint.wrap(f1.location), radius, false); // unsorted
+			for (int i=0, n=search2.numNeighbors(); i<n; ++i) {
+				neighbors2.add(search2.getSampler(i).get());
+			}
+			matches.addAll(FloatArray2DSIFT.createMatches(single1, neighbors2, max_sd, model, max_id, rod));
+		}
+		// now remove ambiguous matches: where one feature from 1 matched more than one feature from 2
+		// Copied and modified from: mpicbg.imagefeatures.FloatArray2DSIFT.createMatches
+		for ( int i = 0; i < matches.size(); )
+		{
+			boolean amb = false;
+			final PointMatch m = matches.get( i );
+			final double[] m_p2 = m.getP2().getL();
+			for ( int j = i + 1; j < matches.size(); )
+			{
+				final PointMatch n = matches.get( j );
+				final double[] n_p2 = n.getP2().getL();
+				if ( m_p2[ 0 ] == n_p2[ 0 ] && m_p2[ 1 ] == n_p2[ 1 ] )
+				{
+					amb = true;
+					matches.remove( j ); // removeElementAt is specific of Vector
+				}
+				else ++j;
+			}
+			if ( amb )
+			{
+				matches.remove( i ); // removeElementAt is specific of Vector
+			}
+			else ++i;
+		}
+		return matches;
 	}
 
 	public final double[][] toRows()
