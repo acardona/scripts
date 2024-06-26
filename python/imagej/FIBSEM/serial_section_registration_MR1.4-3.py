@@ -211,6 +211,33 @@ volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_he
                                show=True, matrices=None, section_offsets=sectionOffsets, title="Montages")
 
 
+# Function to filter out features outside the tissue
+model_path = os.path.join(tgtDir, "classifier_1+6000.model") # from the Trainable Weka Segmentation
+ws = createWekaSegmentation(model_path)
+model_width = 400
+
+
+def filterFeatures(section_ip, positions, points=False):
+  """ If points=False, assume features contain Feature instances, otherwise Point instances. """
+  global ws, model_width
+  n_threads = 1
+  section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
+  resized_imp = ImagePlus("", section_ip.resize(model_width))
+  labels_imp = ws.applyClassifier(resized_imp, n_threads, False) # False for labels in 8-bit, True for probability maps in floating-point
+  mask = labels_imp.getProcessor() # with 0 for background (resin) and 1 for tissue
+  ps = ArrayList()
+  scale = float(model_width) / section_ip.getWidth()
+  if points:
+    for p in positions: # p is a Point, for BlockMatching
+      if mask.getPixel(int(p.getL()[0] * scale + 0.5), int(p.getL()[1] * scale + 0.5)) > 0:
+        ps.add(p)
+  else:
+    for f in positions: # f is a Feature, for SIFT
+      if mask.getPixel(int(f.location[0] * scale + 0.5), int(f.location[1] * scale + 0.5)) > 0:
+        ps.add(f)
+  return ps
+
+
 # Start section registration
 
 # First align sections with SIFT
@@ -232,7 +259,8 @@ properties = {
  'preload': 64, # 64 sections, matching the export as N5 Z axis
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
  'max_n_pointmatches': 1000, # When loading, keep only a sensible subset
- 'ignoreCacheFn': lambda index: False, # True if index > 17000 else False,
+ 'ignoreCacheFn': lambda index: False, # True if index > 17000 else False
+ 'filterFeaturesFn': filterFeatures, # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
 }
 
 # Parameters for blockmatching
