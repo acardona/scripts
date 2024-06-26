@@ -126,6 +126,7 @@ public final class PointMatchesFast
 				neighbors2.add(search2.getSampler(i).get());
 			}
 			matches.addAll(FloatArray2DSIFT.createMatches(single1, neighbors2, max_sd, model, max_id, rod));
+			neighbors2.clear();
 		}
 		// now remove ambiguous matches: where one feature from 1 matched more than one feature from 2
 		// Copied and modified from: mpicbg.imagefeatures.FloatArray2DSIFT.createMatches
