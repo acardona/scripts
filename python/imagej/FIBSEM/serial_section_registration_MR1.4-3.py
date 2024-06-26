@@ -325,6 +325,6 @@ img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertie
 """
 
 # To be determined:
-
+imp.setRoi(Roi(352, 152, 13776, 15608))
 
 
