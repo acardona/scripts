@@ -144,6 +144,13 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
     dimensions = properties['img_dimensions'] # unscaled
     mesh = TransformMesh(params["meshResolution"], dimensions[0], dimensions[1]) # unscaled
     PointMatch.sourcePoints( mesh.getVA().keySet(), sourcePoints )
+    
+    # Use only points within the tissue
+    filterFeaturesFn = properties.get("filterFeaturesFn", None)
+    if filterFeaturesFn:
+      sourcePoints = filterFeaturesFn(fp1, sourcePoints, points=True)
+    
+    
     syncPrintQ("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
     # Run
     BlockMatching.matchByMaximalPMCCFromPreScaledImages(
@@ -295,10 +302,16 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
     ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
     features = ArrayList() # of Feature instances
     ijSIFT.extractFeatures(ip, features)
+    # Filter out features outside the tissue
+    filterFeaturesFn = properties.get("filterFeaturesFn", None)
+    if filterFeaturesFn:
+      features = filterFeaturesFn(ip, features)
+    # Flush
     ip = None
     imp.flush()
     imp = None
-    features.add(paramsSIFT) # append Params instance at the end for future validation
+    # append Params instance at the end for future validation
+    features.add(paramsSIFT)
     serialize(features, path)
     features.remove(features.size() -1) # to return without the Params for immediate use
     syncPrintQ("Extracted %i SIFT features for %s" % (features.size(), os.path.basename(filepath)))
