@@ -15,6 +15,7 @@ from jarray import array, zeros
 from java.util import ArrayList
 from math import radians, floor, ceil
 from weka.core import SerializationHelper, DenseInstance, Instances, Attribute
+from weka.classifiers import AbstractClassifier
 from weka.classifiers.functions import SMO, MultilayerPerceptron
 from trainableSegmentation import WekaSegmentation
 from hr.irb.fastRandomForest import FastRandomForest
@@ -541,7 +542,7 @@ def createWekaSegmentation(model_path):
   ws.setClassifier(loadClassifier(model_path))
   return ws
 
-def classifyImageTWS(imp, n_threads=1, labels=True, ws=None, classifier=None, model_path=None):
+def classifyImageTWS(imp, n_threads=1, labels=True, ws=None, classifier=None, clone=False, model_path=None):
   """ Apply the classifier and return the results ImagePlus with labels as an 8-bit image.
       Use labels=False for the probability map in floating-point.
   """
@@ -549,6 +550,8 @@ def classifyImageTWS(imp, n_threads=1, labels=True, ws=None, classifier=None, mo
     ws = WekaSegmentation()
     if not classifier:
       classifier = loadClassifier(model_path)
+    elif clone:
+      classifier = AbstractClassifier.makeCopy(classifier)
     ws.setClassifier(classifier)
   return ws.applyClassifier(imp, n_threads, labels) # False for labels, True for probability maps
 

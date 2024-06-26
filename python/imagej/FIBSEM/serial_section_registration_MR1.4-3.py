@@ -227,7 +227,7 @@ def filterFeatures(section_ip, positions, points=False):
   section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
   resized_imp = ImagePlus("", section_ip.resize(model_width))
   syncPrintQ("resized_imp: " + str(resized_imp))
-  labels_imp = classifyImageTWS(resized_imp, classifier=classifier)
+  labels_imp = classifyImageTWS(resized_imp, classifier=classifier, clone=True)
   mask = labels_imp.getProcessor() # with 0 for background (resin) and 1 for tissue
   ps = ArrayList()
   scale = float(model_width) / section_ip.getWidth()
