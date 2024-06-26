@@ -85,7 +85,8 @@ def loadFloatProcessor(filepath, params, paramsSIFT, scale=True, loaderImp=None)
     # Preprocess images: Gaussian-blur to scale down, then normalize contrast
     if scale:
       fp = Filter.createDownsampled(fp, params["scale"], 0.5, paramsSIFT.initialSigma)
-      Util.normalizeContrast(fp) # TODO should be outside the if clause?
+      # Don't do it if images are pre-processed
+      #Util.normalizeContrast(fp) # TODO should be outside the if clause?
     return fp
   except:
     syncPrintQ(sys.exc_info())
