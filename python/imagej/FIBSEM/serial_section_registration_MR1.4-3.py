@@ -6,7 +6,7 @@ from lib.io import loadFilePaths
 from lib.util import syncPrintQ
 from lib.serial2Dregistration import align, alignInChunks, handleNoPointMatches, computeShifts
 from lib.montage2d import ensureMontages, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices, fuseTranslationMatrices
-from lib.segmentation_em import classifyImageTWS, loadClassifier
+from lib.segmentation_em import classifyImageTWS2, loadClassifier
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
 from net.imglib2 import FinalInterval
@@ -227,7 +227,7 @@ def filterFeatures(section_ip, positions, points=False):
   section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
   resized_imp = ImagePlus("", section_ip.resize(model_width))
   syncPrintQ("resized_imp: " + str(resized_imp))
-  labels_imp = classifyImageTWS(resized_imp, classifier=classifier, clone=True)
+  labels_imp = classifyImageTWS2(resized_imp, classifier=classifier, clone=True)
   mask = labels_imp.getProcessor() # with 0 for background (resin) and 1 for tissue
   ps = ArrayList()
   scale = float(model_width) / section_ip.getWidth()

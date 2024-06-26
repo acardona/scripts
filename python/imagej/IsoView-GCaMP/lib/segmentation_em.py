@@ -556,4 +556,14 @@ def classifyImageTWS(imp, n_threads=1, labels=True, ws=None, classifier=None, cl
   return ws.applyClassifier(imp, n_threads, labels) # False for labels, True for probability maps
 
 
-
+def classifyImageTWS2(imp, n_threads=1, labels=True, classifier=None, clone=False, model_path=None):
+  ws = WekaSegmentation(imp)
+  if not classifier:
+    classifier = loadClassifier(model_path)
+  elif clone:
+    classifier = AbstractClassifier.makeCopy(classifier)
+  
+  # Stateful but does not call IJ.error modal dialog
+  ws.setClassifier(classifier)
+  ws.applyClassifier(n_threads, labels) # False 'labels' means generate labels, otherwise probability maps. Will create feature stack if not present.
+  return ws.getClassifiedImage()
