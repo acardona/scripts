@@ -7,7 +7,8 @@ from lib.features_asm import initNativeClasses
 from mpicbg.ij import SIFT
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.models import TranslationModel2D
-from ij import IJ
+from ij import IJ, ImagePlus
+from ij.gui import PointRoi
 from java.util import ArrayList
 from java.lang import Double, System
 
@@ -21,7 +22,7 @@ imp2 = IJ.openImage(folder + "1_0.2_2.tif")
 radius = 100 # in pixels, as maximum expected displacement
 
 params = {
-  "scale": 1.0, # images are pre-scaled to 20%
+  "scale": 0.5, # images are pre-scaled to 20%, so 0.5 means 10%
   "rod": 0.9, # rod: ratio of best vs second best
 }
 
@@ -82,11 +83,13 @@ def show(impA, impB, matches, suffix):
   imp1 = ImagePlus(impA.getTitle() + suffix, impA.getProcessor()) # shallow copy
   imp2 = ImagePlus(impB.getTitle() + suffix, impB.getProcessor()) # shallow copy
   proi1 = PointRoi()
+  proi1.setShowLabels(True)
   proi2 = PointRoi()
+  proi2.setShowLabels(True)
   for pm in matches:
-    p1 = pm.get1().getL()
+    p1 = pm.getP1().getL()
     proi1.addPoint(p1[0], p1[1])
-    p2 = pm.get2().getL()
+    p2 = pm.getP2().getL()
     proi2.addPoint(p2[0], p2[1])
   imp1.setRoi(proi1)
   imp1.show()
@@ -97,7 +100,8 @@ show(imp1, imp2, matchesAllToAll, " all-to-all")
 show(imp1, imp2, matchesKDTree, " kdtree")
   
   
-  
+# Result: takes 4 times as long to run with a KDTree, and finds only 421 features as opposed to 3191.
+# So the result is different and it is slower.
   
   
   
