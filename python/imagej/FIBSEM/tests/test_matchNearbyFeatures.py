@@ -9,13 +9,14 @@ from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.models import TranslationModel2D
 from ij import IJ
 from java.util import ArrayList
-from java.lang import Double
+from java.lang import Double, System
 
 _, PointMatchesFast = initNativeClasses()
 
-
-imp1 = IJ.openImage("/home/albert/Desktop/t2/FIBSEM_MR1.4-3/1_0.2_1.tif")
-imp2 = IJ.openImage("/home/albert/Desktop/t2/FIBSEM_MR1.4-3/1_0.2_2.tif")
+#folder = "/home/albert/Desktop/t2/FIBSEM_MR1.4-3/"
+folder = "/home/albert/lab/projects/20240625_segment_FIBSEM_neural_tissue_vs_background/test-images/"
+imp1 = IJ.openImage(folder + "1_0.2_1.tif")
+imp2 = IJ.openImage(folder + "1_0.2_2.tif")
 
 radius = 100 # in pixels, as maximum expected displacement
 
