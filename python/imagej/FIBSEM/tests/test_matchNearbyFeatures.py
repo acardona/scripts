@@ -100,8 +100,8 @@ show(imp1, imp2, matchesAllToAll, " all-to-all")
 show(imp1, imp2, matchesKDTree, " kdtree")
   
   
-# Result: takes 4 times as long to run with a KDTree, and finds only 421 features as opposed to 3191.
-# So the result is different and it is slower.
+# Result: takes 98 milliseconds instead of 27 seconds (!!!) and finds 2632 features instead of 3191 (all-to-all).
+# I'd like to think it's skipping a lot of potential false matches.
   
   
   
