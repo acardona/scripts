@@ -455,7 +455,7 @@ def createSMOClassifier(img, samples, class_names, n_samples=0, ops=None, filepa
       filterBank: optional, the sequence of ImgMath ops to apply to the img.
       save_to_file: optional, a filename for saving the learnt classifier.
   """
-  return trainClassifier(SMO(), img, samples, class_names, n_samples=n_samples, ops=ops, filepath=None)
+  return trainClassifier(SMO(), img, samples, class_names, n_samples=n_samples, ops=ops, filepath=filepath)
 
 
 def createRandomForestClassifier(img, samples, class_names, n_samples=0, ops=None, filepath=None, params={}):
@@ -495,7 +495,7 @@ def classify(img, classifier, class_names, ops=None, distribution_class_index=-1
                                 When larger than -1, it's interpreted as a class index, and
                                 returns instead the floating-point value of each pixel in
                                 the distribution of that particular class index. """
-  if type(classifier) == str:
+  if type(classifier) == str or type(classifier) == unicode:
     classifier = SerializationHelper.read(classifier)
 
   ops = ops if ops else filterBank(img)
