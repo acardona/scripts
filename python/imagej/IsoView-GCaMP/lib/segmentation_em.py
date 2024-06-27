@@ -11,17 +11,27 @@ from net.imglib2.realtransform import AffineTransform2D
 from net.imglib2.realtransform import RealViews as RV
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from itertools import product, repeat
+from functools import partial
 from jarray import array, zeros
 from java.util import ArrayList
+from java.lang import Thread
 from math import radians, floor, ceil
 from weka.core import SerializationHelper, DenseInstance, Instances, Attribute
 from weka.classifiers import AbstractClassifier
 from weka.classifiers.functions import SMO, MultilayerPerceptron
 from trainableSegmentation import WekaSegmentation
 from hr.irb.fastRandomForest import FastRandomForest
-from util import numCPUs
+from util import numCPUs, SoftMemoize
 import sys
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
+try:
+  from sc.fiji.labkit.pixel_classification.classification import Segmenter
+  from sc.fiji.labkit.pixel_classification.gson import GsonUtils
+  from sc.fiji.labkit.pixel_classification.utils import SingletonContext
+except:
+  print "lib/segmentation_em.py: Missing LabKit libraries!"
+
+
 
 
 def shift(corners, dx, dy):
@@ -567,3 +577,37 @@ def classifyImageTWS2(imp, n_threads=1, labels=True, classifier=None, clone=Fals
   ws.setClassifier(classifier)
   ws.applyClassifier(n_threads, labels) # False 'labels' means generate labels, otherwise probability maps. Will create feature stack if not present.
   return ws.getClassifiedImage()
+
+
+def decodeLabKitClassifier(model_path, json, n_threads):
+  if not json:
+    json = GsonUtils.read(model_path)
+  seg = Segmenter.fromJson(SingletonContext.getInstance(), json)
+  seg.getClassifier().setNumThreads(n_threads)
+  # Instead,could build it here:
+  # fastrandomforest = ClassifierSerialization.jsonToWeka(json)
+  # ... but it is not obvious how to clone it, and building the Segmenter requires types that may be hard to get via jython.
+  return seg
+
+
+def classifyImageLabKit(imp, n_threads=1, json=None, model_path=None, seg=None):
+  # Has to decode it every time, but at least isn't loading it from the file system
+  if not seg:
+    seg = decodeLabKitClassifier(n_threads=n_threads, json=json, model_path=model_path)
+  return seg.segment(IL.wrap(imp)) # a RandomAccessibleInterval
+
+def segThreadCache(model_path, n_threads, cache_size=64):
+  json = GsonUtils.read(model_path) # load from the file system
+  def make(thread): # ignore the argument
+    return decodeLabKitClassifier(model_path, json, n_threads)
+  return SoftMemoize(make, maxsize=cache_size)
+
+def classifyImageLabKitSegCached(img, segCache):
+  """ Takes a RandomAccessibleInterval as argument, and the thread-keyed cache of Segmenter instances. """
+  return segCache(Thread.currentThread()).segment(img) # returns a RandomAccessibleInterval
+
+
+
+
+
+

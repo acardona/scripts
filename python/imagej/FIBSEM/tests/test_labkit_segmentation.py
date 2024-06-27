@@ -13,6 +13,7 @@ from sc.fiji.labkit.pixel_classification.classification import Segmenter
 from sc.fiji.labkit.pixel_classification.gson import GsonUtils
 from sc.fiji.labkit.pixel_classification.classification import ClassifierSerialization
 
+
 folder = "/home/albert/lab/projects/20240625_segment_FIBSEM_neural_tissue_vs_background/"
 model_path = folder + "labkit/MR1.4-3_section1+6000_0.025.labkit.classifier"
 test_imp = IJ.openImage(os.path.join(folder, "MR1.4-3_section_9000_0.025.tif"))
