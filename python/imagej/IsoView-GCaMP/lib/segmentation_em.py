@@ -591,10 +591,13 @@ def decodeLabKitClassifier(model_path, json, n_threads):
 
 
 def classifyImageLabKit(imp, n_threads=1, json=None, model_path=None, seg=None):
+  """ Takes an ImagePlus of any type, and returns an 8-bit ImagePlus (i.e., assumes there are only up to 256 labels). """
   # Has to decode it every time, but at least isn't loading it from the file system
   if not seg:
     seg = decodeLabKitClassifier(n_threads=n_threads, json=json, model_path=model_path)
-  return seg.segment(IL.wrap(imp)) # a RandomAccessibleInterval
+  labels = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
+  seg.segment(Views.extendBorder(IL.wrap(imp)), labels)
+  return IL.wrap(labels, imp.getTitle() + " - labels")
 
 def segThreadCache(model_path, n_threads, cache_size=64):
   json = GsonUtils.read(model_path) # load from the file system
@@ -603,8 +606,13 @@ def segThreadCache(model_path, n_threads, cache_size=64):
   return SoftMemoize(make, maxsize=cache_size)
 
 def classifyImageLabKitSegCached(img, segCache):
-  """ Takes a RandomAccessibleInterval as argument, and the thread-keyed cache of Segmenter instances. """
-  return segCache(Thread.currentThread()).segment(img) # returns a RandomAccessibleInterval
+  """ Takes a RandomAccessibleInterval as argument, and the thread-keyed cache of Segmenter instances.
+      Returns an ArrayImg<UnsignedByteType> - assumes there are up to 256 labels maximum.
+  """
+  seg = segCache(Thread.currentThread())
+  labels = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img))
+  seg.segment(labels, Views.extendBorder(img)) # WARNING notice the order of arguments feels backwards
+  return labels
 
 
 
