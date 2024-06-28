@@ -214,7 +214,7 @@ volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_he
 
 
 # Function to filter out features outside the tissue
-model_path = os.path.join(tgtDir, "classifier_1+6000.model") # from the Trainable Weka Segmentation
+model_path = os.path.join(tgtDir, "MR1.4-3_section1+6000_0.025.labkit.classifier") # from LabKit
 model_width = 400 # target width for resizing so as to match the dimensions of the image used when training the model.
 
 
