@@ -281,8 +281,8 @@ paramsTileConfiguration = {
 #computeShifts(groupNames, csvDirZ, threshold, params, properties, "shifts")
 
 # DEBUG:
-groupNames = groupNames[0:4]
-tileGroups = tileGroups[0:4]
+#groupNames = groupNames[0:4]
+#tileGroups = tileGroups[0:4]
 
 
 matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
