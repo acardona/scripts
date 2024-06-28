@@ -150,7 +150,8 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
     # Use only points within the tissue
     filterFeaturesFn = properties.get("filterFeaturesFn", None)
     if filterFeaturesFn:
-      sourcePoints = filterFeaturesFn(fp1.convertToByte(True), sourcePoints, points=True)
+      # sourcePoints are unscaled, but fp1 is scaled. Hence pass on the scale    
+      sourcePoints = filterFeaturesFn(fp1.convertToByte(True), sourcePoints, points=True, ip_scale=params["scale"])
     
     
     syncPrintQ("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
@@ -1209,7 +1210,7 @@ def makeFilterFeaturesFn(model_path, model_width):
                  model_width,
                  segThreadCache(model_path, 1, cache_size=numCPUs())) # 1 thread for running the inference on the image
 
-def filterFeatures(model_width, seg_cache, section_ip, positions, points=False):
+def filterFeatures(model_width, seg_cache, section_ip, positions, points=False, ip_scale=1.0, process_mask=True):
   """ Compute a mask for the section_ip (a ByteProcessor) using a LabKit Segmenter, obtained from the seg_cache.
   If points=False, assume features contain Feature instances, otherwise Point instances. """
   section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
@@ -1225,18 +1226,41 @@ def filterFeatures(model_width, seg_cache, section_ip, positions, points=False):
   labels = classifyImageLabKitSegCached(resized_img, seg_cache) # Returns a RandomAccessibleInterval<UnsignedByteType>
   mask = ByteProcessor(resized_ip.getWidth(), resized_ip.getHeight(), labels.update(None).getCurrentStorageArray())
   
+  if process_mask:
+    # First multiply by 255
+    mask.multiply(255)
+    # Close small holes by dilating and then eroding, which, since it's not inverted, do backwards
+    mask.erode()
+    mask.dilate()
+    # Erase floating debris by eroding twice, which means dilate when not inverted
+    mask.dilate()
+    mask.dilate()
+  
+  # DEBUG
+  tag = str(System.nanoTime())
+  #ImagePlus("original " + tag, section_ip).show()
+  #ImagePlus("resized " + tag, resized_ip).show()
+  #IL.wrap(labels, "labels " + tag).show()
+  #ImagePlus("mask " + tag, mask).show()
+  
   # Filter points or features by their location: if the value is larger than 0 at the location then accept, otherwise reject
   ps = ArrayList()
-  scale = float(model_width) / section_ip.getWidth()
+  scale = ip_scale * float(model_width) / section_ip.getWidth()
   
   if points:
+    #ls = []
     for p in positions: # p is a Point, for BlockMatching
+      #ls.append("[%f, %f]" % (p.getL()[0], p.getL()[1]))
       if mask.getPixel(int(p.getL()[0] * scale + 0.5), int(p.getL()[1] * scale + 0.5)) > 0:
         ps.add(p)
+      #syncPrintQ(tag + ", ".join(ls))
   else:
     for f in positions: # f is a Feature, for SIFT
       if mask.getPixel(int(f.location[0] * scale + 0.5), int(f.location[1] * scale + 0.5)) > 0:
         ps.add(f)
+  
+  # DEBUG
+  syncPrintQ("filterFeatures # start: %s, end: %i - %s" % (len(positions), len(ps), tag))
   
   return ps
 
