@@ -4,10 +4,8 @@ sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths
 from lib.util import syncPrintQ
-from lib.serial2Dregistration import align, alignInChunks, handleNoPointMatches, computeShifts
+from lib.serial2Dregistration import align, alignInChunks, handleNoPointMatches, computeShifts, makeFilterFeaturesFn
 from lib.montage2d import ensureMontages, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices, fuseTranslationMatrices
-#from lib.segmentation_em import classifyImageTWS2, loadClassifier
-from lib.segmentation_em import classifyImageLabKitSegCached, segThreadCache
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
@@ -16,8 +14,7 @@ from net.imglib2.util import Intervals
 from net.imglib2.type.numeric.integer import UnsignedByteType
 from java.lang import Runtime
 from ij.gui import Roi
-from ij import ImagePlus
-from ij.process import ImageProcessor
+
 
 
 # MR1.4-3 volume
@@ -218,42 +215,7 @@ volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_he
 
 # Function to filter out features outside the tissue
 model_path = os.path.join(tgtDir, "classifier_1+6000.model") # from the Trainable Weka Segmentation
-#classifier = loadClassifier(model_path) # weka's
-model_width = 400
-seg_cache = segThreadCache(model_path, 1, cache_size=256)
-
-
-def filterFeatures(section_ip, positions, points=False):
-  """ If points=False, assume features contain Feature instances, otherwise Point instances. """
-  global classifier, model_width
-  n_threads = 1
-  section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
-  resized_ip = section_ip.resize(model_width)
-  resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [model_width, resized_ip.getHeight()])
-  
-  """
-  # Trainable Weka Segmentation fails for mysterious reasons, works on isolated scripts
-  labels_imp = classifyImageTWS2(resized_imp, classifier=classifier, clone=True)
-  mask = labels_imp.getProcessor() # with 0 for background (resin) and 1 for tissue
-  """
-  # Use LabKit instead
-  labels = classifyImageLabKitSegCached(resized_img, cache) # Returns a RandomAccessibleInterval<UnsignedByteType>
-  mask = ByteProcessor(resized_ip.getWidth(), resized_ip.getHeight(), labels.update(None).getCurrentStorageArray())
-  
-  # Filter points or features by their location: if the value is larger than 0 at the location then accept, otherwise reject
-  ps = ArrayList()
-  scale = float(model_width) / section_ip.getWidth()
-  
-  if points:
-    for p in positions: # p is a Point, for BlockMatching
-      if mask.getPixel(int(p.getL()[0] * scale + 0.5), int(p.getL()[1] * scale + 0.5)) > 0:
-        ps.add(p)
-  else:
-    for f in positions: # f is a Feature, for SIFT
-      if mask.getPixel(int(f.location[0] * scale + 0.5), int(f.location[1] * scale + 0.5)) > 0:
-        ps.add(f)
-  
-  return ps
+model_width = 400 # target width for resizing so as to match the dimensions of the image used when training the model.
 
 
 # Start section registration
@@ -278,7 +240,7 @@ properties = {
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
  'max_n_pointmatches': 1000, # When loading, keep only a sensible subset
  'ignoreCacheFn': lambda index: False, # True if index > 17000 else False
- 'filterFeaturesFn': filterFeatures, # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
+ 'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
 }
 
 # Parameters for blockmatching

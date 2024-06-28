@@ -29,7 +29,7 @@ from java.util import ArrayList, HashSet
 from java.lang import Double, System, Runnable, Runtime, Exception, Throwable
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.view import Views
-from ij.process import FloatProcessor
+from ij.process import FloatProcessor, ImageProcessor
 from ij import IJ, ImageListener, ImagePlus, WindowManager
 from net.imglib2.img.io.proxyaccess import ShortAccessProxy
 from net.imglib2.img.cell import LazyCellImg, Cell, CellGrid
@@ -59,6 +59,7 @@ from ui import showStack, wrap, showTable, ExecutorCloser
 from converter import convert2
 from pixels import autoAdjust
 from loop import createBiConsumerTypeSet
+from segmentation_em import classifyImageLabKitSegCached, segThreadCache
 
 
 
@@ -1203,8 +1204,41 @@ def computeShifts(groupNames, csvDir, threshold, params, properties, shifts_file
         f.write('\n')
 
 
+def makefilterFeaturesFn(model_path, model_width):
+  return partial(filterFeatures,
+                 model_width,
+                 segThreadCache(model_path, 1, cache_size=numCPUs())) # 1 thread for running the inference on the image
 
-
+def filterFeatures(model_width, seg_cache, section_ip, positions, points=False):
+  """ Compute a mask for the section_ip using a LabKit Segmenter, obtained from the seg_cache.
+  If points=False, assume features contain Feature instances, otherwise Point instances. """
+  section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
+  resized_ip = section_ip.resize(model_width)
+  resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [model_width, resized_ip.getHeight()])
+  
+  """
+  # Trainable Weka Segmentation fails for mysterious reasons, works on isolated scripts
+  labels_imp = classifyImageTWS2(resized_imp, classifier=classifier, clone=True)
+  mask = labels_imp.getProcessor() # with 0 for background (resin) and 1 for tissue
+  """
+  # Use LabKit instead
+  labels = classifyImageLabKitSegCached(resized_img, seg_cache) # Returns a RandomAccessibleInterval<UnsignedByteType>
+  mask = ByteProcessor(resized_ip.getWidth(), resized_ip.getHeight(), labels.update(None).getCurrentStorageArray())
+  
+  # Filter points or features by their location: if the value is larger than 0 at the location then accept, otherwise reject
+  ps = ArrayList()
+  scale = float(model_width) / section_ip.getWidth()
+  
+  if points:
+    for p in positions: # p is a Point, for BlockMatching
+      if mask.getPixel(int(p.getL()[0] * scale + 0.5), int(p.getL()[1] * scale + 0.5)) > 0:
+        ps.add(p)
+  else:
+    for f in positions: # f is a Feature, for SIFT
+      if mask.getPixel(int(f.location[0] * scale + 0.5), int(f.location[1] * scale + 0.5)) > 0:
+        ps.add(f)
+  
+  return ps
 
 
 
