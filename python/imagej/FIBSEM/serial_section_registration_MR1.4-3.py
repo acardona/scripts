@@ -237,7 +237,7 @@ def filterFeatures(section_ip, positions, points=False):
   mask = labels_imp.getProcessor() # with 0 for background (resin) and 1 for tissue
   """
   # Use LabKit instead
-  labels = classifyImageLabKitSegCached(IL.wrap(resized_imp), cache) # Returns a RandomAccessibleInterval<UnsignedByteType>
+  labels = classifyImageLabKitSegCached(IL.wrap(resized_imp), cache) # Returns a RandomAccessibleInterval<UnsignedByteType> in the form of an ArrayImg
   mask = ByteProcessor(resized_imp.getWidth(), resized_imp.getHeight(), labels.update(None).getCurrentStorageArray())
   
   # Filter points or features by their location: if the value is larger than 0 at the location then accept, otherwise reject
