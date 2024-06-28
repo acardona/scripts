@@ -1204,7 +1204,7 @@ def computeShifts(groupNames, csvDir, threshold, params, properties, shifts_file
         f.write('\n')
 
 
-def makefilterFeaturesFn(model_path, model_width):
+def makeFilterFeaturesFn(model_path, model_width):
   return partial(filterFeatures,
                  model_width,
                  segThreadCache(model_path, 1, cache_size=numCPUs())) # 1 thread for running the inference on the image
