@@ -29,7 +29,7 @@ from java.util import ArrayList, HashSet
 from java.lang import Double, System, Runnable, Runtime, Exception, Throwable
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.view import Views
-from ij.process import FloatProcessor, ImageProcessor
+from ij.process import FloatProcessor, ImageProcessor, ByteProcessor
 from ij import IJ, ImageListener, ImagePlus, WindowManager
 from net.imglib2.img.io.proxyaccess import ShortAccessProxy
 from net.imglib2.img.cell import LazyCellImg, Cell, CellGrid
@@ -150,7 +150,7 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
     # Use only points within the tissue
     filterFeaturesFn = properties.get("filterFeaturesFn", None)
     if filterFeaturesFn:
-      sourcePoints = filterFeaturesFn(fp1, sourcePoints, points=True)
+      sourcePoints = filterFeaturesFn(fp1.convertToByte(True), sourcePoints, points=True)
     
     
     syncPrintQ("Extracting block matches for \n S: " + filepath1 + "\n T: " + filepath2 + "\n  with " + str(sourcePoints.size()) + " mesh sourcePoints.")
@@ -1210,12 +1210,10 @@ def makeFilterFeaturesFn(model_path, model_width):
                  segThreadCache(model_path, 1, cache_size=numCPUs())) # 1 thread for running the inference on the image
 
 def filterFeatures(model_width, seg_cache, section_ip, positions, points=False):
-  """ Compute a mask for the section_ip using a LabKit Segmenter, obtained from the seg_cache.
+  """ Compute a mask for the section_ip (a ByteProcessor) using a LabKit Segmenter, obtained from the seg_cache.
   If points=False, assume features contain Feature instances, otherwise Point instances. """
   section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
   resized_ip = section_ip.resize(model_width)
-  if not isinstance(resized_ip, ByteProcesor):
-    resized_ip = resized_ip.convertToByte(True)
   resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [model_width, resized_ip.getHeight()])
   
   """
