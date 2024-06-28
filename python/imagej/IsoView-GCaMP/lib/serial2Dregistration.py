@@ -1214,6 +1214,8 @@ def filterFeatures(model_width, seg_cache, section_ip, positions, points=False):
   If points=False, assume features contain Feature instances, otherwise Point instances. """
   section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
   resized_ip = section_ip.resize(model_width)
+  if not isinstance(resized_ip, ByteProcesor):
+    resized_ip = resized_ip.convertToByte(True)
   resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [model_width, resized_ip.getHeight()])
   
   """
