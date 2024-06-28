@@ -600,6 +600,7 @@ def classifyImageLabKit(imp, n_threads=1, json=None, model_path=None, seg=None):
   return IL.wrap(labels, imp.getTitle() + " - labels")
 
 def segThreadCache(model_path, n_threads, cache_size=64):
+  """ Creates a cache of SoftReference values holding LabKit Segmenter instances, keyed by Thread. """
   json = GsonUtils.read(model_path) # load from the file system
   def make(thread): # ignore the argument
     return decodeLabKitClassifier(model_path, json, n_threads)

@@ -228,8 +228,8 @@ def filterFeatures(section_ip, positions, points=False):
   global classifier, model_width
   n_threads = 1
   section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
-  resized_imp = ImagePlus("", section_ip.resize(model_width))
-  syncPrintQ("resized_imp: " + str(resized_imp))
+  resized_ip = section_ip.resize(model_width)
+  resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [model_width, resized_ip.getHeight()])
   
   """
   # Trainable Weka Segmentation fails for mysterious reasons, works on isolated scripts
@@ -237,8 +237,8 @@ def filterFeatures(section_ip, positions, points=False):
   mask = labels_imp.getProcessor() # with 0 for background (resin) and 1 for tissue
   """
   # Use LabKit instead
-  labels = classifyImageLabKitSegCached(IL.wrap(resized_imp), cache) # Returns a RandomAccessibleInterval<UnsignedByteType> in the form of an ArrayImg
-  mask = ByteProcessor(resized_imp.getWidth(), resized_imp.getHeight(), labels.update(None).getCurrentStorageArray())
+  labels = classifyImageLabKitSegCached(resized_img, cache) # Returns a RandomAccessibleInterval<UnsignedByteType>
+  mask = ByteProcessor(resized_ip.getWidth(), resized_ip.getHeight(), labels.update(None).getCurrentStorageArray())
   
   # Filter points or features by their location: if the value is larger than 0 at the location then accept, otherwise reject
   ps = ArrayList()
