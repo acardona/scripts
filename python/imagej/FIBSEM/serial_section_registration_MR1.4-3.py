@@ -134,7 +134,7 @@ fixed_tile_indices = [7000-1904] # A section in the brain, with 1x2 tiles
 
 # Manual offset for sections with a single tile:
 def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
-  index -= 1904 # removed 964 to 1904+964 afterwards
+  index += 1904 # removed 964 to 1904+964 afterwards
   # Must always return a tuple with two integers
   if index >= 0 and index < (2869 - 964 -1): # All single-tile slices, with first 1x2 tiles being Merlin-WEMS_24-02-25_214509_
     dx = 1282
@@ -210,7 +210,7 @@ ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsS
 # NOTE: it's 8-bit
 volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
                                paramsSIFT, paramsRANSAC, paramsTileConf, csvDir, params_pixels,
-                               show=False, matrices=None, section_offsets=sectionOffsets, title="Montages")
+                               show=True, matrices=None, section_offsets=sectionOffsets, title="Montages")
 
 
 # Function to filter out features outside the tissue
@@ -228,7 +228,7 @@ properties = {
  'img_dimensions': Intervals.dimensionsAsLongArray(volumeImgMontaged),
  'srcDir': srcDir,
  'pixelType': UnsignedByteType,
- 'n_threads': 64, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
+ 'n_threads': 84, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
  'invert': False, # Processing is done already
  'CLAHE_params': None, #[200, 256, 3.0], # For viewAligned. Use None to disable. Blockradius, nBins, slope.
  'use_SIFT': False,
@@ -268,7 +268,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 4000, # Saalfeld recommends 1000
+  "maxIterations": 40000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
   "nThreadsOptimizer": Runtime.getRuntime().availableProcessors(), # as many as CPU cores
   "chunk_size": 400, # Will align in 50% overlapping chunks for best use of the optimizer
@@ -296,6 +296,7 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
                                   title_addendum=" SIFT+RANSAC")
 
 imp = impSIFT
+
 
 """
 
