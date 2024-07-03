@@ -1,5 +1,6 @@
+import os
 from time import time
-from lib.util import syncPrintQ, printException
+from lib.util import syncPrintQ, printException, newFixedThreadPool
 from lib.converter import createConverter, convert
 from net.imglib2 import FinalInterval
 from net.imglib2.img.array import ArrayImgs
@@ -12,12 +13,13 @@ from ij import ImagePlus, CompositeImage, VirtualStack
 from ij.process import FloatProcessor
 from java.awt import Dimension
 from java.awt.event import KeyAdapter, KeyEvent, WindowAdapter
-from java.lang import Number, Runtime
+from java.lang import Number, Runtime, Thread
 from java.util import Comparator
 from java.util.concurrent import Callable, Future, Executors
 from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
 from javax.swing.table import AbstractTableModel, TableRowSorter
-from ij import IJ, ImagePlus, ImageStack
+from ij import IJ, ImagePlus, ImageStack, VirtualStack
+from ij.io import FileSaver
 
 
 
@@ -331,16 +333,24 @@ def addWindowListener(window, fn, methods=["windowClosed"]):
 
 
 class CopyStackSlice(Callable):
-  def __init__(self, stack, slice_index, shallow=False):
+  def __init__(self, stack, slice_index, shallow=False, scale=1.0):
     self.stack = stack
     self.slice_index = slice_index # 1-based
     self.shallow = shallow
+    self.scale = scale
   def call(self):
+    t = Thread.currentThread()
+    if t.isInterrupted() or not t.isAlive():
+      return None
     ip = self.stack.getProcessor(self.slice_index)
+    if self.scale < 1.0:
+      return ip.resize(int(ip.getWidth() * self.scale + 0.5),
+                       int(ip.getHeight() * self.scale + 0.5),
+                       True) # averaging
     return ip if self.shallow else ip.duplicate()
 
 # Duplicate a stack in parallel
-def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=True):
+def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=True, scale=1.0):
   """ imp: defaults to None, meaning get the current image.
       slices: defaults to None, meaning all. Otherwise a list of 1-based indices.
       n_threads: defaults to 0, meaning as many as possible.
@@ -349,11 +359,15 @@ def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=
   imp = imp if imp else IJ.getImage()
   slices = slices if slices else range(1, imp.getNSlices() + 1)
   stack = imp.getStack()
-  exe = Executors.newFixedThreadPool(n_threads if n_threads > 0 else min(Runtime.getRuntime().availableProcessors(), stack.getSize()))
+  exe = newFixedThreadPool(n_threads=n_threads if n_threads > 0 else min(Runtime.getRuntime().availableProcessors(), stack.getSize()), name="duplicate-stack")
   try:
     stack2 = ImageStack(imp.getWidth(), imp.getHeight())
-    futures = [(i, exe.submit(CopyStackSlice(stack, i, shallow))) for i in slices]
+    futures = [(i, exe.submit(CopyStackSlice(stack, i, shallow=shallow, scale=scale))) for i in slices]
     for i, fu in futures:
+      t = Thread.currentThread()
+      if t.isInterrupted() or not t.isAlive():
+        syncPrintQ("Interrupted duplicateInParallel.")
+        return
       label = stack.getSliceLabel(i)
       stack2.addSlice(label if label else str(i), fu.get())
     imp = ImagePlus("%s - [%i, %i]" % (imp.getTitle(), slices[0], slices[-1]), stack2)
@@ -363,6 +377,61 @@ def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=
   finally:
     exe.shutdown()
 
+class SaveStackSlice(Callable):
+  def __init__(self, stack, slice_index, targetDir, scale=1.0, incremental=True):
+    self.stack = stack
+    self.slice_index = slice_index # 1-based
+    self.targetDir = targetDir
+    self.scale = scale
+    self.incremental = incremental
+  def call(self):
+    t = Thread.currentThread()
+    if t.isInterrupted() or not t.isAlive():
+      return False
+    path = os.path.join(self.targetDir, "%i.tif" % self.slice_index)
+    if self.incremental and os.path.exists(path):
+      return True
+    ip = self.stack.getProcessor(self.slice_index)
+    if self.scale < 1.0:
+      ip = ip.resize(int(ip.getWidth() * self.scale + 0.5),
+                     int(ip.getHeight() * self.scale + 0.5),
+                     True) # averaging
+    syncPrintQ("Saving slice %i" % self.slice_index)
+    return FileSaver(ImagePlus(str(self.slice_index), ip)).saveAsTiff(path)
+
+# Duplicate a stack in parallel
+def saveInParallel(targetDir, imp=None, slices=None, n_threads=0, show=True, scale=1.0, incremental=True):
+  """ imp: defaults to None, meaning get the current image.
+      slices: defaults to None, meaning all. Otherwise a list of 1-based indices.
+      n_threads: defaults to 0, meaning as many as possible.
+      shallow: defaults to False, meaning don't share the pixel data.
+  """
+  imp = imp if imp else IJ.getImage()
+  slices = slices if slices else range(1, imp.getNSlices() + 1)
+  stack = imp.getStack()
+  exe = newFixedThreadPool(n_threads=n_threads if n_threads > 0 else min(Runtime.getRuntime().availableProcessors(), stack.getSize()), name="duplicate-stack")
+  try:
+    futures = [(i, exe.submit(SaveStackSlice(stack, i, targetDir, scale=scale, incremental=incremental))) for i in slices]
+    for i, fu in futures:
+      t = Thread.currentThread()
+      if t.isInterrupted() or not t.isAlive():
+        syncPrintQ("Interrupted saveInParallel.")
+        return
+      if not fu.get():
+        syncPrint("Failed to save slice %i" % i)
+    if show:
+      vs = VirtualStack(int(imp.getWidth() * scale + 0.5),
+                        int(imp.getHeight() * scale + 0.5),
+                        None,
+                        targetDir)
+      for i in slices:
+        vs.addSlice("%i.tif" % i)
+      imp = ImagePlus(imp.getTitle() + " scale: " + str(scale), vs)
+      imp.show()
+      return imp
+    return None
+  finally:
+    exe.shutdown()
 
 
 
