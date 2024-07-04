@@ -1283,6 +1283,9 @@ def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtC
       srcPath = os.path.join(srcCsvDir, filename)
       tgtPath = os.path.join(tgtCsvDir, filename)
       
+      if not os.path.exists(srcPath):
+        continue
+      
       # Incremental:
       if os.path.exists(tgtPath):
         continue
