@@ -1287,20 +1287,19 @@ def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtC
       if os.path.exists(tgtPath):
         continue
       
-      if 0 == dx1 and 0 == dy1 and 0 == dx2 and 0 == dy2:
-        # Copy the file over
-        #shutils.copyfile(srcPath, tgtPath) # doesn't exist in jython 2.7
-        Files.copy(Paths.get(srcPath), Paths.get(tgtPath), StandardCopyOption.REPLACE_EXISTING)
-        continue
-      
-      t1 = TranslationModel2D()
-      t1.set(dx1, dy1)
-      
-      t2 = TranslationModel2D()
-      t2.set(dx2, dy2)
-      
-      
       try:
+        if 0 == dx1 and 0 == dy1 and 0 == dx2 and 0 == dy2:
+          # Copy the file over
+          #shutils.copyfile(srcPath, tgtPath) # doesn't exist in jython 2.7
+          Files.copy(Paths.get(srcPath), Paths.get(tgtPath), StandardCopyOption.REPLACE_EXISTING)
+          continue
+      
+        t1 = TranslationModel2D()
+        t1.set(dx1, dy1)
+      
+        t2 = TranslationModel2D()
+        t2.set(dx2, dy2)
+      
         pointmatches = PointMatches.fromPath(srcPath).pointmatches
         pms = []
         for pm in pointmatches:
