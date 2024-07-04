@@ -60,7 +60,7 @@ from converter import convert2
 from pixels import autoAdjust
 from loop import createBiConsumerTypeSet
 from segmentation_em import classifyImageLabKitSegCached, segThreadCache
-
+import shutils
 
 
 def loadImp(filepath):
@@ -1266,9 +1266,58 @@ def filterFeatures(model_width, seg_cache, section_ip, positions, points=False, 
 
 
 
+def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtCsvDir):
+  """
+  If the shifts (sectionOffsets) have changed, rather than re-run the alignment to re-extract the pointmatches, merely translate them.
+  """
 
-
-
+  for i in xrange(first, max(1, len(groupNames) - n_adjacent)):
+    for inc in xrange(1, min(n_adjacent + 1, len(groupNames))):
+      i1 = i
+      i2 = i + inc
+      dx1, dy1 = translationFn(i1)
+      dx2, dy2 = translationFn(i2)
+      g1 = groupNames[i1]
+      g2 = groupNames[i2]
+      filename = "%s.%s.pointmatches.csv" % (g1, g2)
+      srcPath = os.path.join(srcCsvDir, filename)
+      tgtPath = os.path.join(tgtCsvDir, filename)
+      
+      # Incremental:
+      if os.path.exists(tgtPath):
+        continue
+      
+      if 0 == dx1 and 0 == dy1 and 0 == dx2 and 0 == dy2:
+        # Copy the file over
+        shutils.copyfile(srcPath, tgtPath)
+        continue
+      
+      t1 = TranslationModel2D()
+      t1.set(dx1, dy1)
+      
+      t2 = TranslationModel2D()
+      t2.set(dx2, dy2)
+      
+      pointmatches = PointMatches.fromPath(srcPath).pointmatches
+      pms = []
+      for pm in pointmatches:
+        p1 = pm.getP1().getL()
+        t1.apply(p1)
+        p2 = pm.getP2().getL()
+        t2.apply(p2)
+        pms.append(PointMatch(Point(p1), Point(p2)))
+      
+      # Construct a params dictionary with ints and floats as values, depending on whether the values have a period or not
+      with open(srcPath, 'r') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+        # First line contains parameter names, second line their values
+        names = reader.next()
+        values = reader.next()
+        params = {name, int(value) if -1 == value.find('.') else float(value) for name, value in izip(names, values)}       
+      
+      savePointMatches(g1, g2, pms, tgtCsvDir, params)
+      
+      
 
 
 
