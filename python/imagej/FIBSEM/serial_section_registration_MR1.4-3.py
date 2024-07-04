@@ -146,8 +146,31 @@ def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
       dy += 875
     return (dx, dy)
   
+  
   dx = 0
   dy = 0
+  if index >= 2351 + 1904: # 0-based
+    dx += 99
+    dy += 35
+  if index >= 2352 + 1904:
+    dx += 2
+    dy += 4
+  if index >= 2353 + 1904:
+    dx += 1
+    dy += -2
+  if index >= 2354 + 1904:
+    dx += 1
+    dy += 0
+  if index >= 1910 + 1904:
+    dx += 61
+    dy += 12
+  if index >= 1911 + 1904:
+    dx += -2
+    dy += 3
+  if index >= 1912 + 1904:
+    dx += -1
+    dy += -372
+  
   if index >= 17004:
     dx += 13 + 1
     dy + 2 + 1
