@@ -17,8 +17,8 @@ imp = IJ.getImage()
 ranges = [
   #(1, 19532), # all, 1-based
   #(1127, 1129), # transition from 1 to 2 tiles
-  #(1127, 1136), # bad montages
-  (3246, 3247), # corrupt tile
+  (1127, 1136), # bad montages
+  #(3246, 3247), # corrupt tile
 ]
 
 #scale = 400.0 / 16000
