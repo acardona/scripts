@@ -29,7 +29,7 @@ if not os.path.exists(tgtCsvDir):
     os.makedirs(tgtCsvDir) # recursive directory creation
 
 
-def sectionOffsets(index)
+def sectionOffsets(index):
   index += 1904 # add 1904 given that we cropped that many from the start
   dx = 0
   dy = 0
