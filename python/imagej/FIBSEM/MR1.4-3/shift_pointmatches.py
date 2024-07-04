@@ -33,6 +33,15 @@ def sectionOffsets(index)
   index += 1904 # add 1904 given that we cropped that many from the start
   dx = 0
   dy = 0
+  if index >= 1910 + 1904:
+    dx += 61
+    dy += 12
+  if index >= 1911 + 1904:
+    dx += -2
+    dy += 3
+  if index >= 1912 + 1904:
+    dx += -1
+    dy += -372
   if index >= 2351 + 1904: # 0-based
     dx += 99
     dy += 35
@@ -45,15 +54,6 @@ def sectionOffsets(index)
   if index >= 2354 + 1904:
     dx += 1
     dy += 0
-  if index >= 1910 + 1904:
-    dx += 61
-    dy += 12
-  if index >= 1911 + 1904:
-    dx += -2
-    dy += 3
-  if index >= 1912 + 1904:
-    dx += -1
-    dy += -372
   
   return dx, dy
 
