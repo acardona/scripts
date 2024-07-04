@@ -60,7 +60,7 @@ from converter import convert2
 from pixels import autoAdjust
 from loop import createBiConsumerTypeSet
 from segmentation_em import classifyImageLabKitSegCached, segThreadCache
-import shutils
+from java.nio.file import Paths, Files, StandardCopyOption
 
 
 def loadImp(filepath):
@@ -1271,7 +1271,7 @@ def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtC
   If the shifts (sectionOffsets) have changed, rather than re-run the alignment to re-extract the pointmatches, merely translate them.
   """
 
-  for i in xrange(first, max(1, len(groupNames) - n_adjacent)):
+  for i in xrange(0, max(1, len(groupNames) - n_adjacent)):
     for inc in xrange(1, min(n_adjacent + 1, len(groupNames))):
       i1 = i
       i2 = i + inc
@@ -1289,7 +1289,8 @@ def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtC
       
       if 0 == dx1 and 0 == dy1 and 0 == dx2 and 0 == dy2:
         # Copy the file over
-        shutils.copyfile(srcPath, tgtPath)
+        #shutils.copyfile(srcPath, tgtPath) # doesn't exist in jython 2.7
+        Files.copy(Paths.get(srcPath), Paths.get(tgtPath), StandardCopyOption.REPLACE_EXISTING)
         continue
       
       t1 = TranslationModel2D()
@@ -1298,22 +1299,29 @@ def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtC
       t2 = TranslationModel2D()
       t2.set(dx2, dy2)
       
-      pointmatches = PointMatches.fromPath(srcPath).pointmatches
-      pms = []
-      for pm in pointmatches:
-        p1 = pm.getP1().getL()
-        t1.apply(p1)
-        p2 = pm.getP2().getL()
-        t2.apply(p2)
-        pms.append(PointMatch(Point(p1), Point(p2)))
       
-      # Construct a params dictionary with ints and floats as values, depending on whether the values have a period or not
-      with open(srcPath, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-        # First line contains parameter names, second line their values
-        names = reader.next()
-        values = reader.next()
-        params = {name, int(value) if -1 == value.find('.') else float(value) for name, value in izip(names, values)}       
+      try:
+        pointmatches = PointMatches.fromPath(srcPath).pointmatches
+        pms = []
+        for pm in pointmatches:
+          p1 = pm.getP1().getL()
+          t1.apply(p1)
+          p2 = pm.getP2().getL()
+          t2.apply(p2)
+          pms.append(PointMatch(Point(p1), Point(p2)))
+      
+        # Construct a params dictionary with ints and floats as values, depending on whether the values have a period or not
+        params = {}
+        with open(srcPath, 'r') as csvfile:
+          reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+          # First line contains parameter names, second line their values
+          names = reader.next()
+          values = reader.next()
+          for name, value in izip(names, values):
+            params[name] = int(value) if -1 == value.find('.') else float(value)
+      except:
+        print "Failed for file: %i, %i\n %s" %(i1, i2, srcPath)
+        print sys.exc_info()
       
       savePointMatches(g1, g2, pms, tgtCsvDir, params)
       
