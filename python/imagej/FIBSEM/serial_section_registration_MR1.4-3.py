@@ -125,7 +125,7 @@ groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
 
 
 # Skip sections 1-963: no sample in them, just resin
-# Skip sections 964-1904: mostly somas and huge gap between 1903 and 1904
+# Skip sections 964-964+1904: mostly somas and huge gap between 1903 and 1904
 # Skip sections beyond 20964: less milling, overstretched, and full of curtains
 groupNames = groupNames[964+1904:20000+964]
 tileGroups = tileGroups[964+1904:20000+964]
@@ -149,6 +149,15 @@ def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
   
   dx = 0
   dy = 0
+  if index >= 1910 + 1904:
+    dx += 61
+    dy += 12
+  if index >= 1911 + 1904:
+    dx += -2
+    dy += 3
+  if index >= 1912 + 1904:
+    dx += -1
+    dy += -372
   if index >= 2351 + 1904: # 0-based
     dx += 99
     dy += 35
@@ -161,15 +170,6 @@ def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
   if index >= 2354 + 1904:
     dx += 1
     dy += 0
-  if index >= 1910 + 1904:
-    dx += 61
-    dy += 12
-  if index >= 1911 + 1904:
-    dx += -2
-    dy += 3
-  if index >= 1912 + 1904:
-    dx += -1
-    dy += -372
   
   if index >= 17004:
     dx += 13 + 1
