@@ -3,10 +3,25 @@
 import sys, os
 sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.serial2Dregistration import translatePointMatches
+from lib.io import loadFilePaths
+from lib.montage2d import makeMontageGroups
 
-srcCsvDir = "/net/zstore1/FIBSEM/MR1.4-3/registration/csvDir/"
-tgtCsvDir = "/net/zstore1/FIBSEM/MR1.4-3/registration/csvDirS/"
+# MR1.4-3 volume
+# Resolution is: 8x8x8 nm, FIBSEM
+name = "MR1.4-3"
 
+# Folders
+srcDir = "/net/fibserver1/raw/" + name + "/"
+tgtDir = "/net/zstore1/FIBSEM/" + name + "/registration/"
+csvDir = tgtDir + "csv/" # for in-section montaging
+csvDirZ = tgtDir + "csvZ/" # for cross-section alignment with SIFT+RANSAC
+csvDirBM = tgtDir + "csvBM/" # for cross-section alignment with BlockMatching
+repairedDir = "/net/zstore1/FIBSEM/" + name + "/repaired/" # Folder with repaired images, if any
+
+srcCsvDir = csvDirZ
+tgtCsvDir = tgtDir + "csvDirZShifts/"
+
+check = False
 n_adjacent = 3
 
 
