@@ -25,7 +25,7 @@ name = "MR1.4-3"
 srcDir = "/net/fibserver1/raw/" + name + "/"
 tgtDir = "/net/zstore1/FIBSEM/" + name + "/registration/"
 csvDir = tgtDir + "csv/" # for in-section montaging
-csvDirZ = tgtDir + "csvZ/" # for cross-section alignment with SIFT+RANSAC
+csvDirZ = tgtDir + "csvZShifts/" # for cross-section alignment with SIFT+RANSAC
 csvDirBM = tgtDir + "csvBM/" # for cross-section alignment with BlockMatching
 repairedDir = "/net/zstore1/FIBSEM/" + name + "/repaired/" # Folder with repaired images, if any
 
@@ -291,7 +291,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 40000, # Saalfeld recommends 1000
+  "maxIterations": 10000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
   "nThreadsOptimizer": Runtime.getRuntime().availableProcessors(), # as many as CPU cores
   "chunk_size": 400, # Will align in 50% overlapping chunks for best use of the optimizer
