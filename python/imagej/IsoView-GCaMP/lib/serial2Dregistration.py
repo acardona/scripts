@@ -1266,12 +1266,12 @@ def filterFeatures(model_width, seg_cache, section_ip, positions, points=False, 
 
 
 
-def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtCsvDir):
+def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtCsvDir, start=0):
   """
   If the shifts (sectionOffsets) have changed, rather than re-run the alignment to re-extract the pointmatches, merely translate them.
   """
 
-  for i in xrange(0, max(1, len(groupNames) - n_adjacent)):
+  for i in xrange(start, max(1, len(groupNames) - n_adjacent)):
     for inc in xrange(1, min(n_adjacent + 1, len(groupNames))):
       i1 = i
       i2 = i + inc

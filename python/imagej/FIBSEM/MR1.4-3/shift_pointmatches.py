@@ -85,5 +85,5 @@ tileGroups = tileGroups[964+1904:20000+964]
 
 
 
-translatePointMatches(groupNames, sectionOffsets, n_adjacent, srcCsvDir, tgtCsvDir)
+translatePointMatches(groupNames, sectionOffsets, n_adjacent, srcCsvDir, tgtCsvDir, start=12000)
 
