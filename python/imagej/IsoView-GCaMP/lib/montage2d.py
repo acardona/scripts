@@ -1,7 +1,7 @@
 from __future__ import with_statement
 import os, re
 
-from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs
+from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
 from lib.ui import wrap, addWindowListener, duplicateInParallel
@@ -815,7 +815,8 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   
   def openStackOfSliceMontages(self):
     if self.firstIndex > -1 and self.lastIndex > -1:
-      duplicateInParallel(self.imp, range(self.firstIndex, self.lastIndex + 1), n_threads=max(1, numCPUs() -2), shallow=True, show=True, scale=1.0)
+      # ij.ImageStack is 1-based, so add +1 to start and end of selection
+      self.exe.submit(Task(duplicateInParallel, self.imp, range(self.firstIndex +1, self.lastIndex + 2), n_threads=max(1, numCPUs() -2), shallow=True, show=True, scale=1.0))
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
