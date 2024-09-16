@@ -8,7 +8,7 @@ from lib.ui import wrap, addWindowListener
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
 from java.util import ArrayList, Vector, HashSet
-from java.lang import Double, Exception, Throwable
+from java.lang import Double, Exception, Throwable, Integer
 from java.util.concurrent import Callable
 from java.io import File
 from ij.process import ShortProcessor, ByteProcessor
@@ -35,6 +35,12 @@ from mpicbg.ij.clahe import FastFlat as CLAHE
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.imglib.type.numeric.complex import ComplexFloatType
+
+from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities, JLabel, BorderFactory
+from javax.swing.table import AbstractTableModel
+from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font, Insets, Color
+from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, WindowAdapter
+from javax.swing.event import ListSelectionListener
 
 from functools import partial
 from collections import defaultdict
@@ -670,7 +676,8 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
 # Define a virtual CellImg expressing all the montages, one per section
 def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
                paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, params_pixels,
-               show=True, matrices=None, section_offsets=None, title=None, cache_size=64):
+               show=True, matrices=None, section_offsets=None, title=None, cache_size=64,
+               showTable=True):
   dimensions = [section_width, section_height]
   volume_dimensions = dimensions + [len(groupNames)]
   cell_dimensions = dimensions + [1]
@@ -698,8 +705,50 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
     for i, groupName in enumerate(groupNames):
       #syncPrintQ("%i: %s" % (i, groupName))
       stack.setSliceLabel(groupName, i+1) # 1-based
+    # Show a JTable for opening raw images and slice ranges
+    if showTable:
+      table = makeMontageTable(groupNames, tileGroups, imp, volumeImg, show=True)
   
   return volumeImg
+
+class SliceTableModel(AbstractTableModel):
+  def __init__(self, groupNames, tileGroups):
+    self.groupNames = groupNames
+    self.tileGroups = tileGroups
+    self.imp = imp
+    self.volumeImg = volumeImg
+    self.header = ["Slice index", "Group name", "Num. tiles"]
+  def getColumnName(self, col):
+    return self.header[col]
+  def getColumnClass(self, col):
+    return 1 == col ? String : Integer
+  def getRowCount(self):
+    return len(self.groupNames)
+  def getColumnCount(self):
+    return 3
+  def getValueAt(self, row, col):
+    if 0 == col:
+      return row + 1 # 1-based
+    if 1 == col:
+      return self.groupNames[row]
+    if 2 == col:
+      return len(self.tileGroups[row])
+  def isCellEditable(self, row, col):
+    return False # none editable
+  def setValueAt(self, value, row, col):
+    pass # none editable
+
+
+def makeMontageTable(groupNames, tileGroups, imp, volumeImg, show=True):
+  model = SliceTableModel(groupNames, tileGroups)
+  # GUI:
+  all = JPanel()
+  all.setBackground(Color.white)
+  gb = GridBagLayout()
+  all.setLayout(gb)
+  c = GridBagConstraints()
+  # Top-left element: 
+
 
 
 def makeSliceLoader(groupNames, volumeImg):
