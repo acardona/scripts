@@ -1,10 +1,10 @@
 from __future__ import with_statement
 import os, re
 
-from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause
+from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
-from lib.ui import wrap, addWindowListener
+from lib.ui import wrap, addWindowListener, duplicateInParallel
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
 from java.util import ArrayList, Vector, HashSet
@@ -715,9 +715,12 @@ class SliceTableModel(AbstractTableModel):
   def __init__(self, groupNames, tileGroups):
     self.groupNames = groupNames
     self.tileGroups = tileGroups
-    self.imp = imp
-    self.volumeImg = volumeImg
+    self.rows = []
+    self.restore() # populate rows
     self.header = ["Slice index", "Group name", "Num. tiles"]
+  def restore(self):
+    self.rows = [[i+1, groupNames[i], tileGroups[i]]
+                 for i in xrange(groupNames)]
   def getColumnName(self, col):
     return self.header[col]
   def getColumnClass(self, col):
@@ -727,16 +730,113 @@ class SliceTableModel(AbstractTableModel):
   def getColumnCount(self):
     return 3
   def getValueAt(self, row, col):
-    if 0 == col:
-      return row + 1 # 1-based
-    if 1 == col:
-      return self.groupNames[row]
     if 2 == col:
-      return len(self.tileGroups[row])
+      return len(self.rows[row][2])
+    return self.rows[row][col]
   def isCellEditable(self, row, col):
     return False # none editable
   def setValueAt(self, value, row, col):
     pass # none editable
+  def filterTable(self, text):
+    text = text.trim()
+    try:
+      if 0 == len(text):
+        self.restore()
+      else:
+        pattern = re.compile(text)
+        # Search in middle column
+        self.rows = [[i+1, groupName, self.tileGroups[i]]
+                     for i, groupName in enumerate(self.groupNames)
+                     if pattern.search(groupName)]
+      return True
+    except:
+      print "Malformed regex pattern: " + text
+
+
+class TypingInSearchField(KeyAdapter):
+  def __init__(self, table, model, search_field):
+    self.table = table
+    self.model = model
+    self.search_field = search_field
+  def keyPressed(self, event):
+    if KeyEvent.VK_ENTER == event.getKeyCode():
+      self.table.filterTable(self.search_field.getText())
+    elif KeyEvent.VK_ESCAPE == event.getKeyCode():
+      self.search_field.setText("")
+      self.model.restore()
+    SwingUtilities.invokeLater(lambda: self.table.updateUI()) # executed by the event dispatch thread 
+
+class OpenDAT(Runnable):
+  def __init__(self, filepath):
+    self.filepath = filepath
+  def run(self):
+    imp = readFIBSEMdat(filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
+    imp.setTitle(os.path.basename(filepath))
+    imp.show()
+    syncPrintQ(readFIBSEMHeader(filepath))
+
+class RowClickListener(MouseAdapter, AbstractAction, ListSelectionListener):
+  def __init__(self, model, exe, imp):
+    self.model = model
+    self.exe = exe
+    self.imp = imp
+    self.firstIndex = -1
+    self.lastIndex = -1
+  
+  def mousePressed(self, event):
+    if 2 == event.getClickCount():
+      # Open the raw images of the montage at that slice
+      table = event.getSource()
+      model = table.getModel()
+      rowIndex = table.rowAtPoint(event.getPoint()) # TODO could use self.firstIndex or the whole range
+      self.openImages(rowIndex)
+      
+  def actionPerformed(self, event):
+    table = event.getSource()
+    model = table.getSelectionModel()
+    rowIndex = model.getLeadSelectionIndex() # first selected row
+    self.openImages(rowIndex)
+    
+  def openImages(self, rowIndex):
+    for filepath in model.rows[rowIndex][2]:
+      # Execute in a separate set of threads
+      exe.submit(OpenDAT(filepath))
+  
+  def openImagesRows(self):
+    if not firstIndex:
+      firstIndex = self.firstIndex
+      lastIndex = self.lastIndex
+    if firstIndex < 0 or lastIndex < 0:
+      return
+    for i in xrange(firstIndex, lastIndex +1):
+      self.openImages(i)
+  
+  def openStackOfSliceMontages(self):
+    if self.firstIndex > -1 and self.lastIndex > -1:
+      duplicateInParallel(self.imp, range(self.firstIndex, self.lastIndex + 1), n_threads=max(1, numCPUs() -2), shallow=True, show=True, scale=1.0)
+
+  def mouseReleased(self, event):
+    if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
+      popup = JPopupMenu()
+      item1 = JMenuItem("Open stack of slice montages", actionPerformed=lambda event: self.openStackOfSliceMontages())
+      popup.add(item1)
+      item2 = JMenuItem("Open raw images", actionPerformed=lambda: self.openImagesRows()))
+      popup.add(item2)
+      popup.show(event.getComponent(), event.getXOnScreen(), event.getYOnScreen())
+      
+  def valueChanged(self, event):
+    if event.valueIsAdjusting():
+      return
+    self.firstIndex = event.getFirstIndex()
+    self.lastIndex = event.getLastIndex()
+
+
+# Convert from row index in the view (could e.g. be sorted)  
+# to the index in the underlying table model  
+def getSelectedRowIndex(table):
+  viewIndex = table.getSelectionModel().getLeadSelectionIndex()
+  modelIndex = table.convertRowIndexToModel(viewIndex)
+  return modelIndex
 
 
 def makeMontageTable(groupNames, tileGroups, imp, volumeImg, show=True):
@@ -747,8 +847,51 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, show=True):
   gb = GridBagLayout()
   all.setLayout(gb)
   c = GridBagConstraints()
-  # Top-left element: 
+  # Top-left element: search box
+  c.gridx = 0
+  c.gridy = 0
+  c.anchor = GridBagConstraints.CENTER
+  c.fill = GridBagConstraints.HORIZONTAL
+  search_field = JTextField("")
+  gb.setConstraints(search_field, c)
+  all.add(search_field)
+  # Bottom left, the table, wrapped in a scrollable component
+  table = JTable(model)
+  table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+  table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
+  c.gridx = 0
+  c.gridy = 1
+  c.anchor = GridBagConstraints.NORTHWEST
+  c.fill = GridBagConstraints.BOTH # resize with the frame
+  c.weightx = 1.0
+  c.gridheight = 2
+  jsp = JScrollPane(table)
+  jsp.setMinimumSize(Dimension(400, 500))
+  gb.setConstraints(jsp, c)
+  all.add(jsp)
 
+  # To open images and run operations outside the event dispatch thread
+  exe = newFixedThreadPool(min(32, numCPUs() / 2))
+
+  # Enable search by regular expression matching
+  search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
+
+  # Enable opening raw DAT files when double-clicking a row
+  opener = RowClickListener(model, exe, imp)
+  table.addMouseListener(opener)
+
+  # Enable pushing enter instead of clicking
+  # Instead of a KeyListener, use the input vs action map
+  table.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "enter")
+  table.getActionMap().put("enter", opener)
+  
+  # Enable popup menu on right click over a multi-row selection
+  table.getSelectionModel().addListSelectionListener(opener)
+  
+  frame = JFrame("Slice montages", windowClosed=lambda: exe.shutdownNow())
+  frame.getContentPane().add(all)
+  frame.pack()
+  frame.setVisible(True)
 
 
 def makeSliceLoader(groupNames, volumeImg):
