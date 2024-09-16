@@ -761,7 +761,7 @@ class TypingInSearchField(KeyAdapter):
     self.search_field = search_field
   def keyPressed(self, event):
     if KeyEvent.VK_ENTER == event.getKeyCode():
-      self.table.filterTable(self.search_field.getText())
+      self.model.filterTable(self.search_field.getText())
     elif KeyEvent.VK_ESCAPE == event.getKeyCode():
       self.search_field.setText("")
       self.model.restore()
@@ -810,13 +810,14 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       lastIndex = self.lastIndex
     if firstIndex < 0 or lastIndex < 0:
       return
-    for i in xrange(firstIndex +1, lastIndex +2): # one-based
+    for i in xrange(firstIndex, lastIndex + 1):
       self.openImages(i)
   
   def openStackOfSliceMontages(self):
     if self.firstIndex > -1 and self.lastIndex > -1:
       # ij.ImageStack is 1-based, so add +1 to start and end of selection
-      self.exe.submit(Task(duplicateInParallel, self.imp, range(self.firstIndex +1, self.lastIndex + 2), n_threads=max(1, numCPUs() -2), shallow=True, show=True, scale=1.0))
+      slice_indices = [self.model.rows[rowIndex][0] for rowIndex in xrange(self.firstIndex, self.lastIndex + 1)] # Already 1-based 
+      self.exe.submit(Task(duplicateInParallel, self.imp, slice_indices, n_threads=max(1, numCPUs() -2), shallow=True, show=True, scale=1.0))
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
