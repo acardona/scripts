@@ -739,7 +739,7 @@ class SliceTableModel(AbstractTableModel):
   def setValueAt(self, value, row, col):
     pass # none editable
   def filterTable(self, text):
-    text = text.trim()
+    text = text.strip()
     try:
       if 0 == len(text):
         self.restore()
