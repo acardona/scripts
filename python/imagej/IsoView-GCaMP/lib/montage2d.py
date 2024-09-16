@@ -8,7 +8,7 @@ from lib.ui import wrap, addWindowListener, duplicateInParallel
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
 from java.util import ArrayList, Vector, HashSet
-from java.lang import Double, Exception, Throwable, Integer
+from java.lang import Double, Exception, Throwable, Integer, Runnable, String
 from java.util.concurrent import Callable
 from java.io import File
 from ij.process import ShortProcessor, ByteProcessor
@@ -36,8 +36,9 @@ from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/maste
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.imglib.type.numeric.complex import ComplexFloatType
 
-from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities, JLabel, BorderFactory
-from javax.swing.table import AbstractTableModel
+from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities,\
+                        JLabel, BorderFactory, JPopupMenu, JMenuItem, AbstractAction, KeyStroke
+from javax.swing.table import AbstractTableModel, DefaultTableCellRenderer
 from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font, Insets, Color
 from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, WindowAdapter
 from javax.swing.event import ListSelectionListener
@@ -719,12 +720,12 @@ class SliceTableModel(AbstractTableModel):
     self.restore() # populate rows
     self.header = ["Slice index", "Group name", "Num. tiles"]
   def restore(self):
-    self.rows = [[i+1, groupNames[i], tileGroups[i]]
-                 for i in xrange(groupNames)]
+    self.rows = [[i+1, groupName, self.tileGroups[i]]
+                 for i, groupName in enumerate(self.groupNames)]
   def getColumnName(self, col):
     return self.header[col]
   def getColumnClass(self, col):
-    return 1 == col ? String : Integer
+    return String if 1 == col else Integer
   def getRowCount(self):
     return len(self.groupNames)
   def getColumnCount(self):
@@ -770,12 +771,21 @@ class OpenDAT(Runnable):
   def __init__(self, filepath):
     self.filepath = filepath
   def run(self):
-    imp = readFIBSEMdat(filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
-    imp.setTitle(os.path.basename(filepath))
+    imp = readFIBSEMdat(self.filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
+    imp.setTitle(os.path.basename(self.filepath))
     imp.show()
-    syncPrintQ(readFIBSEMHeader(filepath))
+    syncPrintQ(readFIBSEMHeader(self.filepath))
 
-class RowClickListener(MouseAdapter, AbstractAction, ListSelectionListener):
+class Action(AbstractAction):
+  def __init__(self, opener):
+    self.opener = opener
+  def actionPerformed(self, event):
+    table = event.getSource()
+    model = table.getSelectionModel()
+    rowIndex = model.getLeadSelectionIndex() # first selected row
+    opener.openImages(rowIndex)
+
+class RowClickListener(MouseAdapter, ListSelectionListener):
   def __init__(self, model, exe, imp):
     self.model = model
     self.exe = exe
@@ -786,21 +796,13 @@ class RowClickListener(MouseAdapter, AbstractAction, ListSelectionListener):
   def mousePressed(self, event):
     if 2 == event.getClickCount():
       # Open the raw images of the montage at that slice
-      table = event.getSource()
-      model = table.getModel()
-      rowIndex = table.rowAtPoint(event.getPoint()) # TODO could use self.firstIndex or the whole range
+      rowIndex = event.getSource().rowAtPoint(event.getPoint()) # TODO could use self.firstIndex or the whole range
       self.openImages(rowIndex)
-      
-  def actionPerformed(self, event):
-    table = event.getSource()
-    model = table.getSelectionModel()
-    rowIndex = model.getLeadSelectionIndex() # first selected row
-    self.openImages(rowIndex)
     
   def openImages(self, rowIndex):
-    for filepath in model.rows[rowIndex][2]:
+    for filepath in self.model.rows[rowIndex][2]:
       # Execute in a separate set of threads
-      exe.submit(OpenDAT(filepath))
+      self.exe.submit(OpenDAT(filepath))
   
   def openImagesRows(self):
     if not firstIndex:
@@ -808,7 +810,7 @@ class RowClickListener(MouseAdapter, AbstractAction, ListSelectionListener):
       lastIndex = self.lastIndex
     if firstIndex < 0 or lastIndex < 0:
       return
-    for i in xrange(firstIndex, lastIndex +1):
+    for i in xrange(firstIndex +1, lastIndex +2): # one-based
       self.openImages(i)
   
   def openStackOfSliceMontages(self):
@@ -820,12 +822,12 @@ class RowClickListener(MouseAdapter, AbstractAction, ListSelectionListener):
       popup = JPopupMenu()
       item1 = JMenuItem("Open stack of slice montages", actionPerformed=lambda event: self.openStackOfSliceMontages())
       popup.add(item1)
-      item2 = JMenuItem("Open raw images", actionPerformed=lambda: self.openImagesRows()))
+      item2 = JMenuItem("Open raw images", actionPerformed=lambda event: self.openImagesRows())
       popup.add(item2)
-      popup.show(event.getComponent(), event.getXOnScreen(), event.getYOnScreen())
+      popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):
-    if event.valueIsAdjusting():
+    if event.getValueIsAdjusting():
       return
     self.firstIndex = event.getFirstIndex()
     self.lastIndex = event.getLastIndex()
@@ -857,8 +859,13 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, show=True):
   all.add(search_field)
   # Bottom left, the table, wrapped in a scrollable component
   table = JTable(model)
-  table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
   table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
+  table.setRowSelectionAllowed(True);
+  table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
+  centerRenderer = DefaultTableCellRenderer();
+  centerRenderer.setHorizontalAlignment(JLabel.CENTER);
+  table.getColumnModel().getColumn(0).setCellRenderer(centerRenderer)
+  table.getColumnModel().getColumn(2).setCellRenderer(centerRenderer)
   c.gridx = 0
   c.gridy = 1
   c.anchor = GridBagConstraints.NORTHWEST
@@ -883,7 +890,7 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, show=True):
   # Enable pushing enter instead of clicking
   # Instead of a KeyListener, use the input vs action map
   table.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "enter")
-  table.getActionMap().put("enter", opener)
+  table.getActionMap().put("enter", Action(opener))
   
   # Enable popup menu on right click over a multi-row selection
   table.getSelectionModel().addListSelectionListener(opener)
