@@ -23,12 +23,18 @@ name = "MR1.4-2"
 
 # Folders
 #srcDir = "/net/fibserver1/raw/" + name + "/"
-srcDir = "/data/raw/" + name + "/" # Run directly on fibserver1
+#srcDir = "/data/raw/" + name + "/" # Run directly on fibserver1
+srcDir = "/net/fibserver1/raw/" + name + "/" # Run directly on fibserver1
 tgtDir = "/net/zstore1/FIBSEM/" + name + "/registration/"
 csvDir = tgtDir + "csv/" # for in-section montaging
 csvDirZ = tgtDir + "csvZ/" # for cross-section alignment with SIFT+RANSAC
 csvDirBM = tgtDir + "csvBM/" # for cross-section alignment with BlockMatching
 repairedDir = "/net/zstore1/FIBSEM/" + name + "/repaired/" # Folder with repaired images, if any
+
+# CHECK whether some sections have problems
+# SOME IMAGES fail to open for reading the header with readFIBSEMHeader
+check = False # To be used only the first time that the script is run
+
 
 # Ensure tgtDir and csvDir exist
 for csvD in [csvDir, csvDirZ, csvDirBM]:
@@ -54,15 +60,10 @@ section_height = 11720
 params_pixels = {
   "invert": True,
   "CLAHE_params": [200, 255, 2.0], # blockRadius, n_bins, and slope in stdDevs
-  "as8bit": True,
+  "as8bit": True, # TODO fails when using False
   "contrast": (500, 1000), # thresholds in pixel counts per histogram bin
   "roiFn": lambda sp: Roi(sp.width / 6, sp.height / 6, 2 * sp.width / 3, 2 * sp.height / 3), # middle 2/3rds to discard edges
 }
-
-# CHECK whether some sections have problems
-# SOME IMAGES fail to open for reading the header with readFIBSEMHeader
-check = False # To be used only the first time that the script is run
-
 
 
 # Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mismatch
@@ -127,7 +128,11 @@ def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
   dx = 0
   dy = 0
   if index < 1127: # All 1-tile sections
-    return (873, 1749)
+    dx += 873
+    dy += 1749
+  if index < 1784:
+    dx += -501
+    dy += -125
   return (dx, dy)
 
 
