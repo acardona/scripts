@@ -378,15 +378,19 @@ def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=
     exe.shutdown()
 
 class SaveStackSlice(Callable):
-  def __init__(self, stack, slice_index, targetDir, scale=1.0, incremental=True):
+  def __init__(self, stack, slice_index, targetDir, scale=1.0, incremental=True, parentThread=None):
     self.stack = stack
     self.slice_index = slice_index # 1-based
     self.targetDir = targetDir
     self.scale = scale
     self.incremental = incremental
+    self.parentThread = parentThread
   def call(self):
     t = Thread.currentThread()
     if t.isInterrupted() or not t.isAlive():
+      return False
+    if self.parentThread.isInterrupted() or not self.parentThread.isAlive():
+      self.parentThread = None
       return False
     path = os.path.join(self.targetDir, "%i.tif" % self.slice_index)
     if self.incremental and os.path.exists(path):
@@ -412,8 +416,9 @@ def saveInParallel(targetDir, imp=None, slices=None, n_threads=0, show=True, sca
   slices = slices if slices else range(1, imp.getNSlices() + 1)
   stack = imp.getStack()
   exe = newFixedThreadPool(n_threads=n_threads if n_threads > 0 else min(Runtime.getRuntime().availableProcessors(), stack.getSize()), name="duplicate-stack")
+  launcher_thread = Thread.currentThread()
   try:
-    futures = [(i, exe.submit(SaveStackSlice(stack, i, targetDir, scale=scale, incremental=incremental))) for i in slices]
+    futures = [(i, exe.submit(SaveStackSlice(stack, i, targetDir, scale=scale, incremental=incremental, parentThread=launcher_thread))) for i in slices]
     for i, fu in futures:
       t = Thread.currentThread()
       if t.isInterrupted() or not t.isAlive():
