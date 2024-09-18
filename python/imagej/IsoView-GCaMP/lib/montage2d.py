@@ -39,7 +39,7 @@ from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.imglib.type.numeric.complex import ComplexFloatType
 
 from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities,\
-                        JLabel, BorderFactory, JPopupMenu, JMenuItem, AbstractAction, KeyStroke
+                        JLabel, BorderFactory, JPopupMenu, JMenuItem, AbstractAction, KeyStroke, JOptionPane
 from javax.swing.table import AbstractTableModel, DefaultTableCellRenderer
 from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font, Insets, Color
 from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, WindowAdapter
@@ -794,11 +794,12 @@ class Action(AbstractAction):
     opener.openImages(rowIndex)
 
 class RowClickListener(MouseAdapter, ListSelectionListener):
-  def __init__(self, model, exe, imp, csvDir):
+  def __init__(self, model, exe, imp, csvDir, table):
     self.model = model
     self.exe = exe
     self.imp = imp
     self.csvDir = csvDir
+    self.table = table
     self.firstIndex = -1
     self.lastIndex = -1
   
@@ -854,6 +855,24 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       #print targetDir, firstIndex, lastIndex, scale, numThreads, incremental
       self.exe.submit(Task(saveInParallel(targetDir, self.imp, slice_indices, n_threads=numThreads, show=True, scale=scale, incremental=incremental)))
 
+  def deleteMontageCSVFiles(self):
+    if self.table.getSelectedRowCount() > 0:
+      rowIndices = list(self.table.getSelectedRows())
+      first = self.model.rows[rowIndices[0]]
+      last = self.model.rows[rowIndices[-1]]
+      sp = max(len(str(first[0])), len(str(last[0])))
+      msg = "Delete CSV files for " + str(last[0] - first[0] + 1) + " montages\n"\
+            + "from slice " + str(first[0]).rjust(sp) + " " + first[1] + "\n"\
+            + "to slice   " + str(last[0]).rjust(sp)  + " " + last[1] + "\n"\
+            + "\nPlease confirm."
+      yn = JOptionPane.showConfirmDialog(self.table, msg, "Delete CSV montage files",
+           JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
+      if JOptionPane.YES_OPTION == yn:
+        for i in xrange(self.firstIndex, self.lastIndex +1):
+          path = os.path.join(self.csvDir, "%s.csv" % self.model.rows[i][1])
+          if os.path.exists(path):
+            syncPrintQ("Deleting CSV file at:\n%s" % path)
+            os.remove(path)
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
@@ -864,6 +883,8 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
                           actionPerformed=lambda event: self.saveStackOfSliceMontages()))
       popup.add(JMenuItem("Open raw images",
                           actionPerformed=lambda event: self.openImagesRows()))
+      popup.add(JMenuItem("Delete CSV files for montages...",
+                          actionPerformed=lambda event: self.deleteMontageCSVFiles()))
       popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):
@@ -924,7 +945,7 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
   search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
 
   # Enable opening raw DAT files when double-clicking a row
-  opener = RowClickListener(model, exe, imp, csvDir)
+  opener = RowClickListener(model, exe, imp, csvDir, table)
   table.addMouseListener(opener)
 
   # Enable pushing enter instead of clicking
