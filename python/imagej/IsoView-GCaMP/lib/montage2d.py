@@ -1,5 +1,6 @@
 from __future__ import with_statement
 import os, re
+from datetime import datetime
 
 from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task
 from lib.registration import saveMatrices, loadMatrices
@@ -554,6 +555,9 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
 
     # Print failed montages
     syncPrintQ("Montages that failed:\n%s" % "\n".join(map(str, failed)))
+    # Save failed montages to disk
+    with open(os.path.join(csvDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss") + ".csv")) as f:
+      f.write("\n".join(map(str, failed)))
 
   finally:
     exe.shutdown()
