@@ -66,7 +66,10 @@ params_pixels = {
 }
 
 
-# Parameters for SIFT features, in case blockmatching fails due to large translation or image dimension mismatch
+
+# Parameters for intra-section montaging
+
+# Parameters for SIFT features
 paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.steps = 1
 paramsSIFT.minOctaveSize = 0 # will be updated in a clone
@@ -109,12 +112,18 @@ ignore_images = set([
   "Merlin-FIBdeSEMAna_24-06-08_215138_0-1-0.dat", # empty file
 ])
 
+# The replacement is under the repaired folder
+replace_images = {
+  "Merlin-FIBdeSEMAna_24-06-11_064022_0-0-0.dat": "Merlin-FIBdeSEMAna_24-06-11_064022_0-0-0.dat.tif" 
+}
+
 # Sorted group names, one per section
 # Includes a way to get images from an alternative folder: the repaired folder
 # or to ignore images that are unrepairable
 groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
                                            alternative_dir=repairedDir,
                                            ignore_images=ignore_images,
+                                           replace_images=replace_images,
                                            writeDir=csvDir)
 
 
