@@ -406,6 +406,8 @@ def saveInParallel(targetDir, imp=None, slices=None, n_threads=0, show=True, sca
       n_threads: defaults to 0, meaning as many as possible.
       shallow: defaults to False, meaning don't share the pixel data.
   """
+  if not os.path.exists(targetDir):
+    os.makeDirs(targetDir)
   imp = imp if imp else IJ.getImage()
   slices = slices if slices else range(1, imp.getNSlices() + 1)
   stack = imp.getStack()
