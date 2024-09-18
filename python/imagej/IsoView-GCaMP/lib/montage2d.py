@@ -712,7 +712,7 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
       stack.setSliceLabel(groupName, i+1) # 1-based
     # Show a JTable for opening raw images and slice ranges
     if showTable:
-      table = makeMontageTable(groupNames, tileGroups, imp, volumeImg, show=True)
+      table = makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True)
   
   return volumeImg
 
@@ -790,10 +790,11 @@ class Action(AbstractAction):
     opener.openImages(rowIndex)
 
 class RowClickListener(MouseAdapter, ListSelectionListener):
-  def __init__(self, model, exe, imp):
+  def __init__(self, model, exe, imp, csvDir):
     self.model = model
     self.exe = exe
     self.imp = imp
+    self.csvDir = csvDir
     self.firstIndex = -1
     self.lastIndex = -1
   
@@ -823,13 +824,37 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       slice_indices = [self.model.rows[rowIndex][0] for rowIndex in xrange(self.firstIndex, self.lastIndex + 1)] # Already 1-based 
       self.exe.submit(Task(duplicateInParallel, self.imp, slice_indices, n_threads=max(1, numCPUs() -2), shallow=True, show=True, scale=1.0))
 
+  def saveStackOfSliceMontages(self):
+    if self.firstIndex > -1 and self.lastIndex > -1:
+      gd = GenericDialog("Save stack")
+      gd.addLabel("1-based slice indices")
+      gd.addNumericField("First slice: ", self.model.rows[self.firstIndex][0], 0, 6, "")
+      gd.addNumericField("Last slice: ", self.model.rows[self.lastIndex][0], 0, 6, "")
+      gd.addNumericField("Scale (0 to 1): ", 1.0, 3, 7, "")
+      gd.addNumericField("Number of threads: ", max(1, int(numCPUs() / 2)), 0, 4, "")
+      gd.addCheckbox("Incremental (avoid overwriting image files): ", True)
+      gd.addDirectoryField("Target directory: ", self.csvDir, 50)
+      gd.showDialog()
+      if not gd.wasOKed():
+        return
+      firstIndex, lastIndex = int(gd.getNextNumber()), int(gd.getNextNumber())
+      slice_indices = range(firstIndex, lastIndex + 1) # Already 1-based
+      scale = gd.getNextNumber()
+      numThreads = int(gd.getNextNumber())
+      incremental = gd.getNextBoolean()
+      targetDir = gd.getNextString()
+      self.exe.submit(Task(saveInParallel(targetDir, self.imp, slice_indices, n_threads=numThreads, show=True, scale=scale, incremental=incremental)
+
+
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
       popup = JPopupMenu()
-      item1 = JMenuItem("Open stack of slice montages", actionPerformed=lambda event: self.openStackOfSliceMontages())
-      popup.add(item1)
-      item2 = JMenuItem("Open raw images", actionPerformed=lambda event: self.openImagesRows())
-      popup.add(item2)
+      popup.add(JMenuItem("Open stack of slice montages",
+                          actionPerformed=lambda event: self.openStackOfSliceMontages()))
+      popup.add(JMenuItem("Save stack of slice montages...",
+                          actionPerformed=lambda event: self.saveStackOfSliceMontages()))
+      popup.add(JMenuItem("Open raw images",
+                          actionPerformed=lambda event: self.openImagesRows()))
       popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):
@@ -847,7 +872,7 @@ def getSelectedRowIndex(table):
   return modelIndex
 
 
-def makeMontageTable(groupNames, tileGroups, imp, volumeImg, show=True):
+def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
   model = SliceTableModel(groupNames, tileGroups)
   # GUI:
   all = JPanel()
@@ -890,7 +915,7 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, show=True):
   search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
 
   # Enable opening raw DAT files when double-clicking a row
-  opener = RowClickListener(model, exe, imp)
+  opener = RowClickListener(model, exe, imp, csvDir)
   table.addMouseListener(opener)
 
   # Enable pushing enter instead of clicking
