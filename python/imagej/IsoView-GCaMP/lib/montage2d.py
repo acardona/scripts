@@ -15,7 +15,7 @@ from java.io import File
 from ij.process import ShortProcessor, ByteProcessor
 from ij.gui import ShapeRoi, PointRoi, Roi, GenericDialog
 from ij.io import OpenDialog
-from ij import ImagePlus
+from ij import ImagePlus, IJ
 from net.imglib2.img.array import ArrayImgs
 try:
   from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
@@ -177,21 +177,27 @@ def getPointMatches(sp0, roi0, sp1, roi1, offset,
   #
   return pointmatches
 
+# Load images
+def load(filepath):
+  """ Return an ImagePlus """
+  if filepath.endswith(".dat"):
+    return readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0]
+  return IJ.openImage(filepath)
 
 def loadShortProcessors(tilePaths, asDict=False):
   for filepath in tilePaths:
     syncPrintQ("#%s#" % filepath)
-  # Load images
   if asDict:
-    return {filepath: readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
+    return {filepath: load(filepath).getProcessor()
             for filepath in tilePaths}
-  return [readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor() for filepath in tilePaths]
+  return [load(filepath).getProcessor()
+          for filepath in tilePaths]
   
 def yieldShortProcessors(tilePaths, reverse=False):
   ls = tilePaths if not reverse else reversed(tilePaths)
   for filepath in ls:
     syncPrintQ("#%s#" % filepath)
-    yield readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0].getProcessor()
+    yield load(filepath).getProcessor()
 
 
 def processTo8bit(sp, params_pixels):
@@ -496,7 +502,7 @@ class SectionLoader(CacheLoader):
                              matrix, self.params_pixels,
                              sdx=sdx, sdy=sdy)
     elif 1 == len(tilePaths):
-      imp = readFIBSEMdat(tilePaths[0], channel_index=0, asImagePlus=True)[0]
+      imp = load(tilePaths[0])
       if as8bit:
         ipTile = processTo8bit(imp.getProcessor(), self.params_pixels)
         ip = ByteProcessor(self.dimensions[0], self.dimensions[1])
@@ -569,7 +575,7 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
 
 
 
-def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_images=set(), writeDir=None):
+def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_images=set(), writeDir=None, replace_images=set()):
   """
   Does not assume anything regarding the number of tiles per montage.
   
@@ -579,7 +585,8 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
   check: whether to check the header and file sizes for issues.
   alternative_dir: if a file fails to open, try to find it in this directory.
   ignore_images: a set of image filenames to ignore and leave out of the montages.
-  
+  replace_images: if the image filename is in, use the provided alternative which is under the alternative_dir.
+
   Returns groupNames, tileGroups
   """
   # Group files by section, as there could be multiple image tiles per section
@@ -613,8 +620,11 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
         if filename in ignore_images:
           drop.append(i)
         # Check if tilePath has to be replaced
-        if filename in alternative_filenames:
+        elif filename in alternative_filenames:
           tilePaths_[i] = os.path.join(alternative_dir, filename)
+          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
+        elif filename in replace_images:
+          tilePaths_[i] = os.path.join(alternative_dir, replace_images[filename])
           syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
       # Remove from group any tilePath to ignore
       for i in drop:
@@ -779,10 +789,11 @@ class OpenDAT(Runnable):
   def __init__(self, filepath):
     self.filepath = filepath
   def run(self):
-    imp = readFIBSEMdat(self.filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
+    imp = load(self.filepath)
+    if filepath.endswith(".dat"):
+      syncPrintQ(readFIBSEMHeader(self.filepath))
     imp.setTitle(os.path.basename(self.filepath))
     imp.show()
-    syncPrintQ(readFIBSEMHeader(self.filepath))
 
 class Action(AbstractAction):
   def __init__(self, opener):
