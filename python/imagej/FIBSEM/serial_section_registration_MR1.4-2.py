@@ -101,6 +101,7 @@ filepaths = loadFilePaths(srcDir, ".dat", csvDir, "imagefilepaths")
 
 # Sections known to have problems (found via check = True above)
 to_remove = set([
+  "Merlin-FIBdeSEMAna_24-06-10_204041_" # section 3311 (1-based) has no data, just white noise
 ])
 
 ignore_images = set([
