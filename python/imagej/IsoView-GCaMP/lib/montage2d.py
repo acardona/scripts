@@ -5,7 +5,7 @@ from datetime import datetime
 from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
-from lib.ui import wrap, addWindowListener, duplicateInParallel
+from lib.ui import wrap, addWindowListener, duplicateInParallel, saveInParallel
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
 from java.util import ArrayList, Vector, HashSet
@@ -13,7 +13,7 @@ from java.lang import Double, Exception, Throwable, Integer, Runnable, String
 from java.util.concurrent import Callable
 from java.io import File
 from ij.process import ShortProcessor, ByteProcessor
-from ij.gui import ShapeRoi, PointRoi, Roi
+from ij.gui import ShapeRoi, PointRoi, Roi, GenericDialog
 from ij import ImagePlus
 from net.imglib2.img.array import ArrayImgs
 try:
@@ -827,7 +827,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   def saveStackOfSliceMontages(self):
     if self.firstIndex > -1 and self.lastIndex > -1:
       gd = GenericDialog("Save stack")
-      gd.addLabel("1-based slice indices")
+      gd.addMessage("1-based slice indices")
       gd.addNumericField("First slice: ", self.model.rows[self.firstIndex][0], 0, 6, "")
       gd.addNumericField("Last slice: ", self.model.rows[self.lastIndex][0], 0, 6, "")
       gd.addNumericField("Scale (0 to 1): ", 1.0, 3, 7, "")
@@ -843,7 +843,8 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       numThreads = int(gd.getNextNumber())
       incremental = gd.getNextBoolean()
       targetDir = gd.getNextString()
-      self.exe.submit(Task(saveInParallel(targetDir, self.imp, slice_indices, n_threads=numThreads, show=True, scale=scale, incremental=incremental)
+      #print targetDir, firstIndex, lastIndex, scale, numThreads, incremental
+      self.exe.submit(Task(saveInParallel(targetDir, self.imp, slice_indices, n_threads=numThreads, show=True, scale=scale, incremental=incremental)))
 
 
   def mouseReleased(self, event):
