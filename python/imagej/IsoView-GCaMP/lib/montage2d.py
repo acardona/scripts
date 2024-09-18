@@ -14,6 +14,7 @@ from java.util.concurrent import Callable
 from java.io import File
 from ij.process import ShortProcessor, ByteProcessor
 from ij.gui import ShapeRoi, PointRoi, Roi, GenericDialog
+from ij.io import OpenDialog
 from ij import ImagePlus
 from net.imglib2.img.array import ArrayImgs
 try:
@@ -553,11 +554,14 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
     for future in futures:
       future.get()
 
-    # Print failed montages
-    syncPrintQ("Montages that failed:\n%s" % "\n".join(map(str, failed)))
-    # Save failed montages to disk
-    with open(os.path.join(csvDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss") + ".csv")) as f:
-      f.write("\n".join(map(str, failed)))
+    if len(failed) > 0:
+      # Print failed montages
+      syncPrintQ("Montages that failed:\n%s" % "\n".join(map(str, failed)))
+      # Save failed montages to disk
+      with open(os.path.join(csvDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss", 'w') + ".csv")) as f:
+        f.write("\n".join(map(str, failed)))
+    else:
+      syncPrintQ("No montages known to have failed.")
 
   finally:
     exe.shutdown()
@@ -833,6 +837,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       gd.addNumericField("Scale (0 to 1): ", 1.0, 3, 7, "")
       gd.addNumericField("Number of threads: ", max(1, int(numCPUs() / 2)), 0, 4, "")
       gd.addCheckbox("Incremental (avoid overwriting image files): ", True)
+      OpenDialog.setDefaultDirectory(self.csvDir)
       gd.addDirectoryField("Target directory: ", self.csvDir, 50)
       gd.showDialog()
       if not gd.wasOKed():
@@ -843,6 +848,9 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       numThreads = int(gd.getNextNumber())
       incremental = gd.getNextBoolean()
       targetDir = gd.getNextString()
+      # Remember the directory for next time
+      if os.path.exists(targetDir):
+        OpenDialog.setDefaultDirectory(targetDir)
       #print targetDir, firstIndex, lastIndex, scale, numThreads, incremental
       self.exe.submit(Task(saveInParallel(targetDir, self.imp, slice_indices, n_threads=numThreads, show=True, scale=scale, incremental=incremental)))
 
