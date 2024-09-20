@@ -430,6 +430,7 @@ class MontageSlice(Callable):
                         Here, only the translation is applied, ultimately as integers.
     """
     matrices = self.getMatrices()
+    # TODO if scale and shear values aren't 1.0, 0.0 then apply an affine transform.
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
     rois = []
