@@ -826,13 +826,10 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       self.exe.submit(OpenDAT(filepath))
   
   def openImagesRows(self):
-    if not firstIndex:
-      firstIndex = self.firstIndex
-      lastIndex = self.lastIndex
-    if firstIndex < 0 or lastIndex < 0:
+    if self.firstIndex < 0 or self.lastIndex < 0:
       return
-    for i in xrange(firstIndex, lastIndex + 1):
-      self.openImages(i)
+    for rowIndex in xrange(self.firstIndex, self.lastIndex + 1):
+      self.openImages(rowIndex)
   
   def openStackOfSliceMontages(self):
     if self.firstIndex > -1 and self.lastIndex > -1:
