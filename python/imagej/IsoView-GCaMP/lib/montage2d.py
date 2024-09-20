@@ -287,7 +287,7 @@ class MontageSlice(Callable):
 
     # Determine rows and columns
     self.rows = defaultdict(partial(defaultdict, str))
-    pattern = re.compile("^\d+-(\d+)-(\d+)\.dat$")
+    pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
     for filepath in self.tilePaths:
       # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
       i_row, i_col = map(int, re.match(pattern, filepath[filepath.rfind('_')+1:]).groups())
