@@ -56,8 +56,8 @@ def getFeatures(sp, roi, paramsSIFT, debug=False):
   sp.setRoi(roi)
   sp = sp.crop()
   paramsSIFT = paramsSIFT.clone()
-  paramsSIFT.minOctaveSize = min(sp.getWidth(), sp.getHeight())
-  paramsSIFT.maxOctaveSize = max(sp.getWidth(), sp.getHeight())
+  paramsSIFT.minOctaveSize = min(sp.getWidth(), sp.getHeight()) if 0 == paramsSIFT.minOctaveSize else paramsSIFT.minOctaveSize
+  paramsSIFT.maxOctaveSize = max(sp.getWidth(), sp.getHeight()) if 0 == paramsSIFT.maxOctaveSize else paramsSIFT.maxOctaveSize
   ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
   features = ArrayList() # of Feature instances
   ijSIFT.extractFeatures(sp, features)
