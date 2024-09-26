@@ -1,5 +1,5 @@
 from __future__ import with_statement
-import os, re
+import os, re, sys
 from datetime import datetime
 
 from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task
@@ -790,11 +790,15 @@ class OpenDAT(Runnable):
   def __init__(self, filepath):
     self.filepath = filepath
   def run(self):
-    imp = load(self.filepath)
-    if filepath.endswith(".dat"):
-      syncPrintQ(readFIBSEMHeader(self.filepath))
-    imp.setTitle(os.path.basename(self.filepath))
-    imp.show()
+    try:
+      syncPrintQ("OpenDAT filepath: %s" % self.filepath)
+      imp = load(self.filepath)
+      if self.filepath.endswith(".dat"):
+        syncPrintQ(readFIBSEMHeader(self.filepath))
+      imp.setTitle(os.path.basename(self.filepath))
+      imp.show()
+    except:
+      print sys.exc_info()
 
 class Action(AbstractAction):
   def __init__(self, opener):
