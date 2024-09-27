@@ -52,7 +52,7 @@ nominal_overlap = 1000 # 8 microns at 8 nm/px = 1000 px
 # Single-tile sections have images of 12500x12500 (at least at the beginning)
 
 # Working canvas
-section_width = 12480 # pixels, after section-wise montaging
+section_width = 13500 #12480 # pixels, after section-wise montaging
 section_height = 11720
 # So a canvas of less than 146,265,600 pixels: just 146 MB/section
 
@@ -140,9 +140,25 @@ def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
   if index < 1127: # All 1-tile sections
     dx += 873
     dy += 1749
-  if index < 1784:
-    dx += -501
-    dy += -125
+    return (dx, dy)
+  if index >= 1784:
+    dx = -501
+    dy = -125
+  if index >= 14509:
+    dx += 24
+    dy += 0
+  if index >= 14510:
+    dx += -6
+    dy += -9
+  if index >= 14516:
+    dx += 752
+    dy += 4
+  if index >= 15556:
+    dx += 120
+    dy += -801
+  if index >= 17283:
+    dx += -375
+    dy += 0
   return (dx, dy)
 
 
@@ -183,7 +199,7 @@ volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_he
 
 # Some of these aren't needed here
 properties = {
- 'name': "MR1.4-3",
+ 'name': name,
  'img_dimensions': Intervals.dimensionsAsLongArray(volumeImgMontaged),
  'srcDir': srcDir,
  'pixelType': UnsignedByteType,
@@ -209,7 +225,7 @@ params = {
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 50, # has to account for the montages shifting about ~100 pixels in any direction
+ 'searchRadius': 100, # has to account for the montages shifting about ~100 pixels in any direction
  'blockRadius': 100, # small, yet enough
 }
 
@@ -227,7 +243,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 4000, # Saalfeld recommends 1000
+  "maxIterations": 20000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
   "nThreadsOptimizer": Runtime.getRuntime().availableProcessors(), # as many as CPU cores
   "chunk_size": 400, # Will align in 50% overlapping chunks for best use of the optimizer
@@ -240,9 +256,9 @@ paramsTileConfiguration = {
 #computeShifts(groupNames, csvDirZ, threshold, params, properties, "shifts")
 
 
-align = False
+alignIt = True
 
-if align:
+if alignIt:
 
   matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
                        loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),

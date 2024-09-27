@@ -24,13 +24,21 @@ ranges = [
   #(1150, 1153), # non-linear deformation
   #(1784, 1787), # jump
   #(2737, 2741), # contrast problem
-  (3308, 3313), # deformation at 3310
+  #(3308, 3313), # deformation at 3310
+  #(12175, 19531) # exporting via saveInParallel scaled down
+  #(1126, 1129), # shift 1127: good
+  #(1783, 1787), # shift 1784: good
+  #(14508, 14512), # shift 14509 and 14510: good
+  #(14514, 14519), # shift 14516: good
+  (15555, 15560), # shift 15556: good
+  (17282, 17286), # shift 17283: good
 ]
 
 #scale = 400.0 / 16000
 scale = 1.0
 
-targetDir = "/data/raw/MR1.4-2/montages-400/"
+#targetDir = "/data/raw/MR1.4-2/montages-400/"
+targetDir = "/net/fibserver1/raw/MR1.4-2/montages-400_for_12175-19531/"
 
 for r in ranges:
   copy = duplicateInParallel(imp, range(*r), n_threads=32, shallow=True, show=True, scale=scale)

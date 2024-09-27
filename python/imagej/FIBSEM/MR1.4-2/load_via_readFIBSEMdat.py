@@ -16,8 +16,9 @@ filepaths = [
   #"/net/fibserver1/raw/MR1.4-2/Y2024/M06/D10/Merlin-FIBdeSEMAna_24-06-10_210018_0-1-0.dat",
   #"/net/fibserver1/raw/MR1.4-2/Y2024/M06/D10/Merlin-FIBdeSEMAna_24-06-10_210136_0-0-0.dat",
   #"/net/fibserver1/raw/MR1.4-2/Y2024/M06/D10/Merlin-FIBdeSEMAna_24-06-10_210136_0-1-0.dat",
-  "/net/fibserver1/raw/MR1.4-2/Y2024/M06/D10/Merlin-FIBdeSEMAna_24-06-10_205904_0-0-0.dat",
-  "/net/fibserver1/raw/MR1.4-2/Y2024/M06/D10/Merlin-FIBdeSEMAna_24-06-10_205904_0-1-0.dat",
+  #"/net/fibserver1/raw/MR1.4-2/Y2024/M06/D10/Merlin-FIBdeSEMAna_24-06-10_205904_0-0-0.dat",
+  #"/net/fibserver1/raw/MR1.4-2/Y2024/M06/D10/Merlin-FIBdeSEMAna_24-06-10_205904_0-1-0.dat",
+  "/net/fibserver1/raw/MR1.4-2/Y2024/M06/D11/Merlin-FIBdeSEMAna_24-06-11_064022_0-0-0.dat" # wrong magnification
 ]
 
 
