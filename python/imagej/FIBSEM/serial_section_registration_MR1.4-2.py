@@ -114,7 +114,13 @@ ignore_images = set([
 
 # The replacement is under the repaired folder
 replace_images = {
-  "Merlin-FIBdeSEMAna_24-06-11_064022_0-0-0.dat": "Merlin-FIBdeSEMAna_24-06-11_064022_0-0-0.dat.tif" 
+  "Merlin-FIBdeSEMAna_24-06-11_064022_0-0-0.dat": "Merlin-FIBdeSEMAna_24-06-11_064022_0-0-0.dat.tif",
+  #"Merlin-FIBdeSEMAna_24-06-11_071856_0-0-0.dat": "Merlin-FIBdeSEMAna_24-06-11_071856_0-0-0.dat.tif", # 3910
+  #"Merlin-FIBdeSEMAna_24-06-11_071856_0-1-0.dat": "Merlin-FIBdeSEMAna_24-06-11_071856_0-1-0.dat.tif", # 3910
+  "Merlin-FIBdeSEMAna_24-06-10_203932_0-0-0.dat": "Merlin-FIBdeSEMAna_24-06-10_203932_0-0-0.dat.tif", # 3310
+  "Merlin-FIBdeSEMAna_24-06-10_203932_0-1-0.dat": "Merlin-FIBdeSEMAna_24-06-10_203932_0-1-0.dat.tif", # 3310
+  "Merlin-FIBdeSEMAna_24-06-10_205538_0-0-0.dat": "Merlin-FIBdeSEMAna_24-06-10_205538_0-0-0.dat.tif", # 3311
+  "Merlin-FIBdeSEMAna_24-06-10_205538_0-1-0.dat": "Merlin-FIBdeSEMAna_24-06-10_205538_0-1-0.dat.tif"  # 3311
 }
 
 # Sorted group names, one per section
@@ -243,7 +249,7 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 20000, # Saalfeld recommends 1000
+  "maxIterations": 1000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
   "nThreadsOptimizer": Runtime.getRuntime().availableProcessors(), # as many as CPU cores
   "chunk_size": 400, # Will align in 50% overlapping chunks for best use of the optimizer
@@ -267,13 +273,13 @@ if alignIt:
   cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
   imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
                                     matricesSIFT,
-                                    rotate=None, # None, "right", "left", or "180"
+                                    rotate="right", # None, "right", "left", or "180"
                                     title_addendum=" SIFT+RANSAC")
 
   imp = impSIFT
 
 
   # To be determined:
-  #imp.setRoi(Roi(352, 152, 13776, 15608))
+  imp.setRoi(Roi(404, 0, 11076, 12684))
 
 
