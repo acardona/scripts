@@ -463,7 +463,8 @@ class SectionLoader(CacheLoader):
   def __init__(self, dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset,
                paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, params_pixels,
                section_offsets=None, # A function that given an index returns a tuple of two integers
-               matrices=None):
+               matrices=None,
+               crop_ROI=None):
     """
     csvDir: the directory specifying the montages, one matrices file per section.
     """
@@ -480,6 +481,7 @@ class SectionLoader(CacheLoader):
     self.params_pixels = params_pixels
     self.section_offsets = section_offsets
     self.matrices = matrices # for alignment in Z
+    self.crop_ROI = crop_ROI # an ij.roi.Roi instance or any object with a getBounds() that returns a java.awt.Rectangle
     if self.matrices and len(self.groupNames) != len(self.matrices):
       raise Exception("Lengths of groupNames and rows in the matrices file don't match!")
   
@@ -489,33 +491,40 @@ class SectionLoader(CacheLoader):
     matrix = self.matrices[index] if self.matrices else None
     sdx, sdy = self.section_offsets(index) if self.section_offsets else (0, 0)
     as8bit = self.params_pixels["as8bit"]
+    if self.crop_ROI is not None:
+      bounds = self.crop_ROI.getBounds() # a java.awt.Rectangle
+      width, height = bounds.width, bounds.height
+      sdx += -bounds.x
+      sdy += -bounds.y
+    else:
+      width, height = self.dimensions
     #
     if len(tilePaths) > 1:
       m = MontageSlice(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
                        self.paramsSIFT, self.paramsRANSAC, self.paramsTileConfiguration,
                        self.csvDir, Vector())
       if as8bit:
-        aimg = m.montagedImg8bit(self.dimensions[0], self.dimensions[1],
+        aimg = m.montagedImg8bit(width, height,
                                  matrix, self.params_pixels,
                                  sdx=sdx, sdy=sdy)
       else:
-        aimg = m.montagedImg(self.dimensions[0], self.dimensions[1],
+        aimg = m.montagedImg(width, height,
                              matrix, self.params_pixels,
-                             sdx=sdx, sdy=sdy)
+                             sdx=sdx, sdy=sdy)        
     elif 1 == len(tilePaths):
       imp = load(tilePaths[0])
       if as8bit:
         ipTile = processTo8bit(imp.getProcessor(), self.params_pixels)
-        ip = ByteProcessor(self.dimensions[0], self.dimensions[1])
+        ip = ByteProcessor(width, height)
       else:
         ipTile = process(imp.getProcessor(), self.params_pixels)
-        ip = ShortProcessor(self.dimensions[0], self.dimensions[1])
+        ip = ShortProcessor(width, height)
       dx, dy = (matrix[2], matrix[5]) if matrix else (0, 0)
       ip.insert(ipTile,
                 int(sdx + dx + 0.5),
                 int(sdy + dy + 0.5))
       fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
-      aimg = fn(ip.getPixels(), self.dimensions)
+      aimg = fn(ip.getPixels(), [width, height])
       imp.flush()
       imp = None
       ip = None
@@ -523,7 +532,7 @@ class SectionLoader(CacheLoader):
       # return empty Cell
       syncPrintQ("WARNING: number of tiles isn't 4 or 1")
       fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
-      aimg = fn(self.dimensions) # TODO this should be a constant DataAccess
+      aimg = fn([width, height]) # TODO this should be a constant DataAccess
 
     return Cell(self.dimensions + [1], # cell dimensions
                 [0, 0, index], # position in the grid: 0, 0, 0, Z-index
@@ -697,8 +706,12 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
 def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
                paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, params_pixels,
                show=True, matrices=None, section_offsets=None, title=None, cache_size=64,
-               showTable=True):
-  dimensions = [section_width, section_height]
+               showTable=True, crop_ROI=None):
+  if crop_ROI:
+    bounds = crop_ROI.getBounds() # a java.awt.Rectangle
+    dimensions = [bounds.width, bounds.height]
+  else:
+    dimensions = [section_width, section_height]
   volume_dimensions = dimensions + [len(groupNames)]
   cell_dimensions = dimensions + [1]
   pixelType = UnsignedByteType # UnsignedShortType
@@ -707,7 +720,8 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
   volumeImg = lazyCachedCellImg(SectionLoader(dimensions, groupNames, tileGroups, overlap, nominal_overlap, offset,
                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, params_pixels,
                                               matrices=matrices,
-                                              section_offsets=section_offsets),
+                                              section_offsets=section_offsets,
+                                              crop_ROI=crop_ROI),
                                 volume_dimensions,
                                 cell_dimensions,
                                 pixelType,
