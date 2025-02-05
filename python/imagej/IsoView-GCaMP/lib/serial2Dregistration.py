@@ -171,7 +171,7 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
               sourceMatches)
 
     # At least some should match to accept the translation
-    if len(sourceMatches) < max(20, len(sourcePoints) / 5) / 2:
+    if len(sourceMatches) < properties.get("min_blockmatching", 10):
       syncPrintQ("Found only %i blockmatching pointmatches (from %i source points)" % (len(sourceMatches), len(sourcePoints)))
       syncPrintQ("... therefore invoking SIFT pointmatching for:\n  S: " + basename(filepath1) + "\n  T: " + basename(filepath2))
       # Can fail if there is a shift larger than the searchRadius
