@@ -272,7 +272,11 @@ class MontageSlice(Callable):
     # EXPECTS filepaths with filenames ending in ["_0-0-0.dat", "_0-0-1.dat", "_0-1-0.dat", "_0-1-1.dat" ... ], where the last number indicates the column, and the second-to-last the row.
     # ASSUMES all tiles have the same dimensions
     self.groupName = groupName
-    self.tilePaths = list(sorted(tilePaths))
+    
+    # Sort tilePaths by using their basenames only, since files in the repaired directory would sort differently
+    paths = {os.path.basename(p)[:p.rfind(".")]: p for p in tilePaths} # keys are base file names without extension or folders
+    self.tilePaths = [paths[p] for p in sorted(paths.keys())]
+    
     self.overlap = overlap
     self.nominal_overlap = nominal_overlap
     self.offset = offset
@@ -292,8 +296,6 @@ class MontageSlice(Callable):
       # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
       i_row, i_col = map(int, re.match(pattern, filepath[filepath.rfind('_')+1:]).groups())
       self.rows[i_row][i_col] = filepath
-      if -1 != filepath.rfind("24-03-02_190309"):
-        print self.rows
 
 
   def connectTiles(self, filepath1, filepath2, sps, tiles, roi0, roi1, offset):
