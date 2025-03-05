@@ -197,7 +197,7 @@ def yieldShortProcessors(tilePaths, reverse=False):
   ls = tilePaths if not reverse else reversed(tilePaths)
   for filepath in ls:
     syncPrintQ("#%s#" % filepath)
-    yield load(filepath).getProcessor()
+    yield filepath, load(filepath).getProcessor()
 
 
 def processTo8bit(sp, params_pixels):
@@ -418,7 +418,7 @@ class MontageSlice(Callable):
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
     # Start pasting from the end, to bury the bad left edges
-    for sp, matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
+    for (filepath, sp), matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
       spMontage.insert(process(sp, params_pixels),  # TODO don't process separately, see above
                        int(sdx + matrix[2] + dx + 0.5),
                        int(sdy + matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
@@ -438,8 +438,22 @@ class MontageSlice(Callable):
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
     rois = []
+    # If a file is in the repaired dir and it ends in TIFF, paint it first:
+    # a crude way of signaling that the file was repaired and it's potentially incomplete,
+    # particularly near the edges where it overlaps with other tiles.
+    for (filepath, sp), matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
+      if not (filepath.find("/repaired/") > 0 and filepath.endswith("tif")):
+        continue
+      # Paint repaired file that was saved as TIFF
+      x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
+      y = int(sdy + matrix[5] + dy + 0.5)
+      spMontage.insert(sp, x, y)
+      rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
+    
     # Start pasting from the end, to bury the bad left edges
-    for sp, matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
+    for (filepath, sp), matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
+      if filepath.find("/repaired/") > 0 and filepath.endswith("tif"):
+        continue # already painted
       x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
       y = int(sdy + matrix[5] + dy + 0.5)
       spMontage.insert(sp, x, y)
