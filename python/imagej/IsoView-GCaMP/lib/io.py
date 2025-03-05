@@ -25,6 +25,7 @@ from net.imglib2.type import PrimitiveType
 from net.imglib2.util import Intervals
 from net.imglib2.cache.ref import SoftRefLoaderCache, BoundedSoftRefLoaderCache
 from net.imglib2.cache.img import CachedCellImg
+from loci.formats import ChannelSeparator
 from ij.io import FileSaver, ImageReader, FileInfo
 from ij import ImagePlus, IJ
 from ij.process import ShortProcessor, ByteProcessor
@@ -1052,4 +1053,30 @@ def deserialize(filepath):
   if obj is None:
     syncPrintQ("Failed to deserialize object at " + filepath)
   return obj
+
+
+def imageInfo(filepath):
+  """ Via LOCI BioFormats ChannelSeparator which reads the header.
+      Returns a dictionary with the width, height, nSlices, bitDepth
+      and also an approximated headerSize that can be wrong if there is a trailer. """
+  try:
+    fr = ChannelSeparator()
+    fr.setGroupFiles(False)
+    fr.setId(filepath)
+    width, height, nSlices = fr.getSizeX(), fr.getSizeY(), fr.getSizeZ()
+    n_pixels = width * height * nSlices
+    bitDepth = fr.getBitsPerPixel()
+    fileSize = os.path.getsize(filepath)
+    headerSize = fileSize - (n_pixels * bitDepth / 8) # 8 bits in 1 byte
+    return {"width": width,
+            "height": height,
+            "nSlices": nSlices,
+            "bitDepth": bitDepth,
+            "headerSize": headerSize}
+  except:  
+    # Print the error, if any  
+    print sys.exc_info()  
+  finally:  
+    fr.close() # close the file handle safely and always
+
 

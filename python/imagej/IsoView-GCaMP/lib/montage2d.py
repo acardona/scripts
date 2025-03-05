@@ -4,7 +4,7 @@ from datetime import datetime
 
 from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task
 from lib.registration import saveMatrices, loadMatrices
-from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
+from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg, imageInfo
 from lib.ui import wrap, addWindowListener, duplicateInParallel, saveInParallel
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
@@ -292,6 +292,8 @@ class MontageSlice(Callable):
       # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
       i_row, i_col = map(int, re.match(pattern, filepath[filepath.rfind('_')+1:]).groups())
       self.rows[i_row][i_col] = filepath
+      if -1 != filepath.rfind("24-03-02_190309"):
+        print self.rows
 
 
   def connectTiles(self, filepath1, filepath2, sps, tiles, roi0, roi1, offset):
@@ -616,10 +618,17 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
   for af in alternative_filenames:
       syncPrintQ("Available alternative: %s" % af)
 
+  pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
+  def coordsFn(a):
+    row, col = re.match(pattern, filepath[a.rfind('_')+1:]).groups()
+    return int(row) * 10 + int(col) # Assumes no more than 9 rows or cols
+
   # Ensure tilePaths are sorted,
   # and check that tiles are of the same dimensions and file size within each section:
   for groupName_, tilePaths_ in groups.iteritems():
-    tilePaths_.sort() # in place
+    tilePaths_.sort(key=coordsFn) # in place
+    if tilePaths_[0].find("24-03-02_190309") > 0:
+      print tilePaths_
 
     # Replace and remove filepaths as needed
     if alternative_dir or len(ignore_images) > 0:
@@ -654,19 +663,26 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
     drop = set()
     for i, tilePath in enumerate(tilePaths_):
       try:
-        header = readFIBSEMHeader(tilePath)
-        if header is None:
-            drop.add(i)
-            syncPrintQ("%s HEADER: %s" % (groupName_, str(type(header))))
+        if tilePath.endswith(".dat"):
+          header = readFIBSEMHeader(tilePath)
+          if header is None:
+              drop.add(i)
+              syncPrintQ("%s HEADER: %s" % (groupName_, str(type(header))))
+          else:
+            widths.append(header.xRes)
+            heights.append(header.yRes)
+            #fileSizes.append(os.stat(tilePath).st_size)
+            #syncPrintQ("tilePath: %s\ndimensions: %i, %i" % (tilePath, header.xRes, header.yRes))
         else:
-          widths.append(header.xRes)
-          heights.append(header.yRes)
-          fileSizes.append(os.stat(tilePath).st_size)
-          #syncPrintQ("tilePath: %s\ndimensions: %i, %i" % (tilePath, header.xRes, header.yRes))
+          # Not a .DAT file
+          info = imageInfo(tilePath)
+          widths.append(info["width"])
+          heights.append(info["height"])
+          # ignore file sizes
       except:
         syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
         drop.add(i)
-      if 1 == len(set(widths)) and 1 == len(set(heights)) and 1 == len(set(fileSizes)):
+      if 1 == len(set(widths)) and 1 == len(set(heights)): # and 1 == len(set(fileSizes)):
         # all tiles are the same
         pass
       else:
@@ -842,7 +858,10 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   def openImages(self, rowIndex):
     for filepath in self.model.rows[rowIndex][2]:
       # Execute in a separate set of threads
-      self.exe.submit(OpenDAT(filepath))
+      if filepath.endswith(".dat"):
+        self.exe.submit(OpenDAT(filepath))
+      else:
+        self.exe.submit(lambda: IJ.openImage(filepath))
   
   def openImagesRows(self):
     if self.firstIndex < 0 or self.lastIndex < 0:
