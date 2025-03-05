@@ -585,7 +585,7 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
 
 
 
-def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_images=set(), writeDir=None, replace_images=set()):
+def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_images=set(), writeDir=None, replace_images={}):
   """
   Does not assume anything regarding the number of tiles per montage.
   
