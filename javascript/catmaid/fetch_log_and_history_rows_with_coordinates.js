@@ -8,11 +8,15 @@
     // UPDATE these to desired range of rows from the table
     var range = {range_start: 0, range_length: 100};
 
+    var saveJSON = function(rows) {
+      saveAs(new Blob([JSON.stringify(rows)], {type: 'text/plain'}), "log_history_rows.json");
+    };
+    
     var handle = function(json) {
 
-        console.log(json);
-
         var rows = new Array(json.transactions.length);
+
+        console.log(json);
         console.log(rows);
 
         console.log(json.transactions.length);
@@ -36,11 +40,16 @@
                   rows[i] = row;
                   if (i == json.transactions.length - 1) {
                       console.log(rows);
+                      saveJSON(rows);
                   }
               }).catch(function(error) {
                 console.log("error at ", i);
-                 rows[i] = row;
-                 row.position = [NaN, NaN, NaN];
+                rows[i] = row;
+                row.position = [NaN, NaN, NaN];
+                if (i == json.transactions.length - 1) {
+                      console.log(rows);
+                      saveJSON(rows);
+                }
               });
         });
     };
