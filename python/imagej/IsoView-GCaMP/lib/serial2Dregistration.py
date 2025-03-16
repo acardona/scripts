@@ -869,7 +869,7 @@ class CellLoader(CacheLoader):
       syncPrintQ("CellLoader.preloadCells triggered with preload %i" % self.preload)
       # e.g. if index=0 and preload=5, will load [1,2,3,4]
       for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
-        self.exe.submit(GetSectionTask(self.cachedCellImg, index))
+        self.exe.submit(GetSectionTask(self.cachedCellImg, i))
 
   def destroy(self):
     if self.exe is not None:
