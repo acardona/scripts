@@ -27,7 +27,7 @@ from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/maste
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList, HashSet
 from java.util.concurrent import Callable
-from java.lang import Double, System, Runnable, Runtime, Exception, Throwable, Integer, Class
+from java.lang import Double, System, Runnable, Runtime, Exception, Throwable, Integer, Class, Thread
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor, ImageProcessor, ByteProcessor
