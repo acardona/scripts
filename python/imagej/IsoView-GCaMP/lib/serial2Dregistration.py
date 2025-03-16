@@ -842,7 +842,9 @@ class GetSectionTask(Callable):
     t = Thread.currentThread()
     if t.isInterrupted() or not t.isAlive():
       return None
-    return self.cachedCellImg.getCells().randomAccess().setPosition(self.index, 0) # one 2D cell per section, so one dimension only
+    ra = self.cachedCellImg.getCells().randomAccess()
+    ra.setPosition(self.index, 2) # one 2D cell per section, so one dimension only
+    return ra.get()
 
 
 class CellLoader(CacheLoader):
@@ -868,6 +870,7 @@ class CellLoader(CacheLoader):
     if self.preload is not None and self.preload > 0 and 0 == index % self.preload:
       syncPrintQ("CellLoader.preloadCells triggered with preload %i" % self.preload)
       # e.g. if index=0 and preload=5, will load [1,2,3,4]
+      syncPrintQ("Preloading sections: %" % str(range(index + 1, min(index + self.preload, len(self.filepaths)))))
       for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
         self.exe.submit(GetSectionTask(self.cachedCellImg, i))
 
