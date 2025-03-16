@@ -27,7 +27,7 @@ from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/maste
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList, HashSet
 from java.util.concurrent import Callable
-from java.lang import Double, System, Runnable, Runtime, Exception, Throwable
+from java.lang import Double, System, Runnable, Runtime, Exception, Throwable, Integer
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor, ImageProcessor, ByteProcessor
@@ -886,10 +886,14 @@ class CellLoader(CacheLoader):
     #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),   # How many threads? Should use 1 only.
     #             aimg)
     # Copy single-threaded
-    ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), # source
-                 aimg.update(None).getCurrentStorageArray(), # target
-                 0, # offset
-                 [1, aimg.dimension(0)]) # stride: [1, width] to convert x,y coordinates to array indices
+    m = ImgUtil.getDeclaredMethod("copy", [Class.forName("net.imglib2.img.Img"), Class.forName("[S"), Integer, Class.forName("[I"))
+
+    #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), # source: an Img
+    m.invoke(None, 
+             [ImgView.wrap(imgT, aimg.factory()), # source: an Img
+              aimg.update(None).getCurrentStorageArray(), # target
+              0, # offset
+              [1, aimg.dimension(0)]]) # stride: [1, width] to convert x,y coordinates to array indices
     
     return Cell(self.cell_dimensions,
                [0, 0, index],
