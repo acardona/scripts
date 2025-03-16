@@ -26,7 +26,8 @@ from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList, HashSet
-from java.lang import Double, System, Runnable, Runtime, Exception, Throwable
+from java.util.concurrent import Callable
+from java.lang import Double, System, Runnable, Runtime, Exception, Throwable, Integer, Class, Thread
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.view import Views
 from ij.process import FloatProcessor, ImageProcessor, ByteProcessor
@@ -44,6 +45,9 @@ from net.imglib2.type.PrimitiveType import BYTE, SHORT
 from net.imglib2.converter import RealUnsignedByteConverter
 from net.imglib2.loops import LoopBuilder
 from net.imglib2.algorithm.math import ImgMath
+from net.imglib2.cache.ref import SoftRefLoaderCache
+from net.imglib2.cache.img import ReadOnlyCachedCellImgFactory, ReadOnlyCachedCellImgOptions
+from net.imglib2.cache import CacheLoader
 from java.awt.event import KeyAdapter, KeyEvent
 from java.util.concurrent import Executors, TimeUnit
 from jarray import zeros, array
@@ -838,7 +842,9 @@ class GetSectionTask(Callable):
     t = Thread.currentThread()
     if t.isInterrupted() or not t.isAlive():
       return None
-    return self.cachedCellImg.getCells().randomAccess().setPosition(self.index, 0) # one 2D cell per section, so one dimension only
+    ra = self.cachedCellImg.getCells().randomAccess()
+    ra.setPosition(self.index, 2) # one 2D cell per section, so one dimension only
+    return ra.get()
 
 
 class CellLoader(CacheLoader):
@@ -857,13 +863,16 @@ class CellLoader(CacheLoader):
       self.cachedCellImg = cachedCellImg
       self.exe = newFixedThreadPool(preload) # BEWARE native memory leak if not closed
       self.preload = preload
+      syncPrintQ("CellLoader.setCache: preload is %i" % preload)
 
   def preloadCells(self, index):
     # Submit jobs to concurrently preload cells ahead into the cache, if not there already
     if self.preload is not None and self.preload > 0 and 0 == index % self.preload:
+      syncPrintQ("CellLoader.preloadCells triggered with preload %i" % self.preload)
       # e.g. if index=0 and preload=5, will load [1,2,3,4]
+      syncPrintQ("Preloading sections: %" % str(range(index + 1, min(index + self.preload, len(self.filepaths)))))
       for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
-        self.exe.submit(GetSectionTask(self.cachedCellImg, index))
+        self.exe.submit(GetSectionTask(self.cachedCellImg, i))
 
   def destroy(self):
     if self.exe is not None:
@@ -882,10 +891,19 @@ class CellLoader(CacheLoader):
     #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),   # How many threads? Should use 1 only.
     #             aimg)
     # Copy single-threaded
-    ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), # source
-                 aimg.update(None).getCurrentStorageArray(), # target
-                 0, # offset
-                 [1, aimg.dimension(0)]) # stride: [1, width] to convert x,y coordinates to array indices
+    
+    # Doesn't exist?
+    #m = ImgUtil.getDeclaredMethod("copy", [Class.forName("net.imglib2.img.Img"), Class.forName("[S"), Integer, Class.forName("[I")])
+
+    #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), # source: an Img
+    #m.invoke(None, 
+    #         [ImgView.wrap(imgT, aimg.factory()), # source: an Img
+    #          aimg.update(None).getCurrentStorageArray(), # target
+    #          0, # offset
+    #          [1, aimg.dimension(0)]]) # stride: [1, width] to convert x,y coordinates to array indices
+    
+    # Copy single-threaded
+    ImgMath.compute(imgT).into(aimg)
     
     return Cell(self.cell_dimensions,
                [0, 0, index],
@@ -913,15 +931,15 @@ def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterva
   # New approach: delegate the cache entirely to ImgLib2
   cell_loader = CellLoader(filepaths, loadImg, matrices,
                            img_dimensions, cell_dimensions,
-                           cropInterval, preload=preload)
+                           cropInterval)
   # Create the cache, which can load any Cell when needed using CellLoader
   loading_cache = SoftRefLoaderCache().withLoader(cell_loader).unchecked()
   # Create a CachedCellImg: a LazyCellImg that caches Cell instances with a SoftReference, for best performance
   # and also self-regulating regarding the amount of memory to allocate to the cache.
   cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
-                    dimensions, createType(bytesPerPixel), loading_cache,
+                    voldims, pixelType(), loading_cache,
                     ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
-  cell_loader.setCache(cachedCellImg)
+  cell_loader.setCache(cachedCellImg, preload)
   return cachedCellImg, cell_loader
 
 
