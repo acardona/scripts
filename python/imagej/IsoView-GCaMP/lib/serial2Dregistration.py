@@ -886,7 +886,7 @@ class CellLoader(CacheLoader):
     #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),   # How many threads? Should use 1 only.
     #             aimg)
     # Copy single-threaded
-    m = ImgUtil.getDeclaredMethod("copy", [Class.forName("net.imglib2.img.Img"), Class.forName("[S"), Integer, Class.forName("[I"))
+    m = ImgUtil.getDeclaredMethod("copy", [Class.forName("net.imglib2.img.Img"), Class.forName("[S"), Integer, Class.forName("[I")])
 
     #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), # source: an Img
     m.invoke(None, 
