@@ -26,6 +26,7 @@ from mpicbg.ij.util import Filter, Util
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList, HashSet
+from java.util.concurrent import Callable
 from java.lang import Double, System, Runnable, Runtime, Exception, Throwable
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
 from net.imglib2.view import Views
@@ -44,6 +45,9 @@ from net.imglib2.type.PrimitiveType import BYTE, SHORT
 from net.imglib2.converter import RealUnsignedByteConverter
 from net.imglib2.loops import LoopBuilder
 from net.imglib2.algorithm.math import ImgMath
+from net.imglib2.cache.ref import SoftRefLoaderCache
+from net.imglib2.cache.img import ReadOnlyCachedCellImgFactory, ReadOnlyCachedCellImgOptions
+from net.imglib2.cache import CacheLoader
 from java.awt.event import KeyAdapter, KeyEvent
 from java.util.concurrent import Executors, TimeUnit
 from jarray import zeros, array
@@ -919,7 +923,7 @@ def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterva
   # Create a CachedCellImg: a LazyCellImg that caches Cell instances with a SoftReference, for best performance
   # and also self-regulating regarding the amount of memory to allocate to the cache.
   cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
-                    dimensions, createType(bytesPerPixel), loading_cache,
+                    dimensions, UnsignedShortType(), loading_cache,
                     ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
   cell_loader.setCache(cachedCellImg)
   return cachedCellImg, cell_loader
