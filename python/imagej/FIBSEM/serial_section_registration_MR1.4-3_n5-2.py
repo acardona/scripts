@@ -12,6 +12,7 @@ from itertools import izip
 from net.imglib2 import FinalInterval
 from net.imglib2.util import Intervals
 from net.imglib2.type.numeric.integer import UnsignedByteType
+from net.imglib2.view import Views
 from java.lang import Runtime
 from ij.gui import Roi
 
@@ -22,8 +23,8 @@ from ij.gui import Roi
 name = "MR1.4-3"
 
 # Folders
-#srcDir = "/net/fibserver1/raw/" + name + "/"
-srcDir = "/data/raw/" + name + "/"
+srcDir = "/net/fibserver1/raw/" + name + "/"
+#srcDir = "/data/raw/" + name + "/" # when running from fibserver1
 tgtDir = "/net/zstore1/FIBSEM/" + name + "/registration/"
 csvDir = tgtDir + "csv/" # for in-section montaging
 csvDirZ = tgtDir + "csvZ-2/" # for cross-section alignment with SIFT+RANSAC
@@ -77,7 +78,7 @@ paramsSIFT.fdBins = 8 # default is 8
 
 paramsRANSAC = {
   "iterations": 1000,
-   "maxEpsilon": 25, # pixels, maximum error allowed, usual number is 25. Started out as 5 for the first ~6000 sections or so.
+   "maxEpsilon": 10, # pixels, maximum error allowed, usual number is 25. Started out as 5 for the first ~6000 sections or so.
    "minInlierRatio": 0.01 # 1%
 }
 
@@ -331,7 +332,7 @@ matricesSIFT = loadMatrices("matrices.csv-combined", csvDirZ)
 print len(matricesSIFT)
 print len(groupNames)
 
-"""
+
 cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
 imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
                                   matricesSIFT,
@@ -339,7 +340,6 @@ imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, p
                                   title_addendum=" SIFT+RANSAC")
 
 imp = impSIFT
-"""
 
 
 """
@@ -379,7 +379,20 @@ img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertie
 
 """
 
-# To be determined:
-#imp.setRoi(Roi(352, 152, 13776, 15608))
+
+# Replace section 7108 (0-based) with 7107
+img = imgSIFT
+imgX = Views.concatenate(2,
+                         [Views.interval(img, [0, 0, 0],
+                                              [img.dimension(0) -1, img.dimension(1) -1, 7107]),
+                          Views.interval(img, [0, 0, 7107],
+                                              [img.dimension(0) -1, img.dimension(1) -1, 7107]),
+                          Views.interval(img, [0, 0, 7109],
+                                              [img.dimension(0) -1, img.dimension(1) -1, img.dimension(2) -1])])
+                                              
+impX = IL.wrap(imgX, "MR1.4-3 aligned subpixel without 7108")
+impX.show()
+
+impX.setRoi(Roi(352, 152, 13776, 15608))
 
 
