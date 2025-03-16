@@ -68,8 +68,14 @@ def exportOpenVSAs8bitN5(name, # dataset name
 #                     gzip_compression=4,
 #                     n_threads=128)
  
-exportOpenVSAs8bitN5("MR1.4-2",
-                     "/net/zstore1/FIBSEM/MR1.4-2/registration/n5/",
+#exportOpenVSAs8bitN5("MR1.4-2",
+#                     "/net/zstore1/FIBSEM/MR1.4-2/registration/n5/",
+#                     [256, 256, 64],
+#                     gzip_compression=4,
+#                     n_threads=128)
+
+exportOpenVSAs8bitN5("MR1.4-3",
+                     "/net/zstore1/FIBSEM/MR1.4-3/registration/n5-2b/",
                      [256, 256, 64],
                      gzip_compression=4,
                      n_threads=128)
