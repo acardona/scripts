@@ -764,8 +764,11 @@ class TranslatedSectionGet(LazyCellImg.Get):
     syncPrintQ(str(Intervals.dimensionsAsLongArray(self.interval)))
     self.cache.clear()
 
+  # From LazyCellImg.Get interface, method get(long index)
+  # This method accesses every pixel
   def get(self, index):
     return self.cache(index) # ENORMOUS Thread contention in accessing every pixel
+    # Should use a CachedCellImage via ReadOnlyCachedCellImgFactory and a CellLoader. See below CellLoader and makeImg.
 
   def makeCell(self, index):
     self.preloadCells(index) # preload others in the background
@@ -776,8 +779,12 @@ class TranslatedSectionGet(LazyCellImg.Get):
     imgA = RealViews.transform(imgI, affine)
     imgT = Views.zeroMin(Views.interval(imgA, self.interval))
     aimg = img.factory().create(self.interval)
-    ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),
-                 aimg)
+    apixels = aimg.update(None).getCurrentStorageArray()
+    #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),   # How many threads? Should use 1 only.
+    #             aimg)
+    # Copy single-threaded
+    ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), apixels, 0, [1, aimg.dimension(1)])
+    
     return Cell(self.cell_dimensions,
                [0, 0, index],
                aimg.update(None))
@@ -820,9 +827,74 @@ class SourcePanning(KeyAdapter):
       syncPrintQ(str(sys.exc_info()))
 
 
+
+# For preloading
+class GetSectionTask(Callable):
+  def __init__(self, cachedCellImg, index):
+    self.cachedCellImg = cachedCellImg
+    self.index = index
+    
+  def call(self):
+    t = Thread.currentThread()
+    if t.isInterrupted() or not t.isAlive():
+      return None
+    return self.cachedCellImg.getCells().randomAccess().setPosition(self.index, 0) # one 2D cell per section, so one dimension only
+
+
+class CellLoader(CacheLoader):
+  def __init__(self, filepaths, loadImg, matrices, img_dimensions, cell_dimensions, interval):
+    self.filepaths = filepaths
+    self.loadImg = loadImg # function to load images
+    self.matrices = matrices
+    self.img_dimensions = img_dimensions
+    self.cell_dimensions = cell_dimensions # x,y must match dims of interval
+    self.interval = interval # when smaller than the image, will crop
+    self.exe = None
+    self.preload = None
+    
+  def setCache(self, cachedCellImg, preload):
+    if preload:
+      self.cachedCellImg = cachedCellImg
+      self.exe = newFixedThreadPool(preload) # BEWARE native memory leak if not closed
+      self.preload = preload
+
+  def preloadCells(self, index):
+    # Submit jobs to concurrently preload cells ahead into the cache, if not there already
+    if self.preload is not None and self.preload > 0 and 0 == index % self.preload:
+      # e.g. if index=0 and preload=5, will load [1,2,3,4]
+      for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
+        self.exe.submit(GetSectionTask(self.cachedCellImg, index))
+
+  def destroy(self):
+    if self.exe is not None:
+      self.exe.shutdownNow()
+
+  def get(self, index):
+    """ Return a new Cell for section at index. """
+    self.preloadCells(index) # preload others in the background
+    img = self.loadImg(self.filepaths[index])
+    affine = AffineTransform2D()
+    affine.set(self.matrices[index])
+    imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
+    imgA = RealViews.transform(imgI, affine)
+    imgT = Views.zeroMin(Views.interval(imgA, self.interval))
+    aimg = img.factory().create(self.interval)
+    #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),   # How many threads? Should use 1 only.
+    #             aimg)
+    # Copy single-threaded
+    ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), # source
+                 aimg.update(None).getCurrentStorageArray(), # target
+                 0, # offset
+                 [1, aimg.dimension(0)]) # stride: [1, width] to convert x,y coordinates to array indices
+    
+    return Cell(self.cell_dimensions,
+               [0, 0, index],
+               aimg.update(None))
+  
+
 def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterval, preload):
-  """ Note that when preload > 0, tjhe returned cellGet (a TranslatedSectionGet as defined above)
-      will have created an ExecutorService that can be shutdown by invoking destroy() on the returned cellGet.
+  """ Note that when preload > 0, the returned CellLoader will have created an ExecutorService
+      that can be shutdown by invoking destroy() on it.
   """
   dims = Intervals.dimensionsAsLongArray(cropInterval)
   voldims = [dims[0],
@@ -832,9 +904,26 @@ def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterva
                      dims[1],
                      1]
   grid = CellGrid(voldims, cell_dimensions)
-  cellGet = TranslatedSectionGet(filepaths, loadImg, matrices, img_dimensions, cell_dimensions,
-                                 cropInterval, preload=preload)
-  return LazyCellImg(grid, pixelType(), cellGet), cellGet
+  
+  # Old approach:
+  #cellGet = TranslatedSectionGet(filepaths, loadImg, matrices, img_dimensions, cell_dimensions,
+  #                               cropInterval, preload=preload)
+  #return LazyCellImg(grid, pixelType(), cellGet), cellGet
+
+  # New approach: delegate the cache entirely to ImgLib2
+  cell_loader = CellLoader(filepaths, loadImg, matrices,
+                           img_dimensions, cell_dimensions,
+                           cropInterval, preload=preload)
+  # Create the cache, which can load any Cell when needed using CellLoader
+  loading_cache = SoftRefLoaderCache().withLoader(cell_loader).unchecked()
+  # Create a CachedCellImg: a LazyCellImg that caches Cell instances with a SoftReference, for best performance
+  # and also self-regulating regarding the amount of memory to allocate to the cache.
+  cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
+                    dimensions, createType(bytesPerPixel), loading_cache,
+                    ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
+  cell_loader.setCache(cachedCellImg)
+  return cachedCellImg, cell_loader
+
 
 
 class OnClosing(ImageListener):
