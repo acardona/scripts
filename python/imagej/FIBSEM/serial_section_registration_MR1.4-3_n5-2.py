@@ -23,8 +23,8 @@ from ij.gui import Roi
 name = "MR1.4-3"
 
 # Folders
-#srcDir = "/net/fibserver1/raw/" + name + "/"
-srcDir = "/data/raw/" + name + "/" # when running from fibserver1
+srcDir = "/net/fibserver1/raw/" + name + "/"
+#srcDir = "/data/raw/" + name + "/" # when running from fibserver1
 tgtDir = "/net/zstore1/FIBSEM/" + name + "/registration/"
 csvDir = tgtDir + "csv/" # for in-section montaging
 csvDirZ = tgtDir + "csvZ-2/" # for cross-section alignment with SIFT+RANSAC
