@@ -2,7 +2,7 @@ import sys, os
 sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from ij import IJ
 from org.janelia.saalfeldlab.n5.universe import N5Factory
-from lib.ui import grabImg
+from lib.ui import grabImg, showStack
 from lib.util import newFixedThreadPool
 from net.imglib2.view import Views
 from org.janelia.saalfeldlab.n5.imglib2 import N5Utils
@@ -43,7 +43,7 @@ if roi:
   img = Views.zeroMin(Views.interval(img, [bounds.x, bounds.y, 0],
                                           [bounds.x + bounds.width -1, bounds.y + bounds.height -1, img.dimension(2) -1]))
 
-def update(exe):
+def update():
   print n5
   print datasetAttributes
   for n5index, RAMindex in slice_indices.iteritems():
@@ -55,13 +55,23 @@ def update(exe):
       # translate
       dz = n5index - RAMindex # e.g., +1 for the 7108 entry which was read at 7107
       plane = Views.translate(plane, [0, 0, dz])
-    N5Utils.saveRegion(plane, n5, dataset, datasetAttributes, exe)
+    
+    # Show the planes that will be written
+    #showStack(plane, "%i::%i" % (n5index, RAMindex))  # THEY ALL LOOK GOOD
+    
+    exe = newFixedThreadPool(250)
+    try:
+      N5Utils.saveRegion(plane, n5, dataset, datasetAttributes, exe)
+    finally:
+      exe.shutdown()
 
 
-exe = newFixedThreadPool(250)
+#exe = newFixedThreadPool(250)
 try:
-  update(exe)
+  update()
+except:
+  print sys.exec_info()
 finally:
-  exe.shutdown()
+  pass # exe.shutdown()
 
 
