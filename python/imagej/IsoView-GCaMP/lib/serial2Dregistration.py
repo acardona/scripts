@@ -917,7 +917,7 @@ def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterva
   # New approach: delegate the cache entirely to ImgLib2
   cell_loader = CellLoader(filepaths, loadImg, matrices,
                            img_dimensions, cell_dimensions,
-                           cropInterval, preload=preload)
+                           cropInterval)
   # Create the cache, which can load any Cell when needed using CellLoader
   loading_cache = SoftRefLoaderCache().withLoader(cell_loader).unchecked()
   # Create a CachedCellImg: a LazyCellImg that caches Cell instances with a SoftReference, for best performance
@@ -925,7 +925,7 @@ def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterva
   cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
                     dimensions, UnsignedShortType(), loading_cache,
                     ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
-  cell_loader.setCache(cachedCellImg)
+  cell_loader.setCache(cachedCellImg, preload)
   return cachedCellImg, cell_loader
 
 
