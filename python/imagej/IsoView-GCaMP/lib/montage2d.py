@@ -958,10 +958,10 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
 
 # Convert from row index in the view (could e.g. be sorted)  
 # to the index in the underlying table model  
-def getSelectedRowIndex(table):
-  viewIndex = table.getSelectionModel().getLeadSelectionIndex()
-  modelIndex = table.convertRowIndexToModel(viewIndex)
-  return modelIndex
+#def getSelectedRowIndex(table):
+#  viewIndex = table.getSelectionModel().getLeadSelectionIndex()
+#  modelIndex = table.convertRowIndexToModel(viewIndex)
+#  return modelIndex
 
 
 def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
