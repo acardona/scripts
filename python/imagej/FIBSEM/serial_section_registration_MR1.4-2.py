@@ -143,6 +143,12 @@ fixed_tile_indices = [int(len(groupNames) / 3)] # [7000] # A section in the brai
 def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
   dx = 0
   dy = 0
+  if index < 176:  # jump between 176-177 1-based
+    dx += 629
+    dy += 250
+  if index < 651: # jump between 651-652 1-based
+    dx += 254
+    dy += 253
   if index < 1127: # All 1-tile sections
     dx += 873
     dy += 1749
