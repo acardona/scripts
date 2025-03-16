@@ -886,14 +886,19 @@ class CellLoader(CacheLoader):
     #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),   # How many threads? Should use 1 only.
     #             aimg)
     # Copy single-threaded
-    m = ImgUtil.getDeclaredMethod("copy", [Class.forName("net.imglib2.img.Img"), Class.forName("[S"), Integer, Class.forName("[I")])
+    
+    # Doesn't exist?
+    #m = ImgUtil.getDeclaredMethod("copy", [Class.forName("net.imglib2.img.Img"), Class.forName("[S"), Integer, Class.forName("[I")])
 
     #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), # source: an Img
-    m.invoke(None, 
-             [ImgView.wrap(imgT, aimg.factory()), # source: an Img
-              aimg.update(None).getCurrentStorageArray(), # target
-              0, # offset
-              [1, aimg.dimension(0)]]) # stride: [1, width] to convert x,y coordinates to array indices
+    #m.invoke(None, 
+    #         [ImgView.wrap(imgT, aimg.factory()), # source: an Img
+    #          aimg.update(None).getCurrentStorageArray(), # target
+    #          0, # offset
+    #          [1, aimg.dimension(0)]]) # stride: [1, width] to convert x,y coordinates to array indices
+    
+    # Copy single-threaded
+    ImgMath.compute(imgT).into(aimg)
     
     return Cell(self.cell_dimensions,
                [0, 0, index],
