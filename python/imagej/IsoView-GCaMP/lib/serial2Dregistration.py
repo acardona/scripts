@@ -861,10 +861,12 @@ class CellLoader(CacheLoader):
       self.cachedCellImg = cachedCellImg
       self.exe = newFixedThreadPool(preload) # BEWARE native memory leak if not closed
       self.preload = preload
+      syncPrintQ("CellLoader.setCache: preload is %i" % preload)
 
   def preloadCells(self, index):
     # Submit jobs to concurrently preload cells ahead into the cache, if not there already
     if self.preload is not None and self.preload > 0 and 0 == index % self.preload:
+      syncPrintQ("CellLoader.preloadCells triggered with preload %i" % self.preload)
       # e.g. if index=0 and preload=5, will load [1,2,3,4]
       for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
         self.exe.submit(GetSectionTask(self.cachedCellImg, index))
