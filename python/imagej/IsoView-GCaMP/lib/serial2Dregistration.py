@@ -585,8 +585,8 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   matrices = loadMatrices(name, csvDir)
   if matrices:
     return matrices
-    
-  # Determine fixed tile
+  
+  # Determine fixed tile for the whole series
   if fixed_tile_index is None:
     fixed_tile_index = int(len(filepaths) / 2)
   
@@ -623,29 +623,28 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
       saveMatrices(name_i, matrices, csvDir)
     chunks.append(matrices)
     
-  # Now register the overlapping chunks, considering each chunk as a tile
+  # Now register the overlapping chunks, considering each chunk as a tile.
   # Given that the subset of sections is the same, use for pointmatches across tiles one point per section,
   # transformed by the transform of that section in that chunk,
   # towards computing a TranslationModel2D for each tile (each chunk is tile).
   dims = properties["img_dimensions"]
-  px, py = dims[0] / 2, dims[1] / 2
+  px, py = dims[0] / 2, dims[1] / 2 # center of each section
   chunk_tiles = [(chunk, Tile(TranslationModel2D())) for chunk in chunks]
   for (cmatrices1, tile1), (cmatrices2, tile2) in izip(chunk_tiles, islice(chunk_tiles, 1, None)):
     pointmatches = []
-    for m1, m2 in izip(islice(cmatrices1, overlap, None), # from overlap to the end
-                       islice(cmatrices2, 0, overlap)):   # from 0 to overlap
-      # Apply each transform to the center point: since it's just a Translation, simply add it
+    for m1, m2 in izip(islice(cmatrices1, overlap, None), # from overlap to the end. 'overlap' is the start of the second half of the first chunk.
+                       islice(cmatrices2, 0, overlap)):   # from 0 to overlap: the first half of the second chunk.
+      # Apply each transform to the center point: since it's just a Translation, simply add it. See https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/models/TranslationModel2D.java#L47
       pointmatches.append(PointMatch(Point(array([px + m1[2], py + m1[5]], 'd')),
                                      Point(array([px + m2[2], py + m2[5]], 'd'))))
     tile1.connect(tile2, pointmatches) # reciprocal
   
   # Fix the chunks (there can be two) that contain the fixed_tile_index:
   # (Both will have had its fixed tile at the same section)
-  i = fixed_tile_index / overlap
-  if i > 0 and i < len(chunks) - 1: # if it's not the first or last chunk
-    ifix = [i -1, i]
+  if k > 0 and k < len(chunks) - 1: # if it's not the first or last chunk
+    ifix = [k -1, k] # always [k-1, k] because the fixed_tile_index will fall in the first half of the chunk at index k.
   else:
-    ifix = [i]
+    ifix = [k]
   
   maxIterations = paramsTileConfiguration.get("chunk_maxIterations", 10000)
   optimize([tile for _, tile in chunk_tiles],
@@ -678,13 +677,13 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
       # weights: 1.0 at the middle of the chunk, 0.0 at the start or end of a chunk.
       w1 = 1.0 - i / float(overlap -1)
       w2 = 1.0 - w1
-      m1 = toChunkCoordinates(chunk_tile1, cmatrices1[overlap + i]) # the second half of the chunk
-      m2 = toChunkCoordinates(chunk_tile2, cmatrices2[i]) # the first half, up to the middle section
+      m1 = toChunkCoordinates(chunk_tile1, cmatrices1[overlap + i]) # the second half of the first chunk
+      m2 = toChunkCoordinates(chunk_tile2, cmatrices2[i]) # the first half of the second chunk, up to the middle section
       matrix = [1, 0, m1[2] * w1 + m2[2] * w2,
                 0, 1, m1[5] * w1 + m2[5] * w2]
       matrices.append(matrix)
   
-  # The last set of sections up to len(filepaths)
+  # The last set of sections up to len(filepaths). Can be that there isn't any, depending upon the number of sections.
   cmatrices, chunk_tile = chunk_tiles[-1]
   for i in xrange(len(cmatrices) - overlap):
     matrices.append(toChunkCoordinates(chunk_tile, cmatrices[overlap + i]))
