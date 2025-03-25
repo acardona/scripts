@@ -973,8 +973,9 @@ def viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfigurat
   return cellImg
 
 
-def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval, loaderImp=None):
-  matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=loaderImp)
+def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, cropInterval, loaderImp=None, inChunks=False):
+  alignFn = alignInChunks if inChunks else align
+  matrices = alignFn(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=loaderImp)  
   def loadImg(filepath):
     return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"], loaderImp=loaderImp)
   cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
