@@ -81,6 +81,11 @@ class Getter(Future):
     return True
 
 
+def isThreadDead(return_value=None):
+  t = Thread.currentThread()
+  if t.isInterrupted() or not t.isAlive():
+    return return_value
+
 class Task(Callable):
   """ A wrapper for executing functions in concurrent threads. """
   def __init__(self, fn, *args, **kwargs):
@@ -88,8 +93,7 @@ class Task(Callable):
     self.args = args
     self.kwargs = kwargs
   def call(self):
-    t = Thread.currentThread()
-    if t.isInterrupted() or not t.isAlive():
+    if isThreadDead():
       return None
     return self.fn(*self.args, **self.kwargs)
 
@@ -100,8 +104,7 @@ class RunTask(Runnable):
     self.args = args
     self.kwargs = kwargs
   def run(self):
-    t = Thread.currentThread()
-    if t.isInterrupted() or not t.isAlive():
+    if isThreadDead():
       return
     self.fn(*self.args, **self.kwargs)
 
@@ -114,8 +117,7 @@ class TimeItTask(Callable):
     self.args = args
     self.kwargs = kwargs
   def call(self):
-    t = Thread.currentThread()
-    if t.isInterrupted() or not t.isAlive():
+    if isThreadDead():
       return None
     t0 = System.nanoTime()
     r = self.fn(*self.args, **self.kwargs)
