@@ -56,7 +56,7 @@ from itertools import izip, islice
 from collections import defaultdict
 # From lib
 from io import lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
-from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException
+from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException, isThreadDead
 from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures, PointMatches
 from registration import loadMatrices, saveMatrices
 from ui import showStack, wrap, showTable, ExecutorCloser
@@ -69,11 +69,15 @@ from java.nio.file import Paths, Files, StandardCopyOption
 
 def loadImp(filepath):
   """ Returns an ImagePlus """
+  if isThreadDead():
+    return None
   syncPrintQ("Loading image " + filepath)
   return IJ.openImage(filepath)
 
 def loadUnsignedShort(filepath, invert=True, CLAHE_params=None, loaderImp=None):
   """ Returns an ImgLib2 ArrayImg """
+  if isThreadDead():
+    return None
   impLoader = loaderImp if loaderImp else loadImp
   imp = impLoader(filepath)
   if invert:
@@ -85,6 +89,8 @@ def loadUnsignedShort(filepath, invert=True, CLAHE_params=None, loaderImp=None):
 
 def loadFloatProcessor(filepath, params, paramsSIFT, scale=True, loaderImp=None):
   try:
+    if isThreadDead():
+      return None
     impLoader = loaderImp if loaderImp else loadImp
     fp = impLoader(filepath).getProcessor().convertToFloatProcessor()
     # Preprocess images: Gaussian-blur to scale down, then normalize contrast
@@ -115,6 +121,9 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
 
   return False if the CSV file already exists, True if it has to be computed.
   """
+  
+  if isThreadDead():
+    return None
   
   filepath1 = filepaths[index1]
   filepath2 = filepaths[index2]
@@ -176,6 +185,8 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
 
     # At least some should match to accept the translation
     if len(sourceMatches) < properties.get("min_blockmatching", 10):
+      if isThreadDead():
+        return None
       syncPrintQ("Found only %i blockmatching pointmatches (from %i source points)" % (len(sourceMatches), len(sourcePoints)))
       syncPrintQ("... therefore invoking SIFT pointmatching for:\n  S: " + basename(filepath1) + "\n  T: " + basename(filepath2))
       # Can fail if there is a shift larger than the searchRadius
@@ -281,6 +292,8 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
      Otherwise extract the features and store them serialized.
      Returns the ArrayList of Feature instances.
   """
+  if isThreadDead():
+    return None
   path = os.path.join(csvDir, os.path.basename(filepath) + ".SIFT-features.obj")
   ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: False)
   if validateByFileExists and not ignoreCacheFn(index):
@@ -301,6 +314,8 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
       os.remove(path)
   # Else, extract de novo:
   try:
+    if isThreadDead():
+      return None
     impLoader = loaderImp if loaderImp else loadImp
     # Extract features
     imp = impLoader(filepath)
@@ -328,6 +343,8 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
 
 
 def extractSIFTMatches(filepaths, index1, index2, params, paramsSIFT, properties, csvDir, loaderImp=None):
+  if isThreadDead():
+    return None
   # Skip if pointmatches CSV file exists already:
   csvpath = os.path.join(csvDir, basename(filepaths[index1]) + '.' + basename(filepaths[index2]) + ".pointmatches.csv")
   ignoreCacheFn = properties.get("ignoreCacheFn", lambda k: False)
@@ -349,6 +366,8 @@ def extractSIFTMatches(filepaths, index1, index2, params, paramsSIFT, properties
                                                    TranslationModel2D(),
                                                    params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
                                                    params.get("rod", 0.9)) # rod: ratio of best vs second best
+    if isThreadDead():
+      return None
     msg = ""
     # Filter matches by geometric consensus
     if properties.get("use_RANSAC", True):
