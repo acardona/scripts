@@ -5,7 +5,7 @@ from datetime import datetime
 from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg, imageInfo
-from lib.ui import wrap, addWindowListener, duplicateInParallel, saveInParallel
+from lib.ui import wrap, addWindowListener, duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
 
 from java.util import ArrayList, Vector, HashSet
@@ -1018,7 +1018,8 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
   # Enable popup menu on right click over a multi-row selection
   table.getSelectionModel().addListSelectionListener(opener)
   
-  frame = JFrame("Slice montages", windowClosed=lambda: exe.shutdownNow())
+  frame = JFrame("Slice montages")
+  frame.addWindowListener(ExecutorCloser(exe))
   frame.getContentPane().add(all)
   frame.pack()
   frame.setVisible(True)
