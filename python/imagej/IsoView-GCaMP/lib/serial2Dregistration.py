@@ -591,7 +591,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   
   
 def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-                  loaderImp=None, fixed_tile_index=None):
+                  groupNames, volumeImg, fixed_tile_index=None):
   """
   Align overlapping chunks of serial sections independently, and then interpolate the alignments.
   This approach helps the optimizer do a good job and fast.
@@ -638,10 +638,11 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
     else:
       print "Computing", name_i
       matrices = align(filepaths[start:end], csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-                       loaderImp=loaderImp, fixed_tile_indices=[fixed], io=False, verboseOptimize=True)
+                       loaderImp=makeSliceLoader(groupNames, volumeImg), fixed_tile_indices=[fixed], io=False, verboseOptimize=True)
       saveMatrices(name_i, matrices, csvDir)
+      volumeImg.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
     chunks.append(matrices)
-    
+  
   # Now register the overlapping chunks, considering each chunk as a tile.
   # Given that the subset of sections is the same, use for pointmatches across tiles one point per section,
   # transformed by the transform of that section in that chunk,
