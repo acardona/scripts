@@ -144,7 +144,6 @@ if srcDir.startswith("/data/raw"):
 groupNames = groupNames[964+1904:20000+964]
 tileGroups = tileGroups[964+1904:20000+964]
 
-
 # Sections with problems:
 # 1. Merlin-WEMS_24-02-27_170732_ : missing 0-0-0 tile (the top one)
 # Solution: replace with next (previous is truncated at the bottom)
@@ -331,7 +330,11 @@ paramsTileConfiguration = {
 #tileGroups = tileGroups[0:4]
 
 matrices = alignInChunks(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
+<<<<<<< HEAD
                         groupNames, volumeImgMontaged,
+=======
+                        loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
+>>>>>>> 2fe8676 (MR1.4-3 alignInChunks)
                         fixed_tile_index=fixed_tile_indices[0])
 
 
@@ -389,6 +392,7 @@ img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertie
 """
 
 
+<<<<<<< HEAD
 # Replace section 1750 (0-based) with 1749  – missing data at the bottom
 # Replace section 7108 (0-based) with 7107  – missing data at the top
 img = imgSIFT
@@ -398,13 +402,23 @@ imgX = Views.concatenate(2,
                           Views.interval(img, [0, 0, 1749],
                                               [img.dimension(0) -1, img.dimension(1) -1, 1749]),
                           Views.interval(img, [0, 0, 1751],
+=======
+# Replace section 7108 (0-based) with 7107
+img = imgSIFT
+imgX = Views.concatenate(2,
+                         [Views.interval(img, [0, 0, 0],
+>>>>>>> 2fe8676 (MR1.4-3 alignInChunks)
                                               [img.dimension(0) -1, img.dimension(1) -1, 7107]),
                           Views.interval(img, [0, 0, 7107],
                                               [img.dimension(0) -1, img.dimension(1) -1, 7107]),
                           Views.interval(img, [0, 0, 7109],
                                               [img.dimension(0) -1, img.dimension(1) -1, img.dimension(2) -1])])
                                               
+<<<<<<< HEAD
 impX = IL.wrap(imgX, "MR1.4-3 aligned subpixel without 1750, 7108")
+=======
+impX = IL.wrap(imgX, "MR1.4-3 aligned subpixel without 7108")
+>>>>>>> 2fe8676 (MR1.4-3 alignInChunks)
 impX.show()
 
 impX.setRoi(Roi(352, 152, 13776, 15608))
