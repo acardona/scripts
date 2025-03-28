@@ -889,7 +889,7 @@ class CellLoader(CacheLoader):
     if self.preload is not None and self.preload > 0 and 0 == index % self.preload:
       syncPrintQ("CellLoader.preloadCells triggered with preload %i" % self.preload)
       # e.g. if index=0 and preload=5, will load [1,2,3,4]
-      syncPrintQ("Preloading sections: %" % str(range(index + 1, min(index + self.preload, len(self.filepaths)))))
+      syncPrintQ("Preloading sections: %s" % str(range(index + 1, min(index + self.preload, len(self.filepaths)))))
       for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
         self.exe.submit(GetSectionTask(self.cachedCellImg, i))
 
