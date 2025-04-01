@@ -1,10 +1,12 @@
 import sys, re, os
 from lib.registration import loadMatrices
 from lib.img import showAlignedImg
-from lib.util import syncPrintQ
+from lib.util import syncPrintQ, printException
 from lib.ui import RowClickListener, showTable
 from net.imglib2 import FinalInterval
 from functools import partial
+from java.lang import String, Number
+from net.imglib2.view import Views
 
 
 def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename):
@@ -13,18 +15,30 @@ def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_
   start, end = map(int, pattern.search(chunk_matrices_csv_filename).groups())
   # Load the matrices
   matrices = loadMatrices(chunk_matrices_csv_filename[:-4], csvDir) # name without the csv
+  # Crop
+  dim2d = [montage_img.dimension(0), montage_img.dimension(1)]
+  img = Views.zeroMin(Views.interval(montage_img, [0, 0, start], [dim2d[0] -1, dim2d[1] -1, end - 1]))
   
-  return showAlignedImg(montage_img,
-                 FinalInterval([montage_img.dimension(0), montage_img.dimension(1)]), # whole 2D
-                 groupNames[start, end], # Only the interval within the chunk
+  imgA, impA = showAlignedImg(img,
+                 FinalInterval(dim2d), # whole 2D
+                 groupNames[start:end], # Only the interval within the chunk
                  properties,
                  matrices, # a list as long as the number of chunks
                  rotate=None,
-                 title_addendum=chunk_matrices_csv_filename)
+                 title_addendum=" - %s" % chunk_matrices_csv_filename)
+   
+  # Fix stack labels
+  stack = impA.getStack()
+  for i in xrange(stack.size()):
+    stack.setSliceLabel(str(start + i), i + 1) # 1-based
+   
+  return imgA, impA
 
 def uiOpenChunkVolume(groupNames, montage_img, csvDir, properties, table_model, rowIndex):
-  openChunkVolume(groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 0))
-
+  try:
+    openChunkVolume(groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 0))
+  except:
+    printException()
 
 def makeTableChunks(groupNames, montage_img, csvDir, properties):
   """
