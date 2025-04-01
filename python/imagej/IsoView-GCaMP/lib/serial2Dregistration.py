@@ -750,6 +750,48 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   return matrices
 
 
+
+def makeTableChunks(csvDir):
+  """
+  Open a JTable listing one chunk per row, with a right-click menu to do:
+    - open the chunk in a stack, virtual but with a preloading cache.
+    - run pair-wise cosyne similarity for all subsequent pairs of sections in a chunk,
+      and open it in another, sortable table.
+  """
+  # Find all "matrices_\d+-\d.csv" files:
+  chunks = {}
+  pattern = re.compile("^matrices_(\d+)-(\d).csv$")
+  for root, dirs, filenames in os.walk(srcDir):
+    for filename in filenames:
+      if filename.startswith("matrices_"):
+        m = pattern.search(filename)
+        if m:
+          start, end = map(int, m.groups())
+        else:
+          syncPrintQ("No match for file: " + filename)
+        chunks[start] = [filename, start, end]
+  
+  rows = [chunks[key] for key in sorted(chunk.keys())]
+  
+  table, frame = showTable(rows,
+      title="Table of chunks",
+      column_names=["file", "start", "end"],
+      dataType=String,
+      width=400, height=500,
+      showTable=True,
+      windowClosing=None, onCellClickFn=None, onRowClickFn=None,
+      singleBlockSelection=True, renderRightColumns=[1, 2])
+  
+  listener = RowClickListener(table,
+                              double_click_fn=None, # TODO open the chunk volume
+                              right_click_fns=[]) # TODO to run evaluation tools
+                                                  # and tools to invalidate relevant CSVs (chunk matrices and CSVs for comparisons around particular sections)
+  table.addMouseListener(listener)
+  
+  return table, frame, listener
+
+
+
 class TranslatedSectionGet(LazyCellImg.Get):
   def __init__(self, filepaths, loadImg, matrices, img_dimensions, cell_dimensions, interval, preload=None):
     self.filepaths = filepaths
