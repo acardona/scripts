@@ -235,9 +235,9 @@ def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
 
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 # NOTE: it's 8-bit
-volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
-                               paramsSIFT, paramsRANSAC, paramsTileConf, csvDir, params_pixels,
-                               show=True, matrices=None, section_offsets=sectionOffsets, title="Montages")
+#volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
+#                               paramsSIFT, paramsRANSAC, paramsTileConf, csvDir, params_pixels,
+#                               show=True, matrices=None, section_offsets=sectionOffsets, title="Montages")
 
 
 # Function to filter out features outside the tissue
@@ -245,8 +245,11 @@ model_path = os.path.join(tgtDir, "MR1.4-3_section1+6000_0.025.labkit.classifier
 model_width = 400 # target width for resizing so as to match the dimensions of the image used when training the model.
 
 
-#montage_img = grabImg(IJ.getImage())
-montage_img = volumeImgMontaged
+montage_img = grabImg(IJ.getImage()).getSource().getSource()
+
+print montage_img
+
+#montage_img = volumeImgMontaged
 
 
 properties = {
