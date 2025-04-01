@@ -330,11 +330,7 @@ paramsTileConfiguration = {
 #tileGroups = tileGroups[0:4]
 
 matrices = alignInChunks(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
-<<<<<<< HEAD
                         groupNames, volumeImgMontaged,
-=======
-                        loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
->>>>>>> 2fe8676 (MR1.4-3 alignInChunks)
                         fixed_tile_index=fixed_tile_indices[0])
 
 
@@ -393,6 +389,7 @@ img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertie
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Replace section 1750 (0-based) with 1749  – missing data at the bottom
 # Replace section 7108 (0-based) with 7107  – missing data at the top
 img = imgSIFT
@@ -408,6 +405,17 @@ img = imgSIFT
 imgX = Views.concatenate(2,
                          [Views.interval(img, [0, 0, 0],
 >>>>>>> 2fe8676 (MR1.4-3 alignInChunks)
+=======
+# Replace section 1750 (0-based) with 1749  – missing data at the bottom
+# Replace section 7108 (0-based) with 7107  – missing data at the top
+img = imgSIFT
+imgX = Views.concatenate(2,
+                         [Views.interval(img, [0, 0, 0],
+                                              [img.dimension(0) -1, img.dimension(1) -1, 1749]),
+                          Views.interval(img, [0, 0, 1749],
+                                              [img.dimension(0) -1, img.dimension(1) -1, 1749]),
+                          Views.interval(img, [0, 0, 1751],
+>>>>>>> d68319f (MR1.4-3: replace sections with problems (truncated files))
                                               [img.dimension(0) -1, img.dimension(1) -1, 7107]),
                           Views.interval(img, [0, 0, 7107],
                                               [img.dimension(0) -1, img.dimension(1) -1, 7107]),
@@ -415,10 +423,14 @@ imgX = Views.concatenate(2,
                                               [img.dimension(0) -1, img.dimension(1) -1, img.dimension(2) -1])])
                                               
 <<<<<<< HEAD
+<<<<<<< HEAD
 impX = IL.wrap(imgX, "MR1.4-3 aligned subpixel without 1750, 7108")
 =======
 impX = IL.wrap(imgX, "MR1.4-3 aligned subpixel without 7108")
 >>>>>>> 2fe8676 (MR1.4-3 alignInChunks)
+=======
+impX = IL.wrap(imgX, "MR1.4-3 aligned subpixel without 1750, 7108")
+>>>>>>> d68319f (MR1.4-3: replace sections with problems (truncated files))
 impX.show()
 
 impX.setRoi(Roi(352, 152, 13776, 15608))
