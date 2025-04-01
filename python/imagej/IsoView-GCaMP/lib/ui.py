@@ -8,7 +8,7 @@ from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.img.display.imagej import ImageJVirtualStack
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.util import ImgUtil
-from net.imglib2.view import Views
+from net.imglib2.view import Views, TransformedRandomAccessible, MixedTransformView
 from bdv.util import BdvFunctions, Bdv
 from ij import ImagePlus, CompositeImage, VirtualStack
 from ij.process import FloatProcessor
@@ -52,7 +52,13 @@ def grabImg(imp):
     f = ImageJVirtualStack.getDeclaredField("source")
     f.setAccessible(True)
     img = f.get(stack)
-    return img
+  else:
+    img = stack
+    
+  while isinstance(img, TransformedRandomAccessible) or isinstance(img, MixedTransformView):
+    img = img.getSource()
+  
+  return img
 
 
 def showAsStack(images, title=None, show=True):
