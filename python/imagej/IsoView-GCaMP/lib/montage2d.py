@@ -557,7 +557,8 @@ class SectionLoader(CacheLoader):
                 aimg.update(None)) # get the underlying DataAccess
 
 
-def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, nThreads):
+def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
+                   paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, nThreads):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
   The overlap between tiles is defined by overlap.
@@ -582,7 +583,9 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
     for groupName, tilePaths in izip(groupNames, tileGroups):
       if len(tilePaths) > 1:
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
-        futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed)))
+        futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset,
+                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed,
+                                               )))
 
     # Await them all
     for future in futures:
