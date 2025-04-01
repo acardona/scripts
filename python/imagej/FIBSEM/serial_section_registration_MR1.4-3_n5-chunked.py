@@ -144,6 +144,15 @@ if srcDir.startswith("/data/raw"):
 groupNames = groupNames[964+1904:20000+964]
 tileGroups = tileGroups[964+1904:20000+964]
 
+
+# Sections with problems:
+# 1. Merlin-WEMS_24-02-27_170732_ : missing 0-0-0 tile (the top one)
+# Solution: replace with next (previous is truncated at the bottom)
+# It's at index 1751 (0-based)
+groupNames[1751] = groupNames[1752]
+tileGroups[1751] = tileGroups[1752]
+
+
 fixed_tile_indices = [7000 - 1904] # A section in the brain, with 1x2 tiles
 
 # Manual offset for sections with a single tile:
@@ -380,17 +389,22 @@ img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertie
 """
 
 
-# Replace section 7108 (0-based) with 7107
+# Replace section 1750 (0-based) with 1749  – missing data at the bottom
+# Replace section 7108 (0-based) with 7107  – missing data at the top
 img = imgSIFT
 imgX = Views.concatenate(2,
                          [Views.interval(img, [0, 0, 0],
+                                              [img.dimension(0) -1, img.dimension(1) -1, 1749]),
+                          Views.interval(img, [0, 0, 1749],
+                                              [img.dimension(0) -1, img.dimension(1) -1, 1749]),
+                          Views.interval(img, [0, 0, 1751],
                                               [img.dimension(0) -1, img.dimension(1) -1, 7107]),
                           Views.interval(img, [0, 0, 7107],
                                               [img.dimension(0) -1, img.dimension(1) -1, 7107]),
                           Views.interval(img, [0, 0, 7109],
                                               [img.dimension(0) -1, img.dimension(1) -1, img.dimension(2) -1])])
                                               
-impX = IL.wrap(imgX, "MR1.4-3 aligned subpixel without 7108")
+impX = IL.wrap(imgX, "MR1.4-3 aligned subpixel without 1750, 7108")
 impX.show()
 
 impX.setRoi(Roi(352, 152, 13776, 15608))
