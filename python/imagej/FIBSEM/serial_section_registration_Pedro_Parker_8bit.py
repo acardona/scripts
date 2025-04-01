@@ -3,7 +3,8 @@ import sys, os
 sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.registration import saveMatrices, loadMatrices
 from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
-from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg
+from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat
+from lib.img import lazyCachedCellImg
 from lib.util import newFixedThreadPool, syncPrintQ, printException
 from lib.ui import wrap, addWindowListener
 from lib.serial2Dregistration import align

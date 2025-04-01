@@ -4,9 +4,10 @@ from datetime import datetime
 
 from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task
 from lib.registration import saveMatrices, loadMatrices
-from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg, imageInfo
-from lib.ui import wrap, addWindowListener, duplicateInParallel, saveInParallel, ExecutorCloser
-from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
+from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo
+from lib.img import lazyCachedCellImg
+from lib.ui import wrap, duplicateInParallel, saveInParallel, ExecutorCloser
+from lib.serial2Dregistration import ensureSIFTFeatures
 
 from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable, Integer, Runnable, String
@@ -1069,43 +1070,4 @@ def fuseTranslationMatrices(matrices1, matrices2):
                  0, 1, m1[5] + m2[5]], 'd')
           for m1, m2 in izip(matrices1, matrices2)]
 
-
-def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=None, title_addendum=""):
-  """
-  rotate: "right" or "left" or "180" or None
-  """
-  # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
-  def loadImg(img, index):
-    if isinstance(img, CellImg):
-      cell = img.getCells().randomAccess().setPositionAndGet([0, 0, index])
-      pixels = cell.getData().getCurrentStorageArray()
-      return ArrayImgs.unsignedBytes(pixels, [img.dimension(0), img.dimension(1)])
-    else:
-      img2d = Views.hyperSlice(img, 2, index)
-      aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img2d))
-      ImgMath.compute(ImgMath.img(img2d)).into(aimg)
-      return aimg
-      
-  
-  cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"],
-                             partial(loadImg, img), properties["img_dimensions"],
-                             matrices, cropInterval, properties.get('preload', 0))
-
-
-  if "right" == rotate or "left" == rotate:
-    # By 90 or -90 degrees
-    a, b = (0, 1) if "right" == rotate else (1, 0) # left
-    img = Views.rotate(cellImg, a, b) # the 0 and 1 are the two axis (dimensions) of reference, e.g., pux X (the 0) into Y (the 1).
-  elif "180" == rotate:
-    # Rotate twice to the right
-    img = Views.rotate(Views.rotate(cellImg, 0, 1), 0, 1)
-  else:
-    img = cellImg
-
-  imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel" + title_addendum)
-  imp.show()
-  # Ensure cleanup of threads upon closing the window
-  addWindowListener(imp.getWindow(), lambda event: cellGet.destroy())
-  
-  return img, imp
   

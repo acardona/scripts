@@ -33,6 +33,7 @@ from synchronize import make_synchronized
 from util import syncPrint, syncPrintQ, newFixedThreadPool, printException
 from ui import showStack, showBDV
 from io_asm import DAT_handler
+from img import lazyCachedCellImg
 try:
   # Needs 'SiMView' Fiji update site enabled
   from org.janelia.simview.klb import KLB
@@ -538,30 +539,6 @@ class SectionCellLoader(CacheLoader):
     return Cell(list(dims) + [1], # cell dimensions
                 [0] * img.numDimensions() + [index], # position in the grid: 0, 0, 0, Z-index
                 img.update(None)) # get the underlying DataAccess
-
-
-def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType, maxRefs=0):
-  """ Create a lazy CachedCellImg, backed by a SoftRefLoaderCache,
-      which can be used to e.g. create the equivalent of ij.VirtualStack but with ImgLib2,
-      with the added benefit of a cache based on SoftReference (i.e. no need to manage memory).
-
-      loader: a CacheLoader that returns a single Cell for each index (like the Z index in a VirtualStack).
-      volume_dimensions: a list of int or long numbers, with the last dimension
-                         being the number of Cell instances (i.e. the number of file paths).
-      cell_dimensions: a list of int or long numbers, whose last dimension is 1.
-      pixelType: e.g. UnsignedByteType
-      primitiveType: e.g. BYTE
-      maxRefs: defaults to zero which means unbounded, that is, soft references may have been garbage collected
-               but entries in the cache table are still around. When maxRefs larger > 0, then only that many references
-               will be kept as entries by using a BoundedSoftRefLoaderCache.
-
-      Returns a CachedCellImg.
-  """
-  cache = SoftRefLoaderCache() if 0 == maxRefs else BoundedSoftRefLoaderCache(maxRefs)
-  return CachedCellImg(CellGrid(volume_dimensions, cell_dimensions),
-                       pixelType(),
-                       cache.withLoader(loader),
-                       ArrayDataAccessFactory.get(primitiveType, AccessFlags.setOf(AccessFlags.VOLATILE)))
 
 
 def readN5(path, dataset_name, show=None):

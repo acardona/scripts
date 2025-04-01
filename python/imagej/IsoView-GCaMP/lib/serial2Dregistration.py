@@ -16,7 +16,7 @@
 # 3. Jointly optimize the pose of every section.
 
 from __future__ import with_statement
-import os, sys, traceback, csv
+import os, sys, traceback, csv, re
 from os.path import basename
 from operator import itemgetter
 from mpicbg.ij.blockmatching import BlockMatching
@@ -55,16 +55,19 @@ from functools import partial
 from itertools import izip, islice
 from collections import defaultdict
 # From lib
-from io import lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
+from io import SectionCellLoader, writeN5, serialize, deserialize
+from img import lazyCachedCellImg
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException, isThreadDead
 from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures, PointMatches
 from registration import loadMatrices, saveMatrices
-from ui import showStack, wrap, showTable, ExecutorCloser
+from ui import showStack, wrap, showTable, ExecutorCloser, RowClickListener
 from converter import convert2
 from pixels import autoAdjust
 from loop import createBiConsumerTypeSet
 from segmentation_em import classifyImageLabKitSegCached, segThreadCache
+from montage2d import showAlignedImg
 from java.nio.file import Paths, Files, StandardCopyOption
+from java.lang import String
 
 
 def loadImp(filepath):
@@ -754,10 +757,10 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
 
 def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename):
   # Extract Z interval from the name of the matrices CSV file
-  pattern = re.compile("^matrices_(\d+)-(\d).csv$")
-  start, end = map(int, m.pattern.search(chunk_matrices_csv_filename).groups())
+  pattern = re.compile("^matrices_(\d+)-(\d+).csv$")
+  start, end = map(int, pattern.search(chunk_matrices_csv_filename).groups())
   # Load the matrices
-  matrices = loadMatrices(matrices_csv[:-4], csvDir) # name without the csv
+  matrices = loadMatrices(chunk_matrices_csv_filename[:-4], csvDir) # name without the csv
   
   return showAlignedImg(montage_img,
                  FinalInterval([montage_img.dimension(0), montage_img.dimension(1)]), # whole 2D
@@ -780,18 +783,18 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
   """
   # Find all "matrices_\d+-\d.csv" files:
   chunks = {}
-  pattern = re.compile("^matrices_(\d+)-(\d).csv$")
-  for root, dirs, filenames in os.walk(srcDir):
+  pattern = re.compile("^matrices_(\d+)-(\d+).csv$")
+  for root, dirs, filenames in os.walk(csvDir):
     for filename in filenames:
       if filename.startswith("matrices_"):
         m = pattern.search(filename)
         if m:
           start, end = map(int, m.groups())
+          chunks[start] = [filename, start, end]
         else:
           syncPrintQ("No match for file: " + filename)
-        chunks[start] = [filename, start, end]
   
-  rows = [chunks[key] for key in sorted(chunk.keys())]
+  rows = [chunks[key] for key in sorted(chunks.keys())]
   
   table, frame = showTable(rows,
       title="Table of chunks",
@@ -989,40 +992,6 @@ class CellLoader(CacheLoader):
     return Cell(self.cell_dimensions,
                [0, 0, index],
                aimg.update(None))
-  
-
-def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterval, preload):
-  """ Note that when preload > 0, the returned CellLoader will have created an ExecutorService
-      that can be shutdown by invoking destroy() on it.
-  """
-  dims = Intervals.dimensionsAsLongArray(cropInterval)
-  voldims = [dims[0],
-             dims[1],
-             len(filepaths)]
-  cell_dimensions = [dims[0],
-                     dims[1],
-                     1]
-  grid = CellGrid(voldims, cell_dimensions)
-  
-  # Old approach:
-  #cellGet = TranslatedSectionGet(filepaths, loadImg, matrices, img_dimensions, cell_dimensions,
-  #                               cropInterval, preload=preload)
-  #return LazyCellImg(grid, pixelType(), cellGet), cellGet
-
-  # New approach: delegate the cache entirely to ImgLib2
-  cell_loader = CellLoader(filepaths, loadImg, matrices,
-                           img_dimensions, cell_dimensions,
-                           cropInterval)
-  # Create the cache, which can load any Cell when needed using CellLoader
-  loading_cache = SoftRefLoaderCache().withLoader(cell_loader).unchecked()
-  # Create a CachedCellImg: a LazyCellImg that caches Cell instances with a SoftReference, for best performance
-  # and also self-regulating regarding the amount of memory to allocate to the cache.
-  cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
-                    voldims, pixelType(), loading_cache,
-                    ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
-  cell_loader.setCache(cachedCellImg, preload)
-  return cachedCellImg, cell_loader
-
 
 
 class OnClosing(ImageListener):

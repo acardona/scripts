@@ -1,4 +1,4 @@
-import os
+import os, sys
 from time import time
 from lib.util import syncPrintQ, printException, newFixedThreadPool
 from lib.converter import createConverter, convert
@@ -17,7 +17,7 @@ from java.awt.event import KeyAdapter, KeyEvent, WindowAdapter, MouseAdapter
 from java.lang import Number, Runtime, Thread
 from java.util import Comparator
 from java.util.concurrent import Callable, Future, Executors
-from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, JLabel, SwingUtilities
+from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, JLabel, SwingUtilities, JPopupMenu
 from javax.swing.table import AbstractTableModel, TableRowSorter, DefaultTableCellRenderer
 from javax.swing.event import ListSelectionListener
 from ij import IJ, ImagePlus, ImageStack, VirtualStack
@@ -272,7 +272,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       popup = JPopupMenu()
       for title, fn in self.right_click_fns:
         popup.add(JMenuItem(title,
-                            actionPerformed=lambda event: fn(self, event))
+                            actionPerformed=lambda event: fn(self, event)))
       popup.show(event.getComponent(), event.getX(), event.getY())
   
   def valueChanged(self, event):
