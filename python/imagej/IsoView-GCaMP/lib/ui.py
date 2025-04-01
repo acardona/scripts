@@ -263,7 +263,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       rowIndex = event.getSource().rowAtPoint(event.getPoint()) # TODO could use self.firstIndex or the whole range
       if self.double_click_fn:
         try:
-          self.double_click_fn(rowIndex)
+          self.double_click_fn(self.table.getModel(), rowIndex)
         except:
           syncPrintQ(sys.exc_info())
   
