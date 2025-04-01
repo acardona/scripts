@@ -5,8 +5,9 @@ from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths
 from lib.util import syncPrintQ
 from lib.ui import grabImg
+from lib.img import showAlignedImg
+from lib.montage2d import ensureMontages, makeMontageGroups, makeVolume, makeSliceLoader, fuseMatrices, fuseTranslationMatrices
 from lib.serial2Dregistration import align, alignInChunks, handleNoPointMatches, computeShifts, makeFilterFeaturesFn, makeTableChunks
-from lib.montage2d import ensureMontages, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices, fuseTranslationMatrices
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
@@ -149,6 +150,84 @@ tileGroups = tileGroups[964+1904:20000+964]
 # It's at index 1751 (0-based)
 groupNames[1751] = groupNames[1752]
 tileGroups[1751] = tileGroups[1752]
+
+
+# Manual offset for sections with a single tile:
+def sectionOffsets(index): # index is 0-based   <<< ZERO BASED
+  index += 1904
+  # Must always return a tuple with two integers
+  if index >= 0 and index < (2869 - 964 -1): # All single-tile slices, with first 1x2 tiles being Merlin-WEMS_24-02-25_214509_
+    dx = 1282
+    dy = 608
+    if index <= 1057:
+      dy += 248
+    if index <= 1815:
+      dx -= 128
+      dy += 875
+    return (dx, dy)
+  
+  
+  dx = 0
+  dy = 0
+  if index >= 1910 + 1904:
+    dx += 61
+    dy += 12
+  if index >= 1911 + 1904:
+    dx += -2
+    dy += 3
+  if index >= 1912 + 1904:
+    dx += -1
+    dy += -372
+  if index >= 2351 + 1904: # 0-based
+    dx += 99
+    dy += 35
+  if index >= 2352 + 1904:
+    dx += 2
+    dy += 4
+  if index >= 2353 + 1904:
+    dx += 1
+    dy += -2
+  if index >= 2354 + 1904:
+    dx += 1
+    dy += 0
+  
+  if index >= 17004:
+    dx += 13 + 1
+    dy + 2 + 1
+  if index >= 17005:
+    dx += -3
+    dy += -6
+  if index >= 17008:
+    dx += -622 + 3
+    dy += 6
+  if index >= 17009:
+    dx += 11
+    dy += -8 -1
+  #if index >= 17013:
+  #  dx += 602 - 601
+  #  dx += 0
+  if index >= 18486:
+    dx += 25
+    dy += 8
+  if index >= 18903:
+    dx += 48
+    dy += 18
+  if index >= 19298:
+    dx += 22
+    dy += 0
+  if index >= 19630:
+    dx += 69
+    dy += 30
+  #if index >= 20444:
+  #  dx += 45
+  #  dy += 1
+  #if index >= 20895:
+  #  dx += 52
+  #  dy += -7
+  #if index >= 21497: 
+  #  dx += 61
+  #  dy += 24
+  return (dx, dy)
 
 
 # Montage all sections
