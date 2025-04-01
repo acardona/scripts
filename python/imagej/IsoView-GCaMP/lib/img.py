@@ -8,7 +8,92 @@ from net.imglib2.cache.ref import SoftRefLoaderCache, BoundedSoftRefLoaderCache
 from net.imglib2.cache.img import CellLoader, CachedCellImg, ReadOnlyCachedCellImgFactory, ReadOnlyCachedCellImgOptions
 from net.imglib2.img.basictypeaccess import ArrayDataAccessFactory, AccessFlags
 from lib.ui import addWindowListener
+from lib.util import newFixedThreadPool, syncPrintQ
 from functools import partial
+from java.lang import Thread
+from net.imglib2.cache import CacheLoader
+from java.util.concurrent import Callable
+from net.imglib2.realtransform import AffineTransform2D, RealViews
+from net.imglib2.img.cell import Cell
+from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
+
+
+# For preloading
+class GetSectionTask(Callable):
+  def __init__(self, cachedCellImg, index):
+    self.cachedCellImg = cachedCellImg
+    self.index = index
+    
+  def call(self):
+    t = Thread.currentThread()
+    if t.isInterrupted() or not t.isAlive():
+      return None
+    ra = self.cachedCellImg.getCells().randomAccess()
+    ra.setPosition(self.index, 2) # one 2D cell per section, so one dimension only
+    return ra.get()
+
+
+class CellLoader(CacheLoader):
+  def __init__(self, filepaths, loadImg, matrices, img_dimensions, cell_dimensions, interval):
+    self.filepaths = filepaths
+    self.loadImg = loadImg # function to load images
+    self.matrices = matrices
+    self.img_dimensions = img_dimensions
+    self.cell_dimensions = cell_dimensions # x,y must match dims of interval
+    self.interval = interval # when smaller than the image, will crop
+    self.exe = None
+    self.preload = None
+    
+  def setCache(self, cachedCellImg, preload):
+    if preload:
+      self.cachedCellImg = cachedCellImg
+      self.exe = newFixedThreadPool(preload) # BEWARE native memory leak if not closed
+      self.preload = preload
+      syncPrintQ("CellLoader.setCache: preload is %i" % preload)
+
+  def preloadCells(self, index):
+    # Submit jobs to concurrently preload cells ahead into the cache, if not there already
+    if self.preload is not None and self.preload > 0 and 0 == index % self.preload:
+      syncPrintQ("CellLoader.preloadCells triggered with preload %i" % self.preload)
+      # e.g. if index=0 and preload=5, will load [1,2,3,4]
+      syncPrintQ("Preloading sections: %s" % str(range(index + 1, min(index + self.preload, len(self.filepaths)))))
+      for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
+        self.exe.submit(GetSectionTask(self.cachedCellImg, i))
+
+  def destroy(self):
+    if self.exe is not None:
+      self.exe.shutdownNow()
+
+  def get(self, index):
+    """ Return a new Cell for section at index. """
+    self.preloadCells(index) # preload others in the background
+    img = self.loadImg(self.filepaths[index])
+    affine = AffineTransform2D()
+    affine.set(self.matrices[index])
+    imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
+    imgA = RealViews.transform(imgI, affine)
+    imgT = Views.zeroMin(Views.interval(imgA, self.interval))
+    aimg = img.factory().create(self.interval)
+    #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),   # How many threads? Should use 1 only.
+    #             aimg)
+    # Copy single-threaded
+    
+    # Doesn't exist?
+    #m = ImgUtil.getDeclaredMethod("copy", [Class.forName("net.imglib2.img.Img"), Class.forName("[S"), Integer, Class.forName("[I")])
+
+    #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), # source: an Img
+    #m.invoke(None, 
+    #         [ImgView.wrap(imgT, aimg.factory()), # source: an Img
+    #          aimg.update(None).getCurrentStorageArray(), # target
+    #          0, # offset
+    #          [1, aimg.dimension(0)]]) # stride: [1, width] to convert x,y coordinates to array indices
+    
+    # Copy single-threaded
+    ImgMath.compute(imgT).into(aimg)
+    
+    return Cell(self.cell_dimensions,
+               [0, 0, index],
+               aimg.update(None))
 
 
 def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterval, preload):
