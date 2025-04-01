@@ -747,11 +747,31 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   
   saveMatrices(name, matrices, csvDir)
   
+  makeTableChunks(groupNames, volumeImg, csvDir, properties)
+  
   return matrices
 
 
+def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename):
+  # Extract Z interval from the name of the matrices CSV file
+  pattern = re.compile("^matrices_(\d+)-(\d).csv$")
+  start, end = map(int, m.pattern.search(chunk_matrices_csv_filename).groups())
+  # Load the matrices
+  matrices = loadMatrices(matrices_csv[:-4], csvDir) # name without the csv
+  
+  return showAlignedImg(montage_img,
+                 FinalInterval([montage_img.dimension(0), montage_img.dimension(1)]), # whole 2D
+                 groupNames[start, end], # Only the interval within the chunk
+                 properties,
+                 matrices, # a list as long as the number of chunks
+                 rotate=None,
+                 title_addendum=chunk_matrices_csv_filename)
 
-def makeTableChunks(csvDir):
+def uiOpenChunkVolume(groupNames, montage_img, csvDir, properties, table_model, rowIndex):
+  openChunkVolume(groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 0))
+
+
+def makeTableChunks(groupNames, montage_img, csvDir, properties):
   """
   Open a JTable listing one chunk per row, with a right-click menu to do:
     - open the chunk in a stack, virtual but with a preloading cache.
@@ -783,7 +803,7 @@ def makeTableChunks(csvDir):
       singleBlockSelection=True, renderRightColumns=[1, 2])
   
   listener = RowClickListener(table,
-                              double_click_fn=None, # TODO open the chunk volume
+                              double_click_fn=partial(uiOpenChunkVolume, groupNames, montage_img, csvDir, properties),
                               right_click_fns=[]) # TODO to run evaluation tools
                                                   # and tools to invalidate relevant CSVs (chunk matrices and CSVs for comparisons around particular sections)
   table.addMouseListener(listener)
