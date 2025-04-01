@@ -289,7 +289,9 @@ class DataTable(AbstractTableModel):
 
 
 def showTable(rows, title="Table", column_names=None, dataType=Number, width=400, height=500, showTable=True,
-              windowClosing=None, onCellClickFn=None, onRowClickFn=None):
+              windowClosing=None, onCellClickFn=None, onRowClickFn=None,
+              singleBlockSelection=True,
+              renderCenteredColumns=[], renderRightColumns=[]):
   """
      rows: list of lists of numbers.
      title: for the JFrame
@@ -312,6 +314,21 @@ def showTable(rows, title="Table", column_names=None, dataType=Number, width=400
   sorter.setComparator(1, Comparator.naturalOrder())
   sorter.setComparator(2, Comparator.naturalOrder())
   table.setRowSorter(sorter)
+  
+  table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
+  
+  if singleBlockSelection:
+    table.setRowSelectionAllowed(True)
+    table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION)
+  
+  centerRenderer = DefaultTableCellRenderer();
+  for i in renderCenteredColumns:
+    centerRenderer.setHorizontalAlignment(JLabel.CENTER)
+    table.getColumnModel().getColumn(i).setCellRenderer(centerRenderer)
+  for i in renderRightColumns:
+    centerRenderer.setHorizontalAlignment(JLabel.RIGHT)
+    table.getColumnModel().getColumn(i).setCellRenderer(centerRenderer)
+  
   
   frame = JFrame(title) if windowClosing is None else JFrame(title, windowClosing=windowClosing)
   jsp = JScrollPane(table)
