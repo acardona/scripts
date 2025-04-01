@@ -13,12 +13,13 @@ from bdv.util import BdvFunctions, Bdv
 from ij import ImagePlus, CompositeImage, VirtualStack
 from ij.process import FloatProcessor
 from java.awt import Dimension
-from java.awt.event import KeyAdapter, KeyEvent, WindowAdapter
+from java.awt.event import KeyAdapter, KeyEvent, WindowAdapter, MouseAdapter
 from java.lang import Number, Runtime, Thread
 from java.util import Comparator
 from java.util.concurrent import Callable, Future, Executors
-from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
-from javax.swing.table import AbstractTableModel, TableRowSorter
+from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, JLabel, SwingUtilities
+from javax.swing.table import AbstractTableModel, TableRowSorter, DefaultTableCellRenderer
+from javax.swing.event import ListSelectionListener
 from ij import IJ, ImagePlus, ImageStack, VirtualStack
 from ij.io import FileSaver
 
@@ -245,6 +246,41 @@ class ExecutorCloser(WindowAdapter):
   def windowClosing(self, event):
     self.exe.shutdownNow()
     
+
+class RowClickListener(MouseAdapter, ListSelectionListener):
+  def __init__(self, table,
+               right_click_fns={},
+               double_click_fn=None):
+    self.table = table
+    self.right_click_fns = right_click_fns
+    self.double_click_fn = double_click_fn
+    self.firstIndex = -1
+    self.lastIndex = -1
+  
+  def mousePressed(self, event):
+    if 2 == event.getClickCount():
+      # Open the raw images of the montage at that slice
+      rowIndex = event.getSource().rowAtPoint(event.getPoint()) # TODO could use self.firstIndex or the whole range
+      if self.double_click_fn:
+        try:
+          self.double_click_fn(rowIndex)
+        except:
+          syncPrintQ(sys.exc_info())
+  
+  def mouseReleased(self, event):
+    if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
+      popup = JPopupMenu()
+      for title, fn in self.right_click_fns:
+        popup.add(JMenuItem(title,
+                            actionPerformed=lambda event: fn(self, event))
+      popup.show(event.getComponent(), event.getX(), event.getY())
+  
+  def valueChanged(self, event):
+    if event.getValueIsAdjusting():
+      return
+    self.firstIndex = event.getFirstIndex()
+    self.lastIndex = event.getLastIndex()
+  
 
 class DataTable(AbstractTableModel):
   """ Assumes all rows contain numbers. """
