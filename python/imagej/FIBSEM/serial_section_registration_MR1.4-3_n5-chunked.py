@@ -331,7 +331,7 @@ paramsTileConfiguration = {
 #tileGroups = tileGroups[0:4]
 
 matrices = alignInChunks(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
-                        loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
+                        groupNames, volumeImgMontaged,
                         fixed_tile_index=fixed_tile_indices[0])
 
 
