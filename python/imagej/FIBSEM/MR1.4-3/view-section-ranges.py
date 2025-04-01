@@ -34,8 +34,9 @@ ranges = [
   #(2250, 2347), # fine?
   #(2340, 2360), 
   #(1900, 1930),
-  (7106, 7111), # 7109 is off
+  #(7106, 7111), # 7109 is off
   #(16388, 16418) # Some d re-montaging for the lower tile.
+  (1748, 1759)
 ]
 
 for r in ranges:
