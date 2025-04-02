@@ -2,6 +2,7 @@ from ij.process import ImageStatistics
 from lib.pixels_asm import ImgCompare
 from lib.util import printException, newFixedThreadPool, numCPUs, isThreadDead, syncPrintQ
 from java.util.concurrent import Callable
+from net.imglib2.view import Views
 
 def autoAdjust(ip):
   """
@@ -61,10 +62,10 @@ class ComputeCosyneSimilarity(Callable):
   def call(self):
     if isThreadDead():
       return None
-    cs = ImgCompare.cosyneSimilarity(Views.hyperSlice(img, 2, i),
-                                     Views.hyperSlice(img, 2, j))
-    syncPrintQ("Cosine similarity for %i-%i: %f" % (i, j, cs))
-    return cs
+    v = ImgCompare.cosyneSimilarity(Views.hyperSlice(self.img, 2, self.i),
+                                    Views.hyperSlice(self.img, 2, self.j))
+    syncPrintQ("Cosine similarity for %i-%i: %f" % (self.i, self.j, v))
+    return v
 
 
 def pairwiseCosyneSimilarity(imgVolume, nThreads=0):
@@ -76,7 +77,7 @@ def pairwiseCosyneSimilarity(imgVolume, nThreads=0):
   try:
     futures = []
     for i in xrange(imgVolume.dimension(2) -1):
-      futures.add(exe.submit(ComputeCosyneSimilarity(imgVolume, i, i+1)))
+      futures.append(exe.submit(ComputeCosyneSimilarity(imgVolume, i, i+1)))
     return [fu.get() for fu in futures]
   except:
     printException()
