@@ -8,7 +8,7 @@ from ij.gui import Roi
 
 
 # VOLUME
-name = "MR1.4-3"
+name = "" # Name of the folder containing the .dat files, e.g., "MR1.4-3"
 sourceServer = "/net/fibserver1/raw/"
 targetServer = "/net/zstore1/FIBSEM/"
 
