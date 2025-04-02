@@ -93,7 +93,7 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
   def launchCosSimForChunk(table_model, rowIndex):
     newThread(makeTableCosyneSimilarityForChunk, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 0))
   
-  commands = [("Compute cosyne similarity (all)", launchCosSimForChunk)]
+  commands = [("Compute cosyne similarity", launchCosSimForChunk)]
   
   listener = RowClickListener(table,
                               double_click_fn=partial(uiOpenChunkVolume, groupNames, montage_img, csvDir, properties),
