@@ -2,9 +2,9 @@ from __future__ import with_statement
 import os, re, sys
 from datetime import datetime
 
-from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task
+from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task, SoftMemoize
 from lib.registration import saveMatrices, loadMatrices
-from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo, ensureDirsExist
+from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo, ensureDirsExist, SectionCellLoader
 from lib.img import lazyCachedCellImg
 from lib.ui import wrap, duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.serial2Dregistration import ensureSIFTFeatures
@@ -15,7 +15,7 @@ from java.util.concurrent import Callable
 from java.io import File
 from ij.process import ShortProcessor, ByteProcessor
 from ij.gui import ShapeRoi, PointRoi, Roi, GenericDialog
-from ij.io import OpenDialog
+from ij.io import OpenDialog, FileSaver
 from ij import ImagePlus, IJ
 from net.imglib2.img.array import ArrayImgs
 try:
@@ -193,12 +193,6 @@ def loadShortProcessors(tilePaths, asDict=False):
             for filepath in tilePaths}
   return [load(filepath).getProcessor()
           for filepath in tilePaths]
-  
-def yieldShortProcessors(tilePaths, reverse=False):
-  ls = tilePaths if not reverse else reversed(tilePaths)
-  for filepath in ls:
-    syncPrintQ("#%s#" % filepath)
-    yield filepath, load(filepath).getProcessor()
 
 
 def processTo8bit(sp, params_pixels):
@@ -266,7 +260,9 @@ def process(sp, params_pixels):
 
 
 class MontageSlice(Callable):
-  def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed):
+  def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset,
+               paramsSIFT, paramsRANSAC, paramsTileConfiguration,
+               csvDir, failed):
     """
     Generic montager, reads out i,j position from the file name.
     """
@@ -310,7 +306,7 @@ class MontageSlice(Callable):
     return False
 
 
-  def getMatrices(self):
+  def getMatrices(self, sps=None):
     # Extract features from the appropriate ROI along the overlapping edges
     
     # Check if matrices exist already:
@@ -326,7 +322,7 @@ class MontageSlice(Callable):
     # Fix top-left tile at 0,0 position
     tc.fixTile(tiles[self.rows[0][0]])
 
-    sps = loadShortProcessors(self.tilePaths, asDict=True)
+    sps = dict(zip(self.tilePaths, sps)) if sps is not None else loadShortProcessors(self.tilePaths, asDict=True)
 
     # Assumes images have the same dimensions
     width = sps[self.tilePaths[0]].getWidth()
@@ -415,11 +411,13 @@ class MontageSlice(Callable):
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
                         Here, only the translation is applied, ultimately as integers.
     """
-    matrices = self.getMatrices()
+    # Load the ShortProcessors once, if matrices need to be computed
+    sps = loadShortProcessors(self.tilePaths, reverse=False)
+    matrices = self.getMatrices(sps=sps)
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
     # Start pasting from the end, to bury the bad left edges
-    for (filepath, sp), matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
+    for sp, matrix in reversed(zip(sps, matrices)):
       spMontage.insert(process(sp, params_pixels),  # TODO don't process separately, see above
                        int(sdx + matrix[2] + dx + 0.5),
                        int(sdy + matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
@@ -434,7 +432,9 @@ class MontageSlice(Callable):
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
                         Here, only the translation is applied, ultimately as integers.
     """
-    matrices = self.getMatrices()
+    # Load the ShortProcessors once, if matrices need to be computed
+    sps = loadShortProcessors(self.tilePaths, reverse=False)
+    matrices = self.getMatrices(sps=sps)
     # TODO if scale and shear values aren't 1.0, 0.0 then apply an affine transform.
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
@@ -442,7 +442,7 @@ class MontageSlice(Callable):
     # If a file is in the repaired dir and it ends in TIFF, paint it first:
     # a crude way of signaling that the file was repaired and it's potentially incomplete,
     # particularly near the edges where it overlaps with other tiles.
-    for (filepath, sp), matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
+    for filepath, sp, matrix in reversed(zip(self.tilePaths, sps, matrices)):
       if not (filepath.find("/repaired/") > 0 and filepath.endswith("tif")):
         continue
       # Paint repaired file that was saved as TIFF
@@ -452,7 +452,7 @@ class MontageSlice(Callable):
       rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     
     # Start pasting from the end, to bury the bad left edges
-    for (filepath, sp), matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
+    for filepath, sp, matrix in reversed(zip(self.tilePaths, sps, matrices)):
       if filepath.find("/repaired/") > 0 and filepath.endswith("tif"):
         continue # already painted
       x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
@@ -558,6 +558,103 @@ class SectionLoader(CacheLoader):
                 aimg.update(None)) # get the underlying DataAccess
 
 
+
+class MontageAndSave(Callable):
+  """ Generate the matrices for the montage, specifying the translation of each tile,
+      and also save a scaled down version of the image into the scaled-montages folder.
+  """
+  def __init__(self, *args)
+    self.args = args
+  
+  def call(self):
+    groupName = self.args[0]
+    montageDir = self.args[8]
+    scaled_image_path = montageDir + "scaled-montages/" + groupName + ".tif"
+    # Check if scaled image exists
+    if os.path.exists(scaled_image_path):
+      # Check if the matrices file exists
+      matrices = loadMatrices(self.groupName, self.csvDir)
+      if matrices is not None:
+        return True
+      # Else, generate both, overwriting the image.
+      # If the matrices exists but the scaled image doesn't, the matrices will simply be loaded, not computed.
+    
+    args = self.args[:10]
+    ms = MontageSlice(*args)
+    section_width, section_height, params_pixels = self.args[10:13]
+    ip = None
+    # Generate the matrices and an image of the montage.
+    # The call to montagedImg or montagedImg8bit will generate and store the montage matrices.
+    if self.params_pixels.as8bit:
+      img = ms.montagedImg(self, section_width, section_height, None, params_pixels, sdx=0, sdy=0)
+      ip = ShortProcessor(section_width, section_height, img.update(None).getCurrentStorageArray(), None)
+    else:
+      img = ms.montagedImg8bit(self, section_width, section_height, None, params_pixels, sdx=0, sdy=0)
+      ip = ByteProcessor(section_width, section_height, img.update(None).getCurrentStorageArray(), None)
+    # Save the image, scaled if required
+    imp = ImagePlus(groupName, ip)
+    k = params_pixels.get("interim_scale", 1.0)
+    if k < 1.0:
+      imp = imp.resize(int(section_width * k + 0.5), int(section_height * k + 0.5), "bilinear")
+    FileSaver(imp).saveAsTiff(montageDir + "scaled-montages/" + groupName + ".tif")
+    return True
+
+
+def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overlap, offset,
+                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, nThreads,
+                                 section_width, section_height, params_pixels):
+  """
+  Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
+  The overlap between tiles is defined by overlap.
+  The offset is for ignoring that many pixels from the left edge, which are artifactually
+  non-linearly compressed and stretched in FIBSEM images. 
+  
+  groupNames: a list of names, with the common part of the filename of all tiles in a section.
+  tileGroups: a list of lists of tile filenames.
+          In other words, these two lists are correlated, and each entry represents a section with 1 or 4 image tiles in it.
+  overlap: the amount of pixels of overlap between two tiles.
+  offset: the amount of pixels to ignore from the left edge of an image tile.
+  paramsSIFT: for montaging using scale invariant feature transform (SIFT).
+  csvDir: where to save the matrix CSV files, one per montage and section.
+  
+  Will save a possibly scaled-down image of the montage as a TIFF file under csvDir/scaled-montages/
+  """
+  exe = newFixedThreadPool(nThreads)
+  try:
+
+    futures = []
+    failed = Vector() # synchronized access
+    
+    # Folder for storing scaled-down versions of each montaged version
+    ensureDirsExist(csvDir + "scaled-montages")
+
+    # Iterate all sections in order and generate the transformation matrices defining a montage for each section
+    for groupName, tilePaths in izip(groupNames, tileGroups):
+      if len(tilePaths) > 1:
+        # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
+        futures.append(exe.submit(MontageAndSave(groupName, tilePaths, overlap, nominal_overlap, offset,
+                                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed,
+                                                 section_width, section_height, params_pixels)))
+
+    # Await them all
+    for future in futures:
+      future.get()
+
+    if len(failed) > 0:
+      # Print failed montages
+      syncPrintQ("Montages that failed:\n%s" % "\n".join(map(str, failed)))
+      # Save failed montages to disk
+      with open(os.path.join(csvDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss", 'w') + ".csv")) as f:
+        f.write("\n".join(map(str, failed)))
+    else:
+      syncPrintQ("No montages known to have failed.")
+
+  finally:
+    exe.shutdown()
+
+
+
+
 def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
                    paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, nThreads):
   """
@@ -585,8 +682,7 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
       if len(tilePaths) > 1:
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
         futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset,
-                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed,
-                                               )))
+                                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed)))
 
     # Await them all
     for future in futures:
@@ -1116,15 +1212,44 @@ def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
 
   syncPrintQ("Number of sections found valid: %i" % len(groupNames))
 
+  # Old approach:
+
   # Montage all sections
-  ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging)
+  #ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
+  #               paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging,
+  #               params_pixels)
 
   # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
   # NOTE: it's 8-bit
-  volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
-                                 paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, params_pixels,
-                                 show=True, matrices=None, section_offsets=sectionOffsets, title="%s - montages" % name)
+  #volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
+  #                               paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, params_pixels,
+  #                               show=True, matrices=None, section_offsets=sectionOffsets, title="%s - montages" % name)
+
+  # New approach:
+  
+  # Montage all sections and save an image of each montage under csvDir/scaled-montages/
+  ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overlap, offset,
+                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, nThreads,
+                                 section_width, section_height, params_pixels)
+
+  # Open a virtual image of the whole scaled-montages folder
+  scaled_filepaths = [csvDir + "scaled-montages/" + groupName + ".tif" for baseName in groupNames]
+  
+  if params_pixels.get("as8bit", True):
+    pixelType = UnsignedByteType
+    primitiveType = PrimitiveType.BYTE
+    asArrayImg = lambda imp: ArrayImgs.unsignedBytes(imp.getProcessor().getPixels(), imp.getWidth(), imp.getHeight())
+  else:
+    pixelType = UnsignedShortType
+    primitiveType = PrimitiveType.SHORT
+    asArrayImg = lambda imp: ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), imp.getWidth(), imp.getHeight())
+   
+  volumeImgMontagedScaled = lazyCachedCellImg(SectionCellLoader(scaled_filepaths, asArrayImg),
+                                              [section_width, section_height, len(groupNames)],
+                                              [section_width, section_height, 1],
+                                              pixelType, primitiveType, maxRefs=0):
   
   return volumeImgMontaged, groupNames, tileGroups
+
 
 
