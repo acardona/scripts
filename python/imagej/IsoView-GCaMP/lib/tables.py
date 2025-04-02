@@ -11,7 +11,7 @@ from net.imglib2.view import Views
 
 
 
-def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename, show=True):
+def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename):
   # Extract Z interval from the name of the matrices CSV file
   pattern = re.compile("^matrices_(\d+)-(\d+).csv$")
   start, end = map(int, pattern.search(chunk_matrices_csv_filename).groups())
@@ -27,8 +27,7 @@ def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_
                  properties,
                  matrices, # a list as long as the number of chunks
                  rotate=None,
-                 title_addendum=" - %s" % chunk_matrices_csv_filename,
-                 show=show)
+                 title_addendum=" - %s" % chunk_matrices_csv_filename)
    
   # Fix stack labels
   stack = impA.getStack()
@@ -46,7 +45,7 @@ def uiOpenChunkVolume(groupNames, montage_img, csvDir, properties, table_model, 
 
 def makeTableCosyneSimilarityForChunk(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename):
   # Load a virtual aligned volume
-  imgA, impA, start, end = openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename, show=False)
+  imgA, impA, start, end = openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename)
   # Compute for all pairs of adjacent sections, in parallel
   cs = pairwiseCosyneSimilarity(imgA)
   

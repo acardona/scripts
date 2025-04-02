@@ -129,7 +129,7 @@ def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterva
   return cachedCellImg, cell_loader
 
 
-def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=None, title_addendum="", show=True):
+def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=None, title_addendum=""):
   """
   rotate: "right" or "left" or "180" or None
   """
@@ -162,8 +162,7 @@ def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=N
     img = cellImg
 
   imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel" + title_addendum)
-  if show:
-    imp.show()
+  
   # Ensure cleanup of threads upon closing the window
   addWindowListener(imp.getWindow(), lambda event: cellGet.destroy())
   
