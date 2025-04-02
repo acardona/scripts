@@ -17,7 +17,7 @@ from java.awt.event import KeyAdapter, KeyEvent, WindowAdapter, MouseAdapter
 from java.lang import Number, Runtime, Thread
 from java.util import Comparator
 from java.util.concurrent import Callable, Future, Executors
-from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, JLabel, SwingUtilities, JPopupMenu
+from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, JLabel, SwingUtilities, JPopupMenu, JMenuItem
 from javax.swing.table import AbstractTableModel, TableRowSorter, DefaultTableCellRenderer
 from javax.swing.event import ListSelectionListener
 from ij import IJ, ImagePlus, ImageStack, VirtualStack
@@ -276,9 +276,10 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
       popup = JPopupMenu()
+      rowIndex = event.getSource().rowAtPoint(event.getPoint())
       for title, fn in self.right_click_fns:
         popup.add(JMenuItem(title,
-                            actionPerformed=lambda event: fn(self, event)))
+                            actionPerformed=lambda event: fn(self.table.getModel(), rowIndex)))
       popup.show(event.getComponent(), event.getX(), event.getY())
   
   def valueChanged(self, event):
