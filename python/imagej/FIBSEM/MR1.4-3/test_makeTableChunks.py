@@ -246,10 +246,9 @@ model_width = 400 # target width for resizing so as to match the dimensions of t
 
 
 montage_img = grabImg(IJ.getImage()).getSource().getSource()
-
+#montage_img = volumeImgMontaged
 print montage_img
 
-#montage_img = volumeImgMontaged
 
 
 properties = {
