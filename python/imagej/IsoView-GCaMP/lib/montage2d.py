@@ -4,7 +4,7 @@ from datetime import datetime
 
 from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task
 from lib.registration import saveMatrices, loadMatrices
-from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo
+from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo, ensureDirsExist
 from lib.img import lazyCachedCellImg
 from lib.ui import wrap, duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.serial2Dregistration import ensureSIFTFeatures
@@ -1070,4 +1070,61 @@ def fuseTranslationMatrices(matrices1, matrices2):
                  0, 1, m1[5] + m2[5]], 'd')
           for m1, m2 in izip(matrices1, matrices2)]
 
+
+
+def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
+                offset, overlap, nominal_overlap,
+                section_width, section_height,
+                replace_sections, first_section, last_section,
+                params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf,
+                to_remove, ignore_images, replace_images):
+  """
+  Main entry point.
+  """
+  # Find all .dat files, as a sorted list
+  # NOTE will be cached into a text file
+  filepaths, filepaths_cached = loadFilePaths(srcDir, ".dat", montageDir, "imagefilepaths")
+
+  ensureDirsExist(tgtDir, montageDir, repairedDir)
+
+  # Sorted group names, one per section
+  groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
+                                             alternative_dir=repairedDir,
+                                             ignore_images=ignore_images,
+                                             replace_images=replace_images,
+                                             writeDir=montageDir)
+
+  # Define the range of sections to montage
+  groupNames = groupNames[first_section:last_section]
+  tileGroups = tileGroups[first_section:last_section]
+
+  # Substitute sections with problems for other, adjacent sections
+  for k, v in replace_sections.iteritems():
+    groupNames[k] = groupNames[v]
+    tileGroups[k] = tileGroups[v]
+
+  # How many sections to montage in parallel
+  nThreadsMontaging = max(1, int(numCPUs() / (paramsTileConf["nThreadsOptimizer"] / 2)))
+
+  # Print groups to a CSV file if it's the first time
+  if not filepaths_cached:
+    rows = ["section index (1-based),groupName,number of tiles"]
+    for i, (groupName, tilePaths) in enumerate(izip(groupNames, tileGroups)):
+      rows.append("%i,%s,%i" % (i+1, groupName, len(tilePaths)))
+    with open(os.path.join(montageDir, "sections-list.csv"), 'w') as f:
+      f.write("\n".join(rows))
+
+  syncPrintQ("Number of sections found valid: %i" % len(groupNames))
+
+  # Montage all sections
+  ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging)
+
+  # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
+  # NOTE: it's 8-bit
+  volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
+                                 paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, params_pixels,
+                                 show=True, matrices=None, section_offsets=sectionOffsets, title="%s - montages" % name)
   
+  return volumeImgMontaged, groupNames, tileGroups
+
+
