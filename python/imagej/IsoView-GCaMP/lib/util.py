@@ -95,7 +95,10 @@ class Task(Callable):
   def call(self):
     if isThreadDead():
       return None
-    return self.fn(*self.args, **self.kwargs)
+    try:
+      return self.fn(*self.args, **self.kwargs)
+    except:
+      printException()
 
 class RunTask(Runnable):
   """ A wrapper for executing functions in concurrent threads. """
@@ -106,7 +109,10 @@ class RunTask(Runnable):
   def run(self):
     if isThreadDead():
       return
-    self.fn(*self.args, **self.kwargs)
+    try:
+      self.fn(*self.args, **self.kwargs)
+    except:
+      printException()
 
 class TimeItTask(Callable):
   """ A wrapper for executing functions in concurrent threads,
@@ -184,6 +190,12 @@ def newFixedThreadPool(n_threads=0, name="jython-worker"):
 
 def numCPUs():
   return Runtime.getRuntime().availableProcessors()
+
+def newThread(fn, *args, **kwargs):
+  t = Thread(RunTask(fn, *args, **kwargs), "script-thread::" + getattr(fn, "__name__", str(fn)))
+  t.setPriority(Thread.NORM_PRIORITY)
+  t.start()
+  return t
 
 class ParallelTasks:
   def __init__(self, name, exe=None):
