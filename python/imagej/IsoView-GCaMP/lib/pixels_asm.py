@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from org.objectweb.asm import ClassWriter, Opcodes, Label
 from java.lang import ClassLoader
 from lib.asm import CustomClassLoader, initClass, initMethod, initMethodObj
@@ -264,7 +265,7 @@ Pixels = definePixels()
 
 def defineImgCompare():
   classWriter = ClassWriter(0)
-  classWriter.visit(V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, "my/ImgCompare", None, "java/lang/Object", None)
+  classWriter.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, "asm/pixels/ImgCompare", None, "java/lang/Object", None)
   classWriter.visitSource("ImgCompare.java", None)
 
   methodVisitor = classWriter.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", None, None)
@@ -379,7 +380,7 @@ def defineImgCompare():
   classWriter.visitEnd()
 
   loader = CustomClassLoader()
-  ImgCompare = loader.defineClass(classname, classWriter.toByteArray())
+  ImgCompare = loader.defineClass("asm/pixels/ImgCompare", classWriter.toByteArray())
   return ImgCompare
 
 ImgCompare = defineImgCompare()
