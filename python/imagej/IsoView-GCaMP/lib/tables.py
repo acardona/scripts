@@ -1,15 +1,17 @@
 import sys, re, os
 from lib.registration import loadMatrices
 from lib.img import showAlignedImg
-from lib.util import syncPrintQ, printException
+from lib.util import syncPrintQ, printException, newThread
 from lib.ui import RowClickListener, showTable
+from lib.pixels import pairwiseCosyneSimilarity
 from net.imglib2 import FinalInterval
 from functools import partial
 from java.lang import String, Number
 from net.imglib2.view import Views
 
 
-def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename):
+
+def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename, show=True):
   # Extract Z interval from the name of the matrices CSV file
   pattern = re.compile("^matrices_(\d+)-(\d+).csv$")
   start, end = map(int, pattern.search(chunk_matrices_csv_filename).groups())
@@ -25,20 +27,38 @@ def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_
                  properties,
                  matrices, # a list as long as the number of chunks
                  rotate=None,
-                 title_addendum=" - %s" % chunk_matrices_csv_filename)
+                 title_addendum=" - %s" % chunk_matrices_csv_filename,
+                 show=show)
    
   # Fix stack labels
   stack = impA.getStack()
   for i in xrange(stack.size()):
     stack.setSliceLabel(str(start + i), i + 1) # 1-based
    
-  return imgA, impA
+  return imgA, impA, start, end
 
 def uiOpenChunkVolume(groupNames, montage_img, csvDir, properties, table_model, rowIndex):
   try:
-    openChunkVolume(groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 0))
+    newThread(openChunkVolume, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 0))
   except:
     printException()
+
+
+def makeTableCosyneSimilarityForChunk(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename):
+  # Load a virtual aligned volume
+  imgA, impA, start, end = openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename, show=False)
+  # Compute for all pairs of adjacent sections, in parallel
+  cs = pairwiseCosyneSimilarity(imgA)
+  
+  table, frame = showTable(zip(("%i-%i" % (i, i+1) for i in xrange(start, end)), cs), # two columns: indices and score
+      title="Cosyne similarities for sections %i-%i" % (start, end),
+      column_names=["pair", "score"],
+      dataType=String,
+      width=400, height=500,
+      showTable=True,
+      windowClosing=None, onCellClickFn=None, onRowClickFn=None,
+      singleBlockSelection=True, renderRightColumns=[0, 1])
+  
 
 def makeTableChunks(groupNames, montage_img, csvDir, properties):
   """
@@ -71,10 +91,15 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
       windowClosing=None, onCellClickFn=None, onRowClickFn=None,
       singleBlockSelection=True, renderRightColumns=[1, 2])
   
+  def launchCosSimForChunk(table_model, rowIndex):
+    newThread(makeTableCosyneSimilarityForChunk, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 0))
+  
+  commands = [("Compute cosyne similarity (all)", launchCosSimForChunk)]
+  
   listener = RowClickListener(table,
                               double_click_fn=partial(uiOpenChunkVolume, groupNames, montage_img, csvDir, properties),
-                              right_click_fns=[]) # TODO to run evaluation tools
-                                                  # and tools to invalidate relevant CSVs (chunk matrices and CSVs for comparisons around particular sections)
+                              right_click_fns=commands) # TODO to run evaluation tools
+                                                        # and tools to invalidate relevant CSVs (chunk matrices and CSVs for comparisons around particular sections)
   table.addMouseListener(listener)
   
   return table, frame, listener
