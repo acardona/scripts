@@ -1,4 +1,7 @@
 from ij.process import ImageStatistics
+from lib.pixels_asm import ImgCompare
+from lib.util import printException, newFixedThreadPool, numCPUs, isThreadDead, syncPrintQ
+from java.util.concurrent import Callable
 
 def autoAdjust(ip):
   """
@@ -48,3 +51,45 @@ def autoAdjust(ip):
     maximum = sp.getMax()
 
   return minimum, maximum
+
+
+class ComputeCosyneSimilarity(Callable):
+  def __init__(self, img, i, j):
+    self.img = img
+    self.i = i
+    self.j = j
+  def call(self):
+    if isThreadDead():
+      return None
+    cs = ImgCompare.cosyneSimilarity(Views.hyperSlice(img, 2, i),
+                                     Views.hyperSlice(img, 2, j))
+    syncPrintQ("Cosine similarity for %i-%i: %f" % (i, j, cs))
+    return cs
+
+
+def pairwiseCosyneSimilarity(imgVolume, nThreads=0):
+  """
+  Returns an array of length imgVolume.dimension(2) -1,
+  where each item is the cosyne similarity between slice i and i+1.
+  """
+  exe = newFixedThreadPool(min(numCPUs(), imgVolume.dimension(2)) if 0 == nThreads else 0) # 0 means max
+  try:
+    futures = []
+    for i in xrange(imgVolume.dimension(2) -1):
+      futures.add(exe.submit(ComputeCosyneSimilarity(imgVolume, i, i+1)))
+    return [fu.get() for fu in futures]
+  except:
+    printException()
+  finally:
+    exe.shutdown()
+
+
+
+
+
+
+
+
+
+
+
