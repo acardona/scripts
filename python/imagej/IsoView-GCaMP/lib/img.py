@@ -162,6 +162,7 @@ def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=N
     img = cellImg
 
   imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel" + title_addendum)
+  imp.show()
   
   # Ensure cleanup of threads upon closing the window
   addWindowListener(imp.getWindow(), lambda event: cellGet.destroy())
