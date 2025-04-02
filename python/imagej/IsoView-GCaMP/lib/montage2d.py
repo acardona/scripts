@@ -1177,6 +1177,11 @@ def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
   """
   Main entry point.
   """
+  
+  if name is None or 0 == len(name):
+    print "Enter the 'name' of the volume: it's folder name."
+    return
+  
   # Find all .dat files, as a sorted list
   # NOTE will be cached into a text file
   filepaths, filepaths_cached = loadFilePaths(srcDir, ".dat", montageDir, "imagefilepaths")
