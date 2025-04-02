@@ -49,6 +49,7 @@ params_pixels = {
   "as8bit": True,
   "contrast": (500, 1000), # thresholds in pixel counts per histogram bin
   "roiFn": lambda sp: Roi(sp.width / 6, sp.height / 6, 2 * sp.width / 3, 2 * sp.height / 3), # middle 2/3rds to discard edges
+  "interim_scale": 0.25, # for saving montaged snapshops to disk to be used for evaluation and serial alignment
 }
 
 # Parameters for SIFT features
