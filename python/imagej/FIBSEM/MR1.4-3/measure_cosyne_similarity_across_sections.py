@@ -24,3 +24,4 @@ for i, v in enumerate(cs):
   table.addValue("cosSim", v)
 
 table.show("cosyne similarity")
+
