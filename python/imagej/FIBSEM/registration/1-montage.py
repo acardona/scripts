@@ -32,7 +32,8 @@ section_height = 16000     # So a canvas of 256,000,000 pixels: 256 MB
 first_section = 0  # 0-based
 last_section = -1
 
-# Replace sections:
+# Replace sections: (0-based, not 1-based !)
+# NOTE indices are relative to the first_section as specified above
 # Add entries like: 1718: 1719,  indicating that section 1718 is to be replaced by section at 1719, effectively duplicating the latter
 # This is desirable to keep the true Euclidean distances and dimensions while overriding a faulty section with e.g, truncated images.
 replace_sections = {
@@ -105,7 +106,7 @@ volumeImgMontaged, groupNames, tileGroups = startMontage(
              name, srcDir, tgtDir, montageDir, repairedDir,
              offset, overlap, nominal_overlap,
              section_width, section_height,
-             replace_sections, first_section, last_section,
+             first_section, last_section, replace_sections,
              params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf,
              to_remove, ignore_images, replace_images)
 

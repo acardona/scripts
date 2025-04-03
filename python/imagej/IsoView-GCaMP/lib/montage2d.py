@@ -250,10 +250,10 @@ def processTo8bit(sp, params_pixels):
 
 
 def process(sp, params_pixels):
-  if params_pixels("invert"):
+  if params_pixels["invert"]:
     sp.invert()
-  if params_pixels("CLAHE_params"):
-    blockRadius, n_bins, slope = params_pixels("CLAHE_params")
+  if params_pixels["CLAHE_params"]:
+    blockRadius, n_bins, slope = params_pixels["CLAHE_params"]
     CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None)
   return sp
 
@@ -412,7 +412,7 @@ class MontageSlice(Callable):
                         Here, only the translation is applied, ultimately as integers.
     """
     # Load the ShortProcessors once, if matrices need to be computed
-    sps = loadShortProcessors(self.tilePaths, reverse=False)
+    sps = loadShortProcessors(self.tilePaths)
     matrices = self.getMatrices(sps=sps)
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
@@ -433,7 +433,7 @@ class MontageSlice(Callable):
                         Here, only the translation is applied, ultimately as integers.
     """
     # Load the ShortProcessors once, if matrices need to be computed
-    sps = loadShortProcessors(self.tilePaths, reverse=False)
+    sps = loadShortProcessors(self.tilePaths)
     matrices = self.getMatrices(sps=sps)
     # TODO if scale and shear values aren't 1.0, 0.0 then apply an affine transform.
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
@@ -563,7 +563,7 @@ class MontageAndSave(Callable):
   """ Generate the matrices for the montage, specifying the translation of each tile,
       and also save a scaled down version of the image into the scaled-montages folder.
   """
-  def __init__(self, *args)
+  def __init__(self, *args):
     self.args = args
   
   def call(self):
@@ -585,18 +585,18 @@ class MontageAndSave(Callable):
     ip = None
     # Generate the matrices and an image of the montage.
     # The call to montagedImg or montagedImg8bit will generate and store the montage matrices.
-    if self.params_pixels.as8bit:
-      img = ms.montagedImg(self, section_width, section_height, None, params_pixels, sdx=0, sdy=0)
-      ip = ShortProcessor(section_width, section_height, img.update(None).getCurrentStorageArray(), None)
-    else:
-      img = ms.montagedImg8bit(self, section_width, section_height, None, params_pixels, sdx=0, sdy=0)
+    if params_pixels.get("as8bit", True):
+      img = ms.montagedImg8bit(section_width, section_height, None, params_pixels, sdx=0, sdy=0)
       ip = ByteProcessor(section_width, section_height, img.update(None).getCurrentStorageArray(), None)
+    else:
+      img = ms.montagedImg(section_width, section_height, None, params_pixels, sdx=0, sdy=0)
+      ip = ShortProcessor(section_width, section_height, img.update(None).getCurrentStorageArray(), None)
     # Save the image, scaled if required
     imp = ImagePlus(groupName, ip)
     k = params_pixels.get("interim_scale", 1.0)
     if k < 1.0:
       imp = imp.resize(int(section_width * k + 0.5), int(section_height * k + 0.5), "bilinear")
-    FileSaver(imp).saveAsTiff(montageDir + "scaled-montages/" + groupName + ".tif")
+    FileSaver(imp).saveAsTiff(scaled_image_path)
     return True
 
 
@@ -743,8 +743,6 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
   # and check that tiles are of the same dimensions and file size within each section:
   for groupName_, tilePaths_ in groups.iteritems():
     tilePaths_.sort(key=coordsFn) # in place
-    if tilePaths_[0].find("24-03-02_190309") > 0:
-      print tilePaths_
 
     # Replace and remove filepaths as needed
     if alternative_dir or len(ignore_images) > 0:
@@ -813,7 +811,11 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
     del groups[groupName_]
     syncPrintQ("Will ignore section: " + groupName_, copy_to_stdout=True)
   
-  syncPrintQ("Invalid sections: %i" % len(to_remove))
+  if check:
+    syncPrintQ("Invalid sections: %i" % len(to_remove))
+  else:
+    syncPrintQ("Check was NOT done to detect invalid sections.")
+    
 
   # Sort groups by key
   keys = groups.keys()
@@ -1171,7 +1173,7 @@ def fuseTranslationMatrices(matrices1, matrices2):
 def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
                 offset, overlap, nominal_overlap,
                 section_width, section_height,
-                replace_sections, first_section, last_section,
+                first_section, last_section, replace_sections,
                 params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf,
                 to_remove, ignore_images, replace_images):
   """
@@ -1179,7 +1181,7 @@ def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
   """
   
   if name is None or 0 == len(name):
-    print "Enter the 'name' of the volume: it's folder name."
+    print "Enter the 'name' of the volume: the folder name containing .dat files."
     return
   
   # Find all .dat files, as a sorted list
@@ -1187,6 +1189,12 @@ def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
   filepaths, filepaths_cached = loadFilePaths(srcDir, ".dat", montageDir, "imagefilepaths")
 
   ensureDirsExist(tgtDir, montageDir, repairedDir)
+  
+  if os.path.exists(montageDir + "check"):
+    check = False
+  else:
+    check = True
+    File(montageDir + "check").createNewFile()  # a new empty file to serve as marker
 
   # Sorted group names, one per section
   groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
@@ -1200,9 +1208,9 @@ def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
   tileGroups = tileGroups[first_section:last_section]
 
   # Substitute sections with problems for other, adjacent sections
-  for k, v in replace_sections.iteritems():
-    groupNames[k] = groupNames[v]
-    tileGroups[k] = tileGroups[v]
+  for bad, good in replace_sections.iteritems():
+    groupNames[bad] = groupNames[good]
+    tileGroups[bad] = tileGroups[good]
 
   # How many sections to montage in parallel
   nThreadsMontaging = max(1, int(numCPUs() / (paramsTileConf["nThreadsOptimizer"] / 2)))
@@ -1234,7 +1242,7 @@ def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
   
   # Montage all sections and save an image of each montage under csvDir/scaled-montages/
   ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overlap, offset,
-                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, nThreads,
+                                 paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging,
                                  section_width, section_height, params_pixels)
 
   # Open a virtual image of the whole scaled-montages folder
@@ -1252,7 +1260,7 @@ def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
   volumeImgMontagedScaled = lazyCachedCellImg(SectionCellLoader(scaled_filepaths, asArrayImg),
                                               [section_width, section_height, len(groupNames)],
                                               [section_width, section_height, 1],
-                                              pixelType, primitiveType, maxRefs=0):
+                                              pixelType, primitiveType, maxRefs=0)
   
   return volumeImgMontaged, groupNames, tileGroups
 
