@@ -22,6 +22,8 @@ from javax.swing.table import AbstractTableModel, TableRowSorter, DefaultTableCe
 from javax.swing.event import ListSelectionListener
 from ij import IJ, ImagePlus, ImageStack, VirtualStack
 from ij.io import FileSaver
+from net.imglib2.img.display.imagej import ImageJVirtualStackUnsignedByte
+from net.imglib2.converter import TypeIdentity
 
 
 
@@ -514,5 +516,16 @@ def saveInParallel(targetDir, imp=None, slices=None, n_threads=0, show=True, sca
   finally:
     exe.shutdown()
 
+# A VirtualStack view of an ImgLib2 8-bit img that supports stack labels
+class VirtualStack8bit(ImageJVirtualStackUnsignedByte):
+  def __init__(self, img3D):
+    super(VirtualStack8bit, self).__init__(img3D, TypeIdentity())
+    self.labels = {}
+  def setSliceLabel(self, label, n):
+    self.labels[n] = label
+  def getSliceLabel(self, n):
+    return self.labels.get(n, str(n))
 
-
+def wrap8bit(img3D, title=""):
+  """ Return a 3D ImagePlus with a VirtualStack that reads from the 3-dimensional img3D. """
+  return ImagePlus(title, VirtualStack8bit(img3D))
