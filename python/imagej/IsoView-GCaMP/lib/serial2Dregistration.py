@@ -652,7 +652,7 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   # Given that the subset of sections is the same, use for pointmatches across tiles one point per section,
   # transformed by the transform of that section in that chunk,
   # towards computing a TranslationModel2D for each tile (each chunk is tile).
-  dims = properties["img_dimensions"]
+  dims = [volumeImg.dimension(0), volumeImg.dimension(1)]
   px, py = dims[0] / 2, dims[1] / 2 # center of each section
   chunk_tiles = [(chunk, Tile(TranslationModel2D())) for chunk in chunks]
   for (cmatrices1, tile1), (cmatrices2, tile2) in izip(chunk_tiles, islice(chunk_tiles, 1, None)):
