@@ -6,7 +6,7 @@ from lib.util import newFixedThreadPool, syncPrintQ, printException, printExcept
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo, ensureDirsExist, SectionCellLoader
 from lib.img import lazyCachedCellImg
-from lib.ui import wrap, duplicateInParallel, saveInParallel, ExecutorCloser
+from lib.ui import wrap, duplicateInParallel, saveInParallel, ExecutorCloser, wrap8bit
 from lib.serial2Dregistration import ensureSIFTFeatures
 
 from java.util import ArrayList, Vector, HashSet
@@ -573,7 +573,7 @@ class MontageAndSave(Callable):
     # Check if scaled image exists
     if os.path.exists(scaled_image_path):
       # Check if the matrices file exists
-      matrices = loadMatrices(self.groupName, self.csvDir)
+      matrices = loadMatrices(groupName, montageDir)
       if matrices is not None:
         return True
       # Else, generate both, overwriting the image.
@@ -601,7 +601,7 @@ class MontageAndSave(Callable):
 
 
 def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overlap, offset,
-                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, nThreads,
+                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, montageDir, nThreads,
                                  section_width, section_height, params_pixels):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
@@ -615,7 +615,7 @@ def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overla
   overlap: the amount of pixels of overlap between two tiles.
   offset: the amount of pixels to ignore from the left edge of an image tile.
   paramsSIFT: for montaging using scale invariant feature transform (SIFT).
-  csvDir: where to save the matrix CSV files, one per montage and section.
+  montageDir: where to save the matrix CSV files, one per montage and section.
   
   Will save a possibly scaled-down image of the montage as a TIFF file under csvDir/scaled-montages/
   """
@@ -626,14 +626,14 @@ def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overla
     failed = Vector() # synchronized access
     
     # Folder for storing scaled-down versions of each montaged version
-    ensureDirsExist(csvDir + "scaled-montages")
+    ensureDirsExist(os.path.join(montageDir, "scaled-montages"))
 
     # Iterate all sections in order and generate the transformation matrices defining a montage for each section
     for groupName, tilePaths in izip(groupNames, tileGroups):
       if len(tilePaths) > 1:
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
         futures.append(exe.submit(MontageAndSave(groupName, tilePaths, overlap, nominal_overlap, offset,
-                                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed,
+                                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, montageDir, failed,
                                                  section_width, section_height, params_pixels)))
 
     # Await them all
@@ -644,7 +644,7 @@ def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overla
       # Print failed montages
       syncPrintQ("Montages that failed:\n%s" % "\n".join(map(str, failed)))
       # Save failed montages to disk
-      with open(os.path.join(csvDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss", 'w') + ".csv")) as f:
+      with open(os.path.join(montageDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss", 'w') + ".csv")) as f:
         f.write("\n".join(map(str, failed)))
     else:
       syncPrintQ("No montages known to have failed.")
@@ -1240,29 +1240,55 @@ def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
 
   # New approach:
   
-  # Montage all sections and save an image of each montage under csvDir/scaled-montages/
+  # Montage all sections and save an image of each montage under montageDir/scaled-montages/
   ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overlap, offset,
                                  paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging,
                                  section_width, section_height, params_pixels)
 
   # Open a virtual image of the whole scaled-montages folder
-  scaled_filepaths = [csvDir + "scaled-montages/" + groupName + ".tif" for baseName in groupNames]
+  scaled_filepaths = [os.path.join(montageDir, "scaled-montages/" + groupName + ".tif") for groupName in groupNames]
+  
+  print len(scaled_filepaths)
+  print len(groupNames)
+  print section_width, section_height
   
   if params_pixels.get("as8bit", True):
     pixelType = UnsignedByteType
     primitiveType = PrimitiveType.BYTE
-    asArrayImg = lambda imp: ArrayImgs.unsignedBytes(imp.getProcessor().getPixels(), imp.getWidth(), imp.getHeight())
+    asArrayImg = lambda index, imp: ArrayImgs.unsignedBytes(imp.getProcessor().getPixels(), imp.getWidth(), imp.getHeight())
   else:
     pixelType = UnsignedShortType
     primitiveType = PrimitiveType.SHORT
-    asArrayImg = lambda imp: ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), imp.getWidth(), imp.getHeight())
-   
+    asArrayImg = lambda index, imp: ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), imp.getWidth(), imp.getHeight())
+  
+  k = params_pixels.get("interim_scale", 1.0)
+  width =  int(section_width  * k + 0.5)
+  height = int(section_height * k + 0.5)
+    
   volumeImgMontagedScaled = lazyCachedCellImg(SectionCellLoader(scaled_filepaths, asArrayImg),
-                                              [section_width, section_height, len(groupNames)],
-                                              [section_width, section_height, 1],
+                                              [width, height, len(groupNames)],
+                                              [width, height, 1],
                                               pixelType, primitiveType, maxRefs=0)
   
-  return volumeImgMontaged, groupNames, tileGroups
+  # Display as an ImageJ stack
+  #imp = wrap(volumeImgMontagedScaled)
+  #imp.setTitle(name + " - montage")
+  #imp.show()
+  
+  # With a virtual stack where slice labels work
+  imp = wrap8bit(volumeImgMontagedScaled, name + " - montage %f" % k)
+  imp.show()
+  
+  # Label each slice with the groupName
+  stack = imp.getStack()
+  for i, groupName in enumerate(groupNames):
+    #syncPrintQ("%i: %s" % (i, groupName))
+    stack.setSliceLabel(groupName, i+1) # 1-based
+  
+  # Show a JTable for opening raw images and slice ranges
+  table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, show=True)
+  
+  return volumeImgMontagedScaled, groupNames, tileGroups
 
 
 
