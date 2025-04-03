@@ -7,7 +7,7 @@ from net.imglib2.util import Intervals
 from net.imglib2.cache.ref import SoftRefLoaderCache, BoundedSoftRefLoaderCache
 from net.imglib2.cache.img import CellLoader, CachedCellImg, ReadOnlyCachedCellImgFactory, ReadOnlyCachedCellImgOptions
 from net.imglib2.img.basictypeaccess import ArrayDataAccessFactory, AccessFlags
-from lib.ui import addWindowListener
+from lib.ui import addWindowListener, wrap8bit
 from lib.util import newFixedThreadPool, syncPrintQ
 from functools import partial
 from java.lang import Thread
@@ -131,6 +131,7 @@ def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterva
 
 def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=None, title_addendum=""):
   """
+  img: an 8-bit RandomAccessibleInterval
   rotate: "right" or "left" or "180" or None
   """
   # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
@@ -161,7 +162,11 @@ def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=N
   else:
     img = cellImg
 
-  imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel" + title_addendum)
+  #imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel" + title_addendum)
+  #imp.show()
+  
+  # Instead use a VirtualStack that shows slice labels
+  imp = wrap8bit(img, properties.get("name", "") + " aligned subpixel" + title_addendum, lambda n: return groupNames[n-1])
   imp.show()
   
   # Ensure cleanup of threads upon closing the window
