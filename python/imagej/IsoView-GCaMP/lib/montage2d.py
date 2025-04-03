@@ -1246,10 +1246,6 @@ def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
   # Open a virtual image of the whole scaled-montages folder
   scaled_filepaths = [os.path.join(montageDir, "scaled-montages/" + groupName + ".tif") for groupName in groupNames]
   
-  print len(scaled_filepaths)
-  print len(groupNames)
-  print section_width, section_height
-  
   if params_pixels.get("as8bit", True):
     pixelType = UnsignedByteType
     primitiveType = PrimitiveType.BYTE
