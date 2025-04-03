@@ -1136,20 +1136,18 @@ def makeSliceLoader(groupNames, volumeImg):
   indices = {groupName: i for i, groupName in enumerate(groupNames)}
 
   def sliceLoader(volumeImg, indices, groupName):
-    # Works, but copies it over
-    #img2d = Views.hyperSlice(volumeImg, 2, indices[groupName])
-    #aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img2d))
-    #ImgMath.compute(ImgMath.img(img2d)).into(aimg)
-    #imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
-    # Process for BlockMatching and SIFT across sections
-    #imp.getProcessor().invert()
-    #CLAHE.run(imp, 200, 256, 3.0, None)
-    # Instead:
     # Each slice is already an ArrayImg: get the DataAccess of the Cell at index, which is a 2D image
-    # ... and it's already processed for invert and CLAHE, and cached.
-    cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, indices[groupName]])
-    pixels = cell.getData().getCurrentStorageArray()
-    return ImagePlus(groupName, ByteProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
+    if isinstance(volumeImg, CellImg):
+      cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, indices[groupName]])
+      pixels = cell.getData().getCurrentStorageArray()
+      return ImagePlus(groupName, ByteProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
+    else:
+      # copy
+      img2d = Views.hyperSlice(volumeImg, 2, indices[groupName])
+      aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img2d))
+      ImgMath.compute(ImgMath.img(img2d)).into(aimg)
+      return ImagePlus(groupName, ByteProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
+    
   
   # Return a 1-argument function that takes the groupName as its sole argument
   return partial(sliceLoader, volumeImg, indices)
