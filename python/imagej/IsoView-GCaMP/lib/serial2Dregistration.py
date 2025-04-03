@@ -66,8 +66,9 @@ from converter import convert2
 from pixels import autoAdjust
 from loop import createBiConsumerTypeSet
 from segmentation_em import classifyImageLabKitSegCached, segThreadCache
-from img import showAlignedImg
+from img import showAlignedImg, makeImg
 from tables import makeTableChunks
+from montage2d import makeSliceLoader
 from java.nio.file import Paths, Files, StandardCopyOption
 
 
