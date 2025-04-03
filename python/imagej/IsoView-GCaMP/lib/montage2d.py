@@ -1168,12 +1168,13 @@ def fuseTranslationMatrices(matrices1, matrices2):
 
 
 
-def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
-                offset, overlap, nominal_overlap,
-                section_width, section_height,
-                first_section, last_section, replace_sections,
-                params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf,
-                to_remove, ignore_images, replace_images):
+def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
+                 offset, overlap, nominal_overlap,
+                 section_width, section_height,
+                 first_section, last_section, replace_sections,
+                 params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf,
+                 to_remove, ignore_images, replace_images,
+                 showTable=True, show=True):
   """
   Main entry point.
   """
@@ -1264,23 +1265,19 @@ def startMontage(name, srcDir, tgtDir, montageDir, repairedDir,
                                               [width, height, 1],
                                               pixelType, primitiveType, maxRefs=0)
   
-  # Display as an ImageJ stack
-  #imp = wrap(volumeImgMontagedScaled)
-  #imp.setTitle(name + " - montage")
-  #imp.show()
+  if show:
+    # Display as an ImageJ stack
+    #imp = wrap(volumeImgMontagedScaled)
+    #imp.setTitle(name + " - montage")
+    #imp.show()
   
-  # With a virtual stack where slice labels work
-  imp = wrap8bit(volumeImgMontagedScaled, name + " - montage %f" % k)
-  imp.show()
-  
-  # Label each slice with the groupName
-  stack = imp.getStack()
-  for i, groupName in enumerate(groupNames):
-    #syncPrintQ("%i: %s" % (i, groupName))
-    stack.setSliceLabel(groupName, i+1) # 1-based
+    # With a virtual stack where slice labels work
+    imp = wrap8bit(volumeImgMontagedScaled, name + " - montage %f" % k, labelsFn=lambda n: return groupNames[n-1])
+    imp.show()
   
   # Show a JTable for opening raw images and slice ranges
-  table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, show=True)
+  if showTable:
+    table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, show=True)
   
   return volumeImgMontagedScaled, groupNames, tileGroups
 
