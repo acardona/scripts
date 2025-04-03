@@ -518,14 +518,20 @@ def saveInParallel(targetDir, imp=None, slices=None, n_threads=0, show=True, sca
 
 # A VirtualStack view of an ImgLib2 8-bit img that supports stack labels
 class VirtualStack8bit(ImageJVirtualStackUnsignedByte):
-  def __init__(self, img3D):
+  def __init__(self, img3D, labelsFn=None):
     super(VirtualStack8bit, self).__init__(img3D, TypeIdentity())
     self.labels = {}
+    self.labelsFn = labelsFn
   def setSliceLabel(self, label, n):
     self.labels[n] = label
   def getSliceLabel(self, n):
-    return self.labels.get(n, str(n))
+    if n in self.labels:
+      return self.labels[n]
+    if self.labelsFn:
+      return self.labelsFn(n)
+    return str(n)
 
-def wrap8bit(img3D, title=""):
+def wrap8bit(img3D, title="", labelsFn=None):
   """ Return a 3D ImagePlus with a VirtualStack that reads from the 3-dimensional img3D. """
-  return ImagePlus(title, VirtualStack8bit(img3D))
+  return ImagePlus(title, VirtualStack8bit(img3D, labelsFn=labelsFn))
+
