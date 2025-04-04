@@ -1272,7 +1272,7 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
     #imp.show()
   
     # With a virtual stack where slice labels work
-    imp = wrap8bit(volumeImgMontagedScaled, name + " - montage %f" % k, labelsFn=lambda n: return groupNames[n-1])
+    imp = wrap8bit(volumeImgMontagedScaled, name + " - montage %f" % k, labelsFn=lambda n: groupNames[n-1])
     imp.show()
   
   # Show a JTable for opening raw images and slice ranges

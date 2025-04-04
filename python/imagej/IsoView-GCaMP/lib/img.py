@@ -166,7 +166,7 @@ def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=N
   #imp.show()
   
   # Instead use a VirtualStack that shows slice labels
-  imp = wrap8bit(img, properties.get("name", "") + " aligned subpixel" + title_addendum, lambda n: return groupNames[n-1])
+  imp = wrap8bit(img, properties.get("name", "") + " aligned subpixel" + title_addendum, lambda n: groupNames[n-1])
   imp.show()
   
   # Ensure cleanup of threads upon closing the window
