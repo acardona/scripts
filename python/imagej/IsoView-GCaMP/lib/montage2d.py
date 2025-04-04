@@ -7,6 +7,7 @@ from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo, ensureDirsExist, SectionCellLoader
 from lib.img import lazyCachedCellImg
 from lib.ui import wrap, duplicateInParallel, saveInParallel, ExecutorCloser, wrap8bit
+from lib.pixels_asm import CopyUnsignedByteType
 
 from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable, Integer, Runnable, String
@@ -32,6 +33,7 @@ from net.imglib2.view import Views
 from net.imglib2.util import Intervals
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.algorithm.math import ImgMath
+from net.imglib2.loops import LoopBuilder
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, Point, NotEnoughDataPointsException, Tile, TileConfiguration, TileUtil
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
@@ -1144,7 +1146,10 @@ def makeSliceLoader(groupNames, volumeImg):
       # copy
       img2d = Views.hyperSlice(volumeImg, 2, indices[groupName])
       aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img2d))
-      ImgMath.compute(ImgMath.img(img2d)).into(aimg)
+      #syncPrintQ(str(img2d) + " " + str(img2d.dimension(0)) + "." + str(img2d.dimension(1))
+      #           + "\n" + str(Intervals.dimensionsAsLongArray(img2d)))
+      #ImgMath.compute(ImgMath.img(img2d)).into(aimg)
+      LoopBuilder.setImages(img2d, aimg).multiThreaded(False).forEachPixel(CopyUnsignedByteType())
       return ImagePlus(groupName, ByteProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
     
   
