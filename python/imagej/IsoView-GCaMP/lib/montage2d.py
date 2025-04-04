@@ -476,6 +476,30 @@ class MontageSlice(Callable):
     return ArrayImgs.unsignedBytes(bpMontage.getPixels(), width, height)
 
 
+def singleTile(tilePath, width, height, params_pixels, sdx=0, sdy=0, matrix=None, center=False):
+  imp = load(tilePath)
+  as8bit = params_pixels.get("as8bit", True)
+  if as8bit:
+    ipTile = processTo8bit(imp.getProcessor(), params_pixels)
+    ip = ByteProcessor(width, height)
+  else:
+    ipTile = process(imp.getProcessor(), params_pixels)
+    ip = ShortProcessor(width, height)
+  if matrix:
+    dx, dy = (matrix[2], matrix[5])
+  elif center:
+    # WARNING this can be a breaking change
+    dx, dy = int((width - imp.getWidth()) / 2), int((height - imp.getHeight()) / 2)
+  else:
+    dx, dy = (0, 0)
+  ip.insert(ipTile,
+            int(sdx + dx + 0.5),
+            int(sdy + dy + 0.5))
+  fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
+  aimg = fn(ip.getPixels(), [width, height])
+  imp.flush()
+  return aimg
+
 
 class SectionLoader(CacheLoader):
   """
@@ -533,22 +557,7 @@ class SectionLoader(CacheLoader):
                              matrix, self.params_pixels,
                              sdx=sdx, sdy=sdy)        
     elif 1 == len(tilePaths):
-      imp = load(tilePaths[0])
-      if as8bit:
-        ipTile = processTo8bit(imp.getProcessor(), self.params_pixels)
-        ip = ByteProcessor(width, height)
-      else:
-        ipTile = process(imp.getProcessor(), self.params_pixels)
-        ip = ShortProcessor(width, height)
-      dx, dy = (matrix[2], matrix[5]) if matrix else (0, 0)
-      ip.insert(ipTile,
-                int(sdx + dx + 0.5),
-                int(sdy + dy + 0.5))
-      fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
-      aimg = fn(ip.getPixels(), [width, height])
-      imp.flush()
-      imp = None
-      ip = None
+      aimg = singleTile(tilePaths[0], width, height, self.params_pixels, sdx=sdx, sdy=sdy, matrix=matrix)
     else:
       # return empty Cell
       syncPrintQ("WARNING: number of tiles isn't 4 or 1")
@@ -569,18 +578,13 @@ class MontageAndSave(Callable):
     self.args = args
   
   def call(self):
-    groupName = self.args[0]
-    montageDir = self.args[8]
-    scaled_image_path = montageDir + "scaled-montages/" + groupName + ".tif"
-    # Check if scaled image exists
-    if os.path.exists(scaled_image_path):
-      # Check if the matrices file exists
-      matrices = loadMatrices(groupName, montageDir)
-      if matrices is not None:
-        return True
-      # Else, generate both, overwriting the image.
-      # If the matrices exists but the scaled image doesn't, the matrices will simply be loaded, not computed.
-    
+    try:
+      return self.callImpl()
+    except:
+      printException()
+      
+  def montageAndSnapshot(self, groupName):
+    syncPrintQ("Generating montage for " + groupName)
     args = self.args[:10]
     ms = MontageSlice(*args)
     section_width, section_height, params_pixels = self.args[10:13]
@@ -598,6 +602,31 @@ class MontageAndSave(Callable):
     k = params_pixels.get("interim_scale", 1.0)
     if k < 1.0:
       imp = imp.resize(int(section_width * k + 0.5), int(section_height * k + 0.5), "bilinear")
+    return imp
+  
+  def callImpl(self):
+    groupName = self.args[0]
+    tilePaths = self.args[1]
+    montageDir = self.args[8]
+    scaled_image_path = montageDir + "scaled-montages/" + groupName + ".tif"
+    # Check if scaled image exists
+    if os.path.exists(scaled_image_path):
+      if len(tilePaths) > 1:
+        # Check if the matrices file exists
+        matrices = loadMatrices(groupName, montageDir)
+        if matrices is not None:
+          #syncPrintQ("Montage OK for " + groupName)
+          return True
+      else: # just one tile
+        return True
+    # Else, generate both, overwriting the image.
+    # If the matrices exists but the scaled image doesn't, the matrices will simply be loaded, not computed.
+    if len(tilePaths) > 1:
+      imp = self.montageAndSnapshot(groupName)
+    else:
+      section_width, section_height, params_pixels = self.args[10:13]
+      imp = singleTile(tilePaths[0], section_width, section_height, params_pixels, sdx=0, sdy=0, matrix=None, center=True)
+    #
     FileSaver(imp).saveAsTiff(scaled_image_path)
     return True
 
@@ -623,7 +652,6 @@ def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overla
   """
   exe = newFixedThreadPool(nThreads)
   try:
-
     futures = []
     failed = Vector() # synchronized access
     
@@ -632,11 +660,10 @@ def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overla
 
     # Iterate all sections in order and generate the transformation matrices defining a montage for each section
     for groupName, tilePaths in izip(groupNames, tileGroups):
-      if len(tilePaths) > 1:
-        # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
-        futures.append(exe.submit(MontageAndSave(groupName, tilePaths, overlap, nominal_overlap, offset,
-                                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, montageDir, failed,
-                                                 section_width, section_height, params_pixels)))
+      # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
+      futures.append(exe.submit(MontageAndSave(groupName, tilePaths, overlap, nominal_overlap, offset,
+                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, montageDir, failed,
+                                               section_width, section_height, params_pixels)))
 
     # Await them all
     for future in futures:
@@ -1249,8 +1276,8 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   
   # Montage all sections and save an image of each montage under montageDir/scaled-montages/
   ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overlap, offset,
-                                 paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging,
-                                 section_width, section_height, params_pixels)
+                               paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging,
+                               section_width, section_height, params_pixels)
 
   # Open a virtual image of the whole scaled-montages folder
   scaled_filepaths = [os.path.join(montageDir, "scaled-montages/" + groupName + ".tif") for groupName in groupNames]
