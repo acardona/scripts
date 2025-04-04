@@ -645,7 +645,14 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
       matrices = align(filepaths[start:end], csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
                        loaderImp=makeSliceLoader(groupNames, volumeImg), fixed_tile_indices=[fixed], io=False, verboseOptimize=True)
       saveMatrices(name_i, matrices, csvDir)
-      volumeImg.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
+      # clear cache
+      try:
+        img = volumeImg
+        while not isinstance(img, CellImg):
+          img = img.getSource()
+        volumeImg.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
+      except:
+        syncPrintQ("No cache to clear.")
     chunks.append(matrices)
   
   # Now register the overlapping chunks, considering each chunk as a tile.
