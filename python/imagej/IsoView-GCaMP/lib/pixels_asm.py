@@ -387,8 +387,9 @@ ImgCompare = defineImgCompare()
 
 
 def makeCopyUnsignedByteTypeBiFunction():
+  classname = "asm/pixels/CopyUnsignedByteType"
   classWriter = ClassWriter(0)
-  classWriter.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, "my/CopyUnsignedByteType", "Ljava/lang/Object;Ljava/util/function/BiFunction<Lnet/imglib2/type/numeric/integer/UnsignedByteType;Lnet/imglib2/type/numeric/integer/UnsignedByteType;Lnet/imglib2/type/numeric/integer/UnsignedByteType;>;", "java/lang/Object", [ "java/util/function/BiFunction" ])
+  classWriter.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, classname, "Ljava/lang/Object;Ljava/util/function/BiFunction<Lnet/imglib2/type/numeric/integer/UnsignedByteType;Lnet/imglib2/type/numeric/integer/UnsignedByteType;Lnet/imglib2/type/numeric/integer/UnsignedByteType;>;", "java/lang/Object", [ "java/util/function/BiFunction" ])
 
   #classWriter.visitSource("CopyUnsignedByteType.java", None)
 
@@ -432,7 +433,7 @@ def makeCopyUnsignedByteTypeBiFunction():
   methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, "net/imglib2/type/numeric/integer/UnsignedByteType")
   methodVisitor.visitVarInsn(Opcodes.ALOAD, 2)
   methodVisitor.visitTypeInsn(Opcodes.CHECKCAST, "net/imglib2/type/numeric/integer/UnsignedByteType")
-  methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "my/CopyUnsignedByteType", "apply", "(Lnet/imglib2/type/numeric/integer/UnsignedByteType;Lnet/imglib2/type/numeric/integer/UnsignedByteType;)Lnet/imglib2/type/numeric/integer/UnsignedByteType;", False)
+  methodVisitor.visitMethodInsn(Opcodes.INVOKEVIRTUAL, classname, "apply", "(Lnet/imglib2/type/numeric/integer/UnsignedByteType;Lnet/imglib2/type/numeric/integer/UnsignedByteType;)Lnet/imglib2/type/numeric/integer/UnsignedByteType;", False)
   methodVisitor.visitInsn(Opcodes.ARETURN)
   methodVisitor.visitMaxs(3, 3)
   methodVisitor.visitEnd()
@@ -440,7 +441,7 @@ def makeCopyUnsignedByteTypeBiFunction():
   classWriter.visitEnd()
 
   loader = CustomClassLoader()
-  CopyUnsignedByteType = loader.defineClass("asm/pixels/CopyUnsignedByteType", classWriter.toByteArray())
+  CopyUnsignedByteType = loader.defineClass(classname, classWriter.toByteArray())
   return CopyUnsignedByteType
 
 CopyUnsignedByteType = makeCopyUnsignedByteTypeBiFunction()
