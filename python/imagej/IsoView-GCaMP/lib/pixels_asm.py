@@ -386,7 +386,7 @@ def defineImgCompare():
 ImgCompare = defineImgCompare()
 
 
-def makeCopyUnsignedByteTypeBiFunction()
+def makeCopyUnsignedByteTypeBiFunction():
   classWriter = ClassWriter(0)
   classWriter.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, "my/CopyUnsignedByteType", "Ljava/lang/Object;Ljava/util/function/BiFunction<Lnet/imglib2/type/numeric/integer/UnsignedByteType;Lnet/imglib2/type/numeric/integer/UnsignedByteType;Lnet/imglib2/type/numeric/integer/UnsignedByteType;>;", "java/lang/Object", [ "java/util/function/BiFunction" ])
 
@@ -440,7 +440,7 @@ def makeCopyUnsignedByteTypeBiFunction()
   classWriter.visitEnd()
 
   loader = CustomClassLoader()
-  CopyUnsignedByteType = loader.defineClass(classname, classWriter.toByteArray())
+  CopyUnsignedByteType = loader.defineClass("asm/pixels/CopyUnsignedByteType", classWriter.toByteArray())
   return CopyUnsignedByteType
 
 CopyUnsignedByteType = makeCopyUnsignedByteTypeBiFunction()
