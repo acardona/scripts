@@ -6,8 +6,10 @@ from lib.util import timeit
 
 filepaths = [
   # single tile:
-  "/net/fibserver1/raw/MR1.4-3/M02/D28/Merlin-WEMS_24-02-28_074147_0-0-0.dat",
-  "/net/fibserver1/raw/MR1.4-3/M02/D28/Merlin-WEMS_24-02-28_074147_0-1-0.dat",
+  #"/net/fibserver1/raw/MR1.4-3/M02/D28/Merlin-WEMS_24-02-28_074147_0-0-0.dat",
+  #"/net/fibserver1/raw/MR1.4-3/M02/D28/Merlin-WEMS_24-02-28_074147_0-1-0.dat",
+  #"/net/fibserver1/raw/MR1.4-3/M03/D05/Merlin-WEMS_24-03-05_062018_0-0-0.dat", # fails to load
+  "/net/zstore1/FIBSEM/MR1.4-3/repaired/Merlin-WEMS_24-03-05_062018_0-0-0.dat",
  ]
 
 #TODO check if these above are the ones at the new large shift
