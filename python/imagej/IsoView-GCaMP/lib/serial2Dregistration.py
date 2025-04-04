@@ -1367,7 +1367,7 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
   
   # Compute and save to disk all transforms for all sections
   matrices = alignInChunks(groupNames, SIFTDir, params, paramsSIFT, paramsTileConfiguration, properties,
-                           groupNames, img, fixed_tile_index=paramsTileConfiguration["fixed_tile_index"]):
+                           groupNames, img, fixed_tile_index=paramsTileConfiguration["fixed_tile_index"])
 
   # Show the full image (not the cropped one used for aligning)
   cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImg.Montaged.dimension(1)]) # The whole 2D view
