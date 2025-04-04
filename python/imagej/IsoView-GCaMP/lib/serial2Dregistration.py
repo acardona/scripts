@@ -596,7 +596,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   
   
 def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-                  groupNames, volumeImg, fixed_tile_index=None):
+                  groupNames, volumeImg, fixed_tile_index=None, clearCacheFn=None):
   """
   Align overlapping chunks of serial sections independently, and then interpolate the alignments.
   This approach helps the optimizer do a good job and fast.
@@ -646,13 +646,10 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
                        loaderImp=makeSliceLoader(groupNames, volumeImg), fixed_tile_indices=[fixed], io=False, verboseOptimize=True)
       saveMatrices(name_i, matrices, csvDir)
       # clear cache
-      try:
-        img = volumeImg
-        while not isinstance(img, CellImg):
-          img = img.getSource()
+      if clearCacheFn:
+        clearCacheFn()
+      elif isinstance(volumeImg, CellImg):
         volumeImg.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
-      except:
-        syncPrintQ("No cache to clear.")
     chunks.append(matrices)
   
   # Now register the overlapping chunks, considering each chunk as a tile.
@@ -1370,9 +1367,16 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
   else:
     img = volumeImgMontaged
   
+  def clearCacheFn():
+    try:
+      volumeImgMontaged.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
+    except:
+      printException()
+  
   # Compute and save to disk all transforms for all sections
   matrices = alignInChunks(groupNames, SIFTdir, paramsPMs, paramsSIFT, paramsTileConfiguration, properties,
-                           groupNames, img, fixed_tile_index=paramsTileConfiguration["fixed_tile_index"])
+                           groupNames, img, fixed_tile_index=paramsTileConfiguration["fixed_tile_index"],
+                           clearCacheFn=clearCacheFn)
 
   # Show the full image (not the cropped one used for aligning)
   cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImg.Montaged.dimension(1)]) # The whole 2D view
