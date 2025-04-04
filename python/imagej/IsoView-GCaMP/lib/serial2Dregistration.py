@@ -1357,7 +1357,9 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
   # Crop image if required
   if properties.get("roi", None) is not None:
     x, y, width, height = properties["roi"]
-    img = Views.interval(volumeImgMontaged, [x, y, 0], [x + width -1, y + height -1, volumeImgMontaged.dimension(2) - 1])
+    img = Views.zeroMin(Views.interval(volumeImgMontaged,
+                                       [x, y, 0],
+                                       [x + width -1, y + height -1, volumeImgMontaged.dimension(2) - 1]))
   else:
     img = volumeImgMontaged
   
