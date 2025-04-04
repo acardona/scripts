@@ -1356,7 +1356,7 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
   properties["SIFT_validateByFileExists"] = True # Avoid loading and parsing SIFT features just to make sure they are fine.
   # Crop image if required
   if properties.get("roi", None) is not None:
-    x, y, width, height = properties["roi"]
+    x, y, width, height = map(lambda v: int(v * params_pixels["interim_scale"] + 0.5), properties["roi"])
     img = Views.zeroMin(Views.interval(volumeImgMontaged,
                                        [x, y, 0],
                                        [x + width -1, y + height -1, volumeImgMontaged.dimension(2) - 1]))
