@@ -6,11 +6,12 @@ from ij.gui import Roi
 # Add current directory to path
 sys.path.append(os.path.dirname(sys.argv[0]))
 # Import parameters used for montaging
-from step_1_montage_parameters import libDir, name, tgtDir, montageDir, section_Width, section_height_ params_pixels
+from step_1_montage_parameters import libDir, name, tgtDir, montageDir, section_width, section_height, params_pixels
 # Import registration library functions
 sys.path.append(libDir)
 from lib.serial2Dregistration import handleNoPointMatches, makeFilterFeaturesFn
 from lib.util import numCPUs
+from java.lang import Double
 
 
 # Folder for storing SIFT features per montage and pointmatches across montages, and the matrices.csv file
@@ -47,6 +48,14 @@ paramsSIFT.steps = 5
 paramsSIFT.minOctaveSize = int(max(256, paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps)))
 paramsSIFT.initialSigma = 1.6 # default 1.6
 
+
+# Parameters for pointmatches
+paramsPMs = {
+  'scale': properties.get('scale', 0.5), # compounds with montage interim_scale
+  'rod': 0.9, # ratio of best vs second best
+  'max_sd': 1.5, # maximal difference in size (ratio max/min)
+  'max_id': Double.MAX_VALUE, # max allowed distance between features in full image space
+}
 
 # Parameters for computing the SIFT-based transformation models
 paramsTileConfiguration = {

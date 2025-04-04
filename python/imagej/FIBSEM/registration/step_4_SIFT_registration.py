@@ -14,7 +14,7 @@ from step_1_montage_parameters import libDir, \
              to_remove, ignore_images, replace_images
 
 from step_3_SIFT_registration_parameters import SIFTdir, properties, \
-             paramsSIFT, paramsTileConfiguration, params_pixels
+             paramsSIFT, paramsPMs, paramsTileConfiguration
 
 # Import registration library functions
 sys.path.append(libDir)
@@ -35,4 +35,4 @@ volumeImgMontaged, groupNames, tileGroups = runMontaging(
 # Align the stack with SIFT features using chunks and open an aligned view
 imgSIFT, impSIFT, matrices = runSIFTAlignment(
              volumeImgMontaged, groupNames, SIFTdir,
-             properties, paramsSIFT, paramsTileConfiguration, params_pixels)
+             properties, paramsSIFT, paramsPMs, paramsTileConfiguration, params_pixels)

@@ -1350,23 +1350,19 @@ def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtC
       
 
 def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
-                     properties, paramsSIFT, paramsTileConfiguration, params_pixels):
+                     properties, paramsSIFT, paramsPMs, paramsTileConfiguration, params_pixels):
   # Ensure use_SIFT is true
   properties["use_SIFT"] = True
   properties["SIFT_validateByFileExists"] = True # Avoid loading and parsing SIFT features just to make sure they are fine.
-  # Define params
-  params = {
-    'scale': properties.get('scale', 0.5) # compounds with montage interim_scale
-  }
   # Crop image if required
   if properties.get("roi", None) is not None:
     x, y, width, height = properties["roi"]
-    img = Views.interval([x, y, 0], [x + width -1, y + height -1, volumeImgMontaged.dimension(2) - 1])
+    img = Views.interval(volumeImgMontaged, [x, y, 0], [x + width -1, y + height -1, volumeImgMontaged.dimension(2) - 1])
   else:
     img = volumeImgMontaged
   
   # Compute and save to disk all transforms for all sections
-  matrices = alignInChunks(groupNames, SIFTDir, params, paramsSIFT, paramsTileConfiguration, properties,
+  matrices = alignInChunks(groupNames, SIFTdir, paramsPMs, paramsSIFT, paramsTileConfiguration, properties,
                            groupNames, img, fixed_tile_index=paramsTileConfiguration["fixed_tile_index"])
 
   # Show the full image (not the cropped one used for aligning)
