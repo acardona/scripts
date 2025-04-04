@@ -304,8 +304,8 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
   if validateByFileExists and not ignoreCacheFn(index):
     if os.path.exists(path):
       return True
-    else:
-      os.remove(path)
+    #else:
+    #  os.remove(path)  # makes no sense, the path doesn't exist. TODO Track this down
   # An ArrayList whose last element is a mpicbg.imagefeatures.FloatArray2DSIFT.Param
   # and all other elements are mpicbg.imagefeatures.Feature
   features = deserialize(path) if os.path.exists(path) and not ignoreCacheFn(index) else None
