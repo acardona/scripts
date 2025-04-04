@@ -1,5 +1,6 @@
 package my;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
+import java.util.function.BiFunction;
 
 public class CopyUnsignedByteType implements BiFunction<UnsignedByteType, UnsignedByteType, UnsignedByteType> {
 
