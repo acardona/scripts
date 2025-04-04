@@ -7,7 +7,6 @@ from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo, ensureDirsExist, SectionCellLoader
 from lib.img import lazyCachedCellImg
 from lib.ui import wrap, duplicateInParallel, saveInParallel, ExecutorCloser, wrap8bit
-from lib.serial2Dregistration import ensureSIFTFeatures
 
 from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable, Integer, Runnable, String
