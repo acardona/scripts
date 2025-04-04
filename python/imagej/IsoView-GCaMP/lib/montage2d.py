@@ -7,7 +7,7 @@ from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo, ensureDirsExist, SectionCellLoader
 from lib.img import lazyCachedCellImg
 from lib.ui import wrap, duplicateInParallel, saveInParallel, ExecutorCloser, wrap8bit
-from lib.pixels_asm import CopyUnsignedByteType
+from lib.loop import createBiConsumerTypeSet
 
 from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable, Integer, Runnable, String
@@ -22,9 +22,10 @@ try:
   from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
 except:
   print "MISSING: class PhaseCorrelation2, from the BigStitcher update site."
+from net.imglib2.type import Type
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.type.numeric.complex import ComplexFloatType
-from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
+from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType, GenericByteType
 from net.imglib2.type import PrimitiveType
 from net.imglib2.img.array import ArrayImgFactory
 from net.imglib2.img.cell import Cell, CellImg
@@ -1135,6 +1136,7 @@ def makeSliceLoader(groupNames, volumeImg):
   """
   # Will use groupNames as filepaths, and a load function that will return hyperslices of volumeImg
   indices = {groupName: i for i, groupName in enumerate(groupNames)}
+  copier = createBiConsumerTypeSet(GenericByteType) # GenericByteType has the "set(Type)" method 
 
   def sliceLoader(volumeImg, indices, groupName):
     # Each slice is already an ArrayImg: get the DataAccess of the Cell at index, which is a 2D image
@@ -1149,7 +1151,9 @@ def makeSliceLoader(groupNames, volumeImg):
       #syncPrintQ(str(img2d) + " " + str(img2d.dimension(0)) + "." + str(img2d.dimension(1))
       #           + "\n" + str(Intervals.dimensionsAsLongArray(img2d)))
       #ImgMath.compute(ImgMath.img(img2d)).into(aimg)
-      LoopBuilder.setImages(img2d, aimg).multiThreaded(False).forEachPixel(CopyUnsignedByteType())
+      LoopBuilder.setImages(img2d, aimg) \
+                 .multiThreaded(False) \
+                 .forEachPixel(copier)
       return ImagePlus(groupName, ByteProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
     
   
