@@ -647,7 +647,7 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
       saveMatrices(name_i, matrices, csvDir)
       # clear cache
       if clearCacheFn:
-        clearCacheFn()
+        clearCacheFn(overlap)
       elif isinstance(volumeImg, CellImg):
         volumeImg.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
     chunks.append(matrices)
@@ -1367,7 +1367,7 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
   else:
     img = volumeImgMontaged
   
-  def clearCacheFn():
+  def clearCacheFn(overlap):
     try:
       volumeImgMontaged.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
     except:
