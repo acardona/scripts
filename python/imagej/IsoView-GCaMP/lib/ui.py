@@ -252,7 +252,10 @@ class ExecutorCloser(WindowAdapter):
   def __init__(self, exe):
     self.exe = exe
   def windowClosing(self, event):
-    self.exe.shutdownNow()
+    try:
+      self.exe.shutdownNow()
+    except:
+      printException()
     
 
 class RowClickListener(MouseAdapter, ListSelectionListener):
