@@ -20,7 +20,7 @@ BMdir = tgtDir + "BM-csv/"
 
 propertiesBM = {
  'name': name,
- 'scale': 1.0, # Compounds with montaging interim_scale
+ 'scale': 0.5, # Compounds with montaging interim_scale
  'n_threads': numCPUs(),
  'roi': [section_width / 4,  # To extract SIFT features from e.g., center part only, reducing ops by 4x
          section_height / 4, # [x, y, width, height] or None.
@@ -32,7 +32,7 @@ propertiesBM = {
 
 # Parameters for blockmatching
 paramsBlockMatching = {
- 'scale': 1.0, # Compounds with montaging interim_scale, so 0.5 would mean half of that
+ 'scale': propertiesBM['scale'], # Compounds with montaging interim_scale, so 0.5 would mean half of that
  'meshResolution': 10, # 10x10 = 100 points
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
@@ -44,7 +44,7 @@ paramsBlockMatching = {
 
 # Parameters for pointmatches
 paramsPMs = {
-  'scale': propertiesBM.get('scale', 1.0), # compounds with montage interim_scale
+  'scale': propertiesBM['scale'], # compounds with montage interim_scale
   'rod': 0.9, # ratio of best vs second best
 }
 
