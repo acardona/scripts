@@ -1362,14 +1362,15 @@ def cropImageView(img, roi, interim_scale=1.0):
 
 
 def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
-                     properties, paramsSIFT, paramsPMs, paramsTileConfiguration, params_pixels):
+                     properties, paramsSIFT, paramsPMs, paramsTileConfiguration,
+                     params_pixels, show=True):
   # Ensure use_SIFT is true
   properties = dict(properties) # duplicate then edit
   properties["use_SIFT"] = True
   properties["SIFT_validateByFileExists"] = True # Avoid loading and parsing SIFT features just to make sure they are fine.
   # Crop image if required
   if properties.get("roi", None) is not None:
-    img = cropImageView(volumeImgMontaged, properties["roi"], properties["interim_scale"])
+    img = cropImageView(volumeImgMontaged, properties["roi"], params_pixels["interim_scale"])
   else:
     img = volumeImgMontaged
   
@@ -1391,20 +1392,21 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
   imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
                                     matrices,
                                     rotate=None, # None, "right", "left", or "180"
-                                    title_addendum=" SIFT+RANSAC")
+                                    title_addendum=" SIFT+RANSAC", show=show)
   
   return imgSIFT, impSIFT, matrices
 
 
 
 def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNames, BMdir,
-                              propertiesBM, paramsBlockMatching, paramsTileConfigurationBM):
+                              propertiesBM, paramsSIFT, paramsBlockMatching, paramsTileConfigurationBM,
+                              params_pixels):
   # Ensure use_SIFT is false
   propertiesBM = dict(propertiesBM) # duplicate then edit
   propertiesBM["use_SIFT"] = False
   # Crop image if required
-  if properties.get("roi", None) is not None:
-    img = cropImageView(imgSIFT, properties["roi"], properties["interim_scale"])
+  if propertiesBM.get("roi", None) is not None:
+    img = cropImageView(imgSIFT, propertiesBM["roi"], params_pixels["interim_scale"])
   else:
     img = imgSIFT
 
@@ -1416,8 +1418,10 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
       printException()
 
   # Compute and save to disk all transforms for all sections
-  matricesBM = alignInChunks(groupNames, BMdir, paramsBlockMatching, None, paramsTileConfigurationBM, propertiesBM,
-                             groupNames, img, fixed_tile_index=paramsTileConfiguration["fixed_tile_index"],
+  # From paramsSIFT reads its field initialSigma
+  propertiesBM["img_dimensions"] = Intervals.dimensionsAsLongArray(img)
+  matricesBM = alignInChunks(groupNames, BMdir, paramsBlockMatching, paramsSIFT, paramsTileConfigurationBM, propertiesBM,
+                             groupNames, img, fixed_tile_index=paramsTileConfigurationBM["fixed_tile_index"],
                              clearCacheFn=clearCacheFn)
   
   # Combine matricesSIFT with matricesBM
@@ -1427,8 +1431,8 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
   # with the combined SIFT and blockmatching translations in one single fused matrix
   # so that the original pixels are interpolated only once.
   cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
-  properties["pixelType"] = type(volumeImgMontaged.randomAccess().get())
-  properties["img_dimensions"] = Intervals.dimensionsAsLongArray(volumeImgMontaged)
+  propertiesBM["pixelType"] = type(volumeImgMontaged.randomAccess().get())
+  propertiesBM["img_dimensions"] = Intervals.dimensionsAsLongArray(volumeImgMontaged)
   imgBM, impBM = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertiesBM,
                                 matricesFused,
                                 rotate=None, # None, "right", "left", or "180"

@@ -16,7 +16,7 @@ from step_1_montage_parameters import libDir, \
 from step_3_SIFT_registration_parameters import SIFTdir, properties, \
              paramsSIFT, paramsPMs, paramsTileConfiguration
              
-from step_5_blockmatching_registration_parameters import BMdir, propertiesBM, paramsBlockMatching, paramsTileConfigurationBM
+from step_5_blockmatching_parameters import BMdir, propertiesBM, paramsBlockMatching, paramsTileConfigurationBM
 
 # Import registration library functions
 sys.path.append(libDir)
@@ -38,10 +38,12 @@ volumeImgMontaged, groupNames, tileGroups = runMontaging(
 # Open the stack pre-aligned with SIFT features using chunks
 imgSIFT, impSIFT, matricesSIFT = runSIFTAlignment(
              volumeImgMontaged, groupNames, SIFTdir,
-             properties, paramsSIFT, paramsPMs, paramsTileConfiguration, params_pixels)
+             properties, paramsSIFT, paramsPMs, paramsTileConfiguration,
+             params_pixels)
 
 # Open the blockmatching finely aligned using chunks
 imgBM, impBM, matricesBM = runBlockMatchingAlignment(
              imgSIFT, matricesSIFT, volumeImgMontaged,
              groupNames, BMdir,
-             propertiesBM, paramsBlockMatching, paramsTileConfigurationBM)
+             propertiesBM, paramsBlockMatching, paramsTileConfigurationBM,
+             params_pixels)
