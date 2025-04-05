@@ -1379,7 +1379,7 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
                            clearCacheFn=clearCacheFn)
 
   # Show the full image (not the cropped one used for aligning)
-  cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImg.Montaged.dimension(1)]) # The whole 2D view
+  cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
   imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
                                     matrices,
                                     rotate=None, # None, "right", "left", or "180"
@@ -1389,10 +1389,40 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
 
 
 
+def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNames, BMdir,
+                              propertiesBM, paramsBlockMatching, paramsTileConfigurationBM):
+  # Ensure use_SIFT is false
+  propertiesBM = dict(propertiesBM) # duplicate then edit
+  propertiesBM["use_SIFT"] = False
+  # Crop image if required
+  if properties.get("roi", None) is not None:
+    img = cropImageView(imgSIFT, properties["roi"], properties["interim_scale"])
+  else:
+    img = imgSIFT
 
+  def clearCacheFn(overlap):
+    try:
+      volumeImgMontaged.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
+      imgSIFT.getCache().invalidateAll(overlap) # it's a CellImg because it's not rotated with showAlignedImg above
+    except:
+      printException()
 
-
-
-
-
+  # Compute and save to disk all transforms for all sections
+  matricesBM = alignInChunks(groupNames, BMdir, paramsBlockMatching, None, paramsTileConfigurationBM, propertiesBM,
+                             groupNames, img, fixed_tile_index=paramsTileConfiguration["fixed_tile_index"],
+                             clearCacheFn=clearCacheFn)
+  
+  # Combine matricesSIFT with matricesBM
+  matrices = fuseTranslationMatrices(matricesSIFT, matricesBM)
+  
+  # Show the full image (not the cropped one used for aligning)
+  # with the combined SIFT and blockmatching translations in one single fused matrix
+  # so that the original pixels are interpolated only once.
+  cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
+  imgBM, impBM = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertiesBM,
+                                matricesFused,
+                                rotate=None, # None, "right", "left", or "180"
+                                title_addendum=" blockmatching")
+  
+  imgBM, impBM, matricesFused
 
