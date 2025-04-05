@@ -1351,7 +1351,15 @@ def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtC
         print sys.exc_info()
       
       savePointMatches(g1, g2, pms, tgtCsvDir, params)
-      
+
+
+def cropImageView(img, roi, interim_scale=1.0):
+  x, y, width, height = map(lambda v: int(v * interim_scale + 0.5), roi)
+  img = Views.zeroMin(Views.interval(img,
+                                     [x, y, 0],
+                                     [x + width -1, y + height -1, img.dimension(2) - 1]))
+  return img
+
 
 def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
                      properties, paramsSIFT, paramsPMs, paramsTileConfiguration, params_pixels):
@@ -1360,10 +1368,7 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
   properties["SIFT_validateByFileExists"] = True # Avoid loading and parsing SIFT features just to make sure they are fine.
   # Crop image if required
   if properties.get("roi", None) is not None:
-    x, y, width, height = map(lambda v: int(v * params_pixels["interim_scale"] + 0.5), properties["roi"])
-    img = Views.zeroMin(Views.interval(volumeImgMontaged,
-                                       [x, y, 0],
-                                       [x + width -1, y + height -1, volumeImgMontaged.dimension(2) - 1]))
+    img = cropImageView(volumeImgMontaged, properties["roi"], properties["interim_scale"])
   else:
     img = volumeImgMontaged
   
@@ -1379,7 +1384,7 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
                            clearCacheFn=clearCacheFn)
 
   # Show the full image (not the cropped one used for aligning)
-  cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
+  cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImg.Montaged.dimension(1)]) # The whole 2D view
   imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
                                     matrices,
                                     rotate=None, # None, "right", "left", or "180"
@@ -1389,40 +1394,10 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
 
 
 
-def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNames, BMdir,
-                              propertiesBM, paramsBlockMatching, paramsTileConfigurationBM):
-  # Ensure use_SIFT is false
-  propertiesBM = dict(propertiesBM) # duplicate then edit
-  propertiesBM["use_SIFT"] = False
-  # Crop image if required
-  if properties.get("roi", None) is not None:
-    img = cropImageView(imgSIFT, properties["roi"], properties["interim_scale"])
-  else:
-    img = imgSIFT
 
-  def clearCacheFn(overlap):
-    try:
-      volumeImgMontaged.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
-      imgSIFT.getCache().invalidateAll(overlap) # it's a CellImg because it's not rotated with showAlignedImg above
-    except:
-      printException()
 
-  # Compute and save to disk all transforms for all sections
-  matricesBM = alignInChunks(groupNames, BMdir, paramsBlockMatching, None, paramsTileConfigurationBM, propertiesBM,
-                             groupNames, img, fixed_tile_index=paramsTileConfiguration["fixed_tile_index"],
-                             clearCacheFn=clearCacheFn)
-  
-  # Combine matricesSIFT with matricesBM
-  matrices = fuseTranslationMatrices(matricesSIFT, matricesBM)
-  
-  # Show the full image (not the cropped one used for aligning)
-  # with the combined SIFT and blockmatching translations in one single fused matrix
-  # so that the original pixels are interpolated only once.
-  cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
-  imgBM, impBM = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertiesBM,
-                                matricesFused,
-                                rotate=None, # None, "right", "left", or "180"
-                                title_addendum=" blockmatching")
-  
-  imgBM, impBM, matricesFused
+
+
+
+
 
