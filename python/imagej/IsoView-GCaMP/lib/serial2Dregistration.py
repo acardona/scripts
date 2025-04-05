@@ -1427,6 +1427,8 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
   # with the combined SIFT and blockmatching translations in one single fused matrix
   # so that the original pixels are interpolated only once.
   cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
+  properties["pixelType"] = type(volumeImgMontaged.randomAccess().get())
+  properties["img_dimensions"] = Intervals.dimensionsAsLongArray(volumeImgMontaged)
   imgBM, impBM = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertiesBM,
                                 matricesFused,
                                 rotate=None, # None, "right", "left", or "180"
