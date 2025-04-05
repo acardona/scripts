@@ -39,11 +39,11 @@ volumeImgMontaged, groupNames, tileGroups = runMontaging(
 imgSIFT, impSIFT, matricesSIFT = runSIFTAlignment(
              volumeImgMontaged, groupNames, SIFTdir,
              properties, paramsSIFT, paramsPMs, paramsTileConfiguration,
-             params_pixels)
+             params_pixels, show=False)
 
 # Open the blockmatching finely aligned using chunks
 imgBM, impBM, matricesBM = runBlockMatchingAlignment(
              imgSIFT, matricesSIFT, volumeImgMontaged,
-             groupNames, BMdir,
-             propertiesBM, paramsBlockMatching, paramsTileConfigurationBM,
+             groupNames, BMdir, propertiesBM,
+             paramsSIFT, paramsBlockMatching, paramsTileConfigurationBM,
              params_pixels)
