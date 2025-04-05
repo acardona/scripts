@@ -32,7 +32,8 @@ ranges = [
   #(14514, 14519), # shift 14516: good
   #(15555, 15560), # shift 15556: good
   #(17282, 17286), # shift 17283: good
-  (3308, 3314),
+  #(3308, 3314),
+  (1, 18096)
 ]
 
 #scale = 400.0 / 16000
@@ -42,5 +43,5 @@ scale = 1.0
 targetDir = "/net/fibserver1/raw/MR1.4-2/montages-400_for_12175-19531/"
 
 for r in ranges:
-  copy = duplicateInParallel(imp, range(*r), n_threads=32, shallow=True, show=True, scale=scale)
+  copy = duplicateInParallel(imp, range(*r), n_threads=200, shallow=True, show=True, scale=scale)
   #copy = saveInParallel(targetDir, imp, range(*r), n_threads=32, show=True, scale=scale, incremental=True)
