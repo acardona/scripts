@@ -1386,6 +1386,8 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
 
   # Show the full image (not the cropped one used for aligning)
   cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
+  properties["pixelType"] = type(volumeImgMontaged.randomAccess().get())
+  properties["img_dimensions"] = Intervals.dimensionsAsLongArray(volumeImgMontaged)
   imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
                                     matrices,
                                     rotate=None, # None, "right", "left", or "180"
