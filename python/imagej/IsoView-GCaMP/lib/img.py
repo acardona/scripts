@@ -129,7 +129,8 @@ def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterva
   return cachedCellImg, cell_loader
 
 
-def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=None, title_addendum=""):
+def showAlignedImg(img, cropInterval, groupNames, properties, matrices,
+                   rotate=None, title_addendum="", show=True):
   """
   img: an 8-bit RandomAccessibleInterval
   rotate: "right" or "left" or "180" or None
@@ -163,14 +164,16 @@ def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=N
     img = cellImg
 
   #imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel" + title_addendum)
-  #imp.show()
+  #if show: imp.show()
   
   # Instead use a VirtualStack that shows slice labels
   imp = wrap8bit(img, properties.get("name", "") + " aligned subpixel" + title_addendum, lambda n: groupNames[n-1])
-  imp.show()
-  
-  # Ensure cleanup of threads upon closing the window
-  addWindowListener(imp.getWindow(), lambda event: cellGet.destroy())
+  if show:
+    imp.show()
+    # Ensure cleanup of threads upon closing the window
+    addWindowListener(imp.getWindow(), lambda event: cellGet.destroy())
+  elif properties.get('preload', 0) > 0:
+    syncPrintQ("WARNING won't cleanup preloading ExecutorService.")
   
   return img, imp
 
