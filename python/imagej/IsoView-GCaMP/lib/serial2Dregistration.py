@@ -1368,6 +1368,9 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
   properties = dict(properties) # duplicate then edit
   properties["use_SIFT"] = True
   properties["SIFT_validateByFileExists"] = True # Avoid loading and parsing SIFT features just to make sure they are fine.
+  
+  ensureDirsExist(SIFTdir)
+  
   # Crop image if required
   if properties.get("roi", None) is not None:
     img = cropImageView(volumeImgMontaged, properties["roi"], params_pixels["interim_scale"])
@@ -1404,6 +1407,9 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
   # Ensure use_SIFT is false
   propertiesBM = dict(propertiesBM) # duplicate then edit
   propertiesBM["use_SIFT"] = False
+  
+  ensureDirsExist(BMdir)
+  
   # Crop image if required
   if propertiesBM.get("roi", None) is not None:
     img = cropImageView(imgSIFT, propertiesBM["roi"], params_pixels["interim_scale"])

@@ -1218,11 +1218,11 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
     print "Enter the 'name' of the volume: the folder name containing .dat files."
     return
   
+  ensureDirsExist(tgtDir, montageDir, repairedDir)
+  
   # Find all .dat files, as a sorted list
   # NOTE will be cached into a text file
   filepaths, filepaths_cached = loadFilePaths(srcDir, ".dat", montageDir, "imagefilepaths")
-
-  ensureDirsExist(tgtDir, montageDir, repairedDir)
   
   if os.path.exists(montageDir + "check"):
     check = False
