@@ -721,7 +721,7 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
       # Print failed montages
       syncPrintQ("Montages that failed:\n%s" % "\n".join(map(str, failed)))
       # Save failed montages to disk
-      with open(os.path.join(csvDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss", 'w') + ".csv")) as f:
+      with open(os.path.join(csvDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss") + ".csv"), 'w') as f:
         f.write("\n".join(map(str, failed)))
     else:
       syncPrintQ("No montages known to have failed.")
