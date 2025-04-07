@@ -55,7 +55,7 @@ from functools import partial
 from itertools import izip, islice
 from collections import defaultdict
 # From lib
-from io import SectionCellLoader, writeN5, serialize, deserialize
+from io import SectionCellLoader, writeN5, serialize, deserialize, ensureDirsExist
 from img import lazyCachedCellImg
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException, isThreadDead
 from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures, PointMatches
