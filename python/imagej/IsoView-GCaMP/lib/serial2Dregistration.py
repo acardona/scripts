@@ -557,13 +557,15 @@ def optimize(tiles, paramsTileConfiguration, fixed_tile_indices=None, verbose=Fa
   maxIterations = paramsTileConfiguration["maxIterations"] if maxIterations is None else maxIterations
   damp = paramsTileConfiguration["damp"]
   nThreads = paramsTileConfiguration.get("nThreadsOptimizer", Runtime.getRuntime().availableProcessors())
-  TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
+  es = ErrorStatistic(maxPlateauwidth + 1)
+  TileUtil.optimizeConcurrently(es, maxAllowedError,
                                 maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles),
                                 tc.getFixedTiles(), nThreads, verbose)
+  return maxIterations, es.min, es.max
   
 
 def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-          loaderImp=None, fixed_tile_indices=None, io=True, verboseOptimize=True):
+          loaderImp=None, fixed_tile_indices=None, io=True, verboseOptimize=True, logDict=None):
   if not os.path.exists(csvDir):
     os.makedirs(csvDir) # recursively
   name = "matrices"
@@ -575,7 +577,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   
   # Optimize
   tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties, loaderImp=loaderImp)
-  optimize(tiles, paramsTileConfiguration, fixed_tile_indices, verbose=verboseOptimize)
+  maxIterations, stats_min, stats_max = optimize(tiles, paramsTileConfiguration, fixed_tile_indices, verbose=verboseOptimize)
 
   # Return model matrices as double[] arrays with 6 values
   matrices = []
@@ -591,10 +593,22 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
 
   if io:
     saveMatrices(name, matrices, csvDir)
-  
+ 
+   if logDict:
+     logDict["maxIterations"] = maxIterations
+     logDict["stats_min"] = stats_min
+     logDict["stats_max"] = stats_max
+ 
   return matrices
-  
-  
+
+def writeOptimizerSummaryLog():
+  # The only way is to read the data from the log window
+  text = IJ.getLog()
+  # Last line starting with a number that should match the number of iterations should contain the ending and starting error values
+  # Then starting from the last line, parse an find the highest value.:
+  # TODO
+
+
 def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
                   groupNames, volumeImg, fixed_tile_index=None, clearCacheFn=None):
   """
@@ -642,9 +656,16 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
       print "Loaded", name_i
     else:
       print "Computing", name_i
+      logDict = {}
       matrices = align(filepaths[start:end], csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-                       loaderImp=makeSliceLoader(groupNames, volumeImg), fixed_tile_indices=[fixed], io=False, verboseOptimize=True)
+                       loaderImp=makeSliceLoader(groupNames, volumeImg), fixed_tile_indices=[fixed], io=False,
+                       verboseOptimize=True, logDict=logDict)
       saveMatrices(name_i, matrices, csvDir)
+      with open(os.path.join(csvDir, name_i + "_optimizer_stats.csv"), 'w') as f: # overwrite any existing
+        keys = logDict.keys()
+        f.write(", ".join(keys))
+        f.write("\n")
+        f.write(", ".join(str(logDict[key] for key in keys)) # all are numeric
       # clear cache
       if clearCacheFn:
         clearCacheFn(overlap)
@@ -1403,7 +1424,7 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
 
 def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNames, BMdir,
                               propertiesBM, paramsSIFT, paramsBlockMatching, paramsTileConfigurationBM,
-                              params_pixels):
+                              params_pixels, show=True):
   # Ensure use_SIFT is false
   propertiesBM = dict(propertiesBM) # duplicate then edit
   propertiesBM["use_SIFT"] = False
@@ -1442,7 +1463,7 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
   imgBM, impBM = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertiesBM,
                                 matricesFused,
                                 rotate=None, # None, "right", "left", or "180"
-                                title_addendum=" blockmatching")
+                                title_addendum=" blockmatching", show=show)
   
   return imgBM, impBM, matricesFused
 
