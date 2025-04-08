@@ -1,3 +1,4 @@
+from __future__ import with_statement
 import operator, sys, os
 from java.io import RandomAccessFile, File, FileInputStream
 from java.io import Serializable, FileOutputStream, ObjectOutputStream, FileInputStream, ObjectInputStream
@@ -1064,3 +1065,12 @@ def imageInfo(filepath):
     fr.close() # close the file handle safely and always
 
 
+def writeDictToCSV(filepath, dictionary):
+  """
+  Assumes the parent folder exists, and that the values all have a sensible representation as a string, without commas.
+  """
+  with open(os.path.join(filepath, 'w') as f:
+    keys = dictionary.keys()
+    f.write(", ".join(keys))
+    f.write("\n")
+    f.write(", ".join(str(logDict[key] for key in keys))
