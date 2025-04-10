@@ -53,10 +53,10 @@ paramsTileConfigurationBM = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 5000, # Optimizer iterations for each chunk of chunk_size sections
+  "maxIterations": 20000, # Optimizer iterations for each chunk of chunk_size sections
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
   "nThreadsOptimizer": numCPUs(), # as many as CPU cores
   "chunk_size": 400, # Will align in 50% overlapping chunks for best use of the optimizer
-  "chunk_maxIterations": 40000, # Iterations for the cross-chunk alignment
+  "chunk_maxIterations": 100000, # Iterations for the cross-chunk alignment
   "fixed_tile_index": 2050, # None implies use the middle tile. Otherwise provide an index (0-based)
 }
