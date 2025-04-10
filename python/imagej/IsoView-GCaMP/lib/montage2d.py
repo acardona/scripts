@@ -1317,4 +1317,37 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   return volumeImgMontagedScaled, groupNames, tileGroups
 
 
+def loadMontagedImg(srcDir, montageDir, repairedDir,
+                    to_remove, ignore_images, replace_images,
+                    first_section, last_section, replace_sections,
+                    section_width, section_height, crop_roi, params_pixels,
+                    cache_size=64):
+  """ At full resolution, loaded from the original .DAT files.
+      Assumes matrices for each section exist, otherwise will fail.
+  """
+  filepaths, filepaths_cached = loadFilePaths(srcDir, ".dat", montageDir, "imagefilepaths")
+  #
+  groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, False,
+                                             alternative_dir=repairedDir,
+                                             ignore_images=ignore_images,
+                                             replace_images=replace_images,
+                                             writeDir=montageDir)
+  # Define the range of sections to montage
+  groupNames = groupNames[first_section:last_section]
+  tileGroups = tileGroups[first_section:last_section]
 
+  # Substitute sections with problems for other, adjacent sections
+  for bad, good in replace_sections.iteritems():
+    groupNames[bad] = groupNames[good]
+    tileGroups[bad] = tileGroups[good]
+  #
+  crop_ROI = None
+  if crop_roi:
+    crop_ROI = Roi(*crop_roi)
+  #
+  img = makeVolume(groupNames, tileGroups, section_width, section_height, None, None, None,
+                   None, None, None, montageDir, params_pixels,
+                   show=False, matrices=None, section_offsets=None, title=None, cache_size=cache_size,
+                   showTable=False, crop_ROI=crop_ROI)
+                   
+  return img, groupNames, tileGroups, filepaths
