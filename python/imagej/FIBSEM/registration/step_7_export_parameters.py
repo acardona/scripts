@@ -20,6 +20,9 @@ crop_roi = [0, # X
             section_width,  # width
             section_height] # height
 
+# Rotate the view: None, "right", "left", or "180"
+rotate = None
+
 # Parameters on what to export
 paramsN5 = {
   "block_size" = [256, 256, 64], # e.g., [128,128,128]
