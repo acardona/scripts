@@ -135,6 +135,11 @@ def showAlignedImg(img, cropInterval, groupNames, properties, matrices,
   img: an 8-bit RandomAccessibleInterval
   rotate: "right" or "left" or "180" or None
   """
+  
+  if cropInterval is None:
+    # Full 2D view
+    cropInterval = FinalInterval([img.dimension(0), img.dimension(1)])
+  
   # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
   def loadImg(img, index):
     if isinstance(img, CellImg):
