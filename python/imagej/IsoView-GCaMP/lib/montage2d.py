@@ -2,7 +2,7 @@ from __future__ import with_statement
 import os, re, sys
 from datetime import datetime
 
-from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task, SoftMemoize
+from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task, ParallelTasks
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo, ensureDirsExist, SectionCellLoader
 from lib.img import lazyCachedCellImg
