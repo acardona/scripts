@@ -198,8 +198,9 @@ def newThread(fn, *args, **kwargs):
   return t
 
 class ParallelTasks:
-  def __init__(self, name, exe=None):
-    self.exe = exe if exe else newFixedThreadPool(name=name)
+  def __init__(self, name, exe=None, n_threads=0):
+    self.exe_arg = exe # if not None, won't be shut down when done
+    self.exe = exe if exe else newFixedThreadPool(n_threads=n_threads, name=name)
     self.futures = []
   def add(self, fn, *args, **kwargs):
     future = self.exe.submit(Task(fn, *args, **kwargs))
@@ -226,7 +227,10 @@ class ParallelTasks:
     while len(self.futures) > 0:
       yield self.futures.pop(0).get()
   def destroy(self):
-    self.exe.shutdownNow()
+    if not self.exe_arg:
+      # exe was created new here, hence shut it down
+      self.exe.shutdownNow()
+    self.exe_arg = None
     self.exe = None
     self.futures = None
 
