@@ -730,6 +730,106 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
     exe.shutdown()
 
 
+class CheckSectionFiles(Callable):
+  def __init__(self, groupName_, tilePaths_, check, alternative_dir,
+               ignore_images, alternative_filenames, replace_images):
+    self.groupName_ = groupName_
+    self.tilePaths_ = tilePaths_
+    self.check = check
+    self.alternative_dir = alternative_dir
+    self.ignore_images = ignore_images
+    self.alternative_filenames = alternative_filenames
+    self.replace_images = replace_images
+    
+  def call(self):
+    """
+    Ensure tilePaths are sorted, in place,
+    and check that tiles are of the same dimensions and file size within each section.
+    Return self.groupName_ if it is to be removed, otherwise return None.
+    """
+    # For tiles with a filename containing their position in a grid, like 0-0-0
+    pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
+    
+    def coordsFn(filepath):
+      # Parse the row and col from the e.g., 0-0-0 string in the file name
+      row, col = re.match(pattern, filepath[filepath.rfind('_')+1:]).groups()
+      return int(row) * 10 + int(col) # Assumes no more than 9 rows or cols
+    
+    self.tilePaths_.sort(key=coordsFn) # in place
+
+    # Replace and remove filepaths as needed
+    if self.alternative_dir or len(self.ignore_images) > 0:
+      drop = []
+      for i, tilePath in enumerate(self.tilePaths_):
+        filename = os.path.basename(tilePath)
+        # Check if tilePath is to be ignored and remove it from the group
+        if filename in self.ignore_images:
+          drop.append(i)
+        # Check if tilePath has to be replaced
+        elif filename in self.alternative_filenames:
+          tilePaths_[i] = os.path.join(alternative_dir, filename)
+          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
+        elif filename in self.replace_images:
+          tilePaths_[i] = os.path.join(self.alternative_dir, self.replace_images[filename])
+          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
+      # Remove from group any tilePath to ignore
+      for i in drop:
+        syncPrintQ("Will ignore image %s" % self.tilePaths_[i])
+        del self.tilePaths_[i]
+      # If no tiles left, remove section
+      if 0 == len(self.tilePaths_):
+        # Return the name of the section to be removed, and to be added to to_remove
+        return self.groupName_
+
+    if self.check:
+      return self.checkFileProperties()
+    # All good with the section
+    return None
+   
+
+  def checkFileProperties(self):
+    # Check that all tiles have the same dimensions (can't check for same file size due to possible replacements)
+    widths = []
+    heights = []
+    #fileSizes = []  # can't compare file sizes: some my have been replaced by TIFF files etc. and differ while having the same width and height
+    drop = set()
+    for i, tilePath in enumerate(self.tilePaths_):
+      try:
+        if tilePath.endswith(".dat"):
+          header = readFIBSEMHeader(tilePath)
+          if header is None:
+              drop.add(i)
+              syncPrintQ("%s HEADER: %s" % (self.groupName_, str(type(header))))
+          else:
+            widths.append(header.xRes)
+            heights.append(header.yRes)
+            #fileSizes.append(os.stat(tilePath).st_size)
+            #syncPrintQ("tilePath: %s\ndimensions: %i, %i" % (tilePath, header.xRes, header.yRes))
+        else:
+          # Not a .DAT file
+          info = imageInfo(tilePath)
+          widths.append(info["width"])
+          heights.append(info["height"])
+          # ignore file sizes
+      except:
+        syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
+        drop.add(i)
+    # End of for loop
+    
+    if not (1 == len(set(widths)) and 1 == len(set(heights))): # and 1 == len(set(fileSizes)):
+      syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n%s\n%s" %(self.groupName_, "\n".join(map(str, izip(widths, heights)))), copy_to_stdout=True)
+      # Return the groupName_ so that this section can be added to to_remove and then deleted
+      return self.groupName_
+
+    # If all tiles were removed, then:
+    if len(drop) == len(self.tilePaths_):
+      syncPrintQ("All tiles dropped for section: %s" % self.groupName_, copy_to_stdout=True)
+      # Return the groupName_ so that this section can be added to to_remove and then deleted
+      return self.groupName_
+    
+    # Keep the section: there is at least one readable tile file, and when more than one, all have the same dimensions
+    return None
+    
 
 
 def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_images=set(), writeDir=None, replace_images={}):
@@ -763,78 +863,21 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
   for af in alternative_filenames:
       syncPrintQ("Available alternative: %s" % af)
 
-  pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
-  def coordsFn(a):
-    row, col = re.match(pattern, filepath[a.rfind('_')+1:]).groups()
-    return int(row) * 10 + int(col) # Assumes no more than 9 rows or cols
-
-  # Ensure tilePaths are sorted,
-  # and check that tiles are of the same dimensions and file size within each section:
-  for groupName_, tilePaths_ in groups.iteritems():
-    tilePaths_.sort(key=coordsFn) # in place
-
-    # Replace and remove filepaths as needed
-    if alternative_dir or len(ignore_images) > 0:
-      drop = []
-      for i, tilePath in enumerate(tilePaths_):
-        filename = os.path.basename(tilePath)
-        # Check if tilePath is to be ignored and remove it from the group
-        if filename in ignore_images:
-          drop.append(i)
-        # Check if tilePath has to be replaced
-        elif filename in alternative_filenames:
-          tilePaths_[i] = os.path.join(alternative_dir, filename)
-          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
-        elif filename in replace_images:
-          tilePaths_[i] = os.path.join(alternative_dir, replace_images[filename])
-          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
-      # Remove from group any tilePath to ignore
-      for i in drop:
-        syncPrintQ("Will ignore image %s" % tilePaths_[i])
-        del tilePaths_[i]
-      # If no tiles left, remove section
-      if 0 == len(tilePaths_):
+  try:
+    n_threads = max(1, numCPUs() -1)
+    w = ParallelTasks("checkSectionFiles", n_threads=n_threads))
+    # Note CheckSectionFiles will modify each tilePaths_ for each section in place.
+    for groupName_ in w.chunkConsume(n_threads * 2,
+                                     CheckSectionFiles(groupName_, tilePaths_, check, alternative_dir,
+                                                       ignore_images, alternative_filenames, replace_images)
+                                     for groupName_, tilePaths_ in groups.iteritems()):
+      if groupName_:
+        # If not None then remove it
         to_remove.add(groupName_)
-
-    if not check:
-      continue
-
-    # Check that all tiles have the same dimensions and the same file size
-    widths = []
-    heights = []
-    fileSizes = []
-    drop = set()
-    for i, tilePath in enumerate(tilePaths_):
-      try:
-        if tilePath.endswith(".dat"):
-          header = readFIBSEMHeader(tilePath)
-          if header is None:
-              drop.add(i)
-              syncPrintQ("%s HEADER: %s" % (groupName_, str(type(header))))
-          else:
-            widths.append(header.xRes)
-            heights.append(header.yRes)
-            #fileSizes.append(os.stat(tilePath).st_size)
-            #syncPrintQ("tilePath: %s\ndimensions: %i, %i" % (tilePath, header.xRes, header.yRes))
-        else:
-          # Not a .DAT file
-          info = imageInfo(tilePath)
-          widths.append(info["width"])
-          heights.append(info["height"])
-          # ignore file sizes
-      except:
-        syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
-        drop.add(i)
-      if 1 == len(set(widths)) and 1 == len(set(heights)): # and 1 == len(set(fileSizes)):
-        # all tiles are the same
-        pass
-      else:
-        to_remove.add(groupName_)
-        syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n%s\n%s" %(groupName_, "\n".join(map(str, izip(widths, heights)))), copy_to_stdout=True)
-
-    # If all tiles were removed, then:
-    if len(drop) == len(tilePaths_):
-      to_remove.add(groupName_)
+        del groups[groupName_]
+        syncPrintQ("Will ignore section: " + groupName_, copy_to_stdout=True)
+  finally:
+    w.destroy()    
 
   for groupName_ in to_remove:
     del groups[groupName_]
@@ -1224,11 +1267,9 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   # NOTE will be cached into a text file
   filepaths, filepaths_cached = loadFilePaths(srcDir, ".dat", montageDir, "imagefilepaths")
   
-  if os.path.exists(montageDir + "check"):
-    check = False
-  else:
-    check = True
-    File(montageDir + "check").createNewFile()  # a new empty file to serve as marker
+  # Determine whether to run an expensive, comprehensive file check for all image tiles
+  # that also checks for consistency of tile dimensions within each section
+  check = not os.path.exists(os.path.join(montageDir, "check"))
 
   # Sorted group names, one per section
   groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
@@ -1236,6 +1277,10 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
                                              ignore_images=ignore_images,
                                              replace_images=replace_images,
                                              writeDir=montageDir)
+
+  if check:
+    # Mark that a comprehensive file check has successfully completed by writing a marker file
+    File(os.path.join(montageDir, "check")).createNewFile()  # a new empty file to serve as marker  
 
   # Define the range of sections to montage
   groupNames = groupNames[first_section:last_section]
