@@ -594,10 +594,10 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   if io:
     saveMatrices(name, matrices, csvDir)
  
-   if logDict:
-     logDict["maxIterations"] = maxIterations
-     logDict["stats_min"] = stats_min
-     logDict["stats_max"] = stats_max
+  if logDict:
+    logDict["maxIterations"] = maxIterations
+    logDict["stats_min"] = stats_min
+    logDict["stats_max"] = stats_max
  
   return matrices
 
