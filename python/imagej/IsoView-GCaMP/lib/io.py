@@ -1069,8 +1069,8 @@ def writeDictToCSV(filepath, dictionary):
   """
   Assumes the parent folder exists, and that the values all have a sensible representation as a string, without commas.
   """
-  with open(os.path.join(filepath, 'w') as f:
+  with open(os.path.join(filepath, 'w')) as f:
     keys = dictionary.keys()
     f.write(", ".join(keys))
     f.write("\n")
-    f.write(", ".join(str(logDict[key] for key in keys))
+    f.write(", ".join(str(logDict[key]) for key in keys))
