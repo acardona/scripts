@@ -868,9 +868,9 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
     w = ParallelTasks("checkSectionFiles", n_threads=n_threads)
     # Note CheckSectionFiles will modify each tilePaths_ for each section in place.
     for groupName_ in w.chunkConsume(n_threads * 2,
-                                     CheckSectionFiles(groupName_, tilePaths_, check, alternative_dir,
+                                     (CheckSectionFiles(groupName_, tilePaths_, check, alternative_dir,
                                                        ignore_images, alternative_filenames, replace_images)
-                                     for groupName_, tilePaths_ in groups.iteritems()):
+                                      for groupName_, tilePaths_ in groups.iteritems())):
       if groupName_:
         # If not None then remove it
         to_remove.add(groupName_)
