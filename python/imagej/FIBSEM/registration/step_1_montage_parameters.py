@@ -77,7 +77,7 @@ paramsTileConf = {
                           # Consider that (numCPUs / (nThreadsOptimizer/2)) sections will be montaged concurrently.
 }
 
-# Sections known to have problems (found via check = True above)
+# Sections known to have problems (more will be added when running a file check the first time)
 # Add entries like this, with a comment for the record":
 # "Merlin-WEMS_24-02-27_170732_" # added 0-0-0 tile to ignore: truncated, no pixels, only header
 to_remove = set([
