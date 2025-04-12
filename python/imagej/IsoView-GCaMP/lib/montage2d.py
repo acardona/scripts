@@ -863,9 +863,9 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
   for af in alternative_filenames:
       syncPrintQ("Available alternative: %s" % af)
 
+  n_threads = max(1, numCPUs() -1)
   w = ParallelTasks("checkSectionFiles", n_threads=n_threads)
   try:
-    n_threads = max(1, numCPUs() -1)
     # Note CheckSectionFiles will modify each tilePaths_ for each section in place.
     for groupName_ in w.chunkConsume(n_threads * 2,
                                      (CheckSectionFiles(groupName_, tilePaths_, check, alternative_dir,
