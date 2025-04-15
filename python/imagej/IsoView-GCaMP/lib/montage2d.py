@@ -498,7 +498,7 @@ def singleTile(tilePath, width, height, params_pixels, sdx=0, sdy=0, matrix=None
   fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
   aimg = fn(ip.getPixels(), [width, height])
   imp.flush()
-  return aimg
+  return aimg, ImagePlus("", ip)
 
 
 class SectionLoader(CacheLoader):
@@ -557,7 +557,7 @@ class SectionLoader(CacheLoader):
                              matrix, self.params_pixels,
                              sdx=sdx, sdy=sdy)        
     elif 1 == len(tilePaths):
-      aimg = singleTile(tilePaths[0], width, height, self.params_pixels, sdx=sdx, sdy=sdy, matrix=matrix)
+      aimg, imp = singleTile(tilePaths[0], width, height, self.params_pixels, sdx=sdx, sdy=sdy, matrix=matrix)
     else:
       # return empty Cell
       syncPrintQ("WARNING: number of tiles isn't 4 or 1")
@@ -625,7 +625,7 @@ class MontageAndSave(Callable):
       imp = self.montageAndSnapshot(groupName)
     else:
       section_width, section_height, params_pixels = self.args[10:13]
-      imp = singleTile(tilePaths[0], section_width, section_height, params_pixels, sdx=0, sdy=0, matrix=None, center=True)
+      aimg, imp = singleTile(tilePaths[0], section_width, section_height, params_pixels, sdx=0, sdy=0, matrix=None, center=True)
     #
     FileSaver(imp).saveAsTiff(scaled_image_path)
     return True
