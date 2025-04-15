@@ -1239,11 +1239,12 @@ def fuseMatrices(matricesSIFT, matricesBM):
     # The SIFT alignment will have been expressed as integers, so correct for that
     matrices.append(array([1, 0, int(m1[2] + 0.5) + m2[2], 0, 1, int(m1[5] + 0.5) + m2[5]], 'd'))
 
-def fuseTranslationMatrices(matrices1, matrices2):
-  return [array([1, 0, m1[2] + m2[2],
-                 0, 1, m1[5] + m2[5]], 'd')
-          for m1, m2 in izip(matrices1, matrices2)]
 
+def fuseTranslationMatrices(matricesList):
+  # matricesList is a list of lists of arrays computed with a TranslationModel2D
+  return [array([1, 0, sum(m[2] for m in ms),
+                 0, 1, sum(m[5] for m in ms)], 'd')
+          for ms in izip(*matricesList)]
 
 
 def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
