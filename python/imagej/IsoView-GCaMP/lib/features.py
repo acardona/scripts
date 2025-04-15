@@ -164,6 +164,15 @@ def saveFeatures(img_filename, directory, features, params):
     syncPrint(str(sys.exc_info()))
 
 
+def deleteFeatures(img_filename, directory):
+  path = os.path.join(directory, basename(img_filename)) + ".features.csv"
+  try:
+    if os.path.exists(path):
+      os.remove(path)
+  except:
+    syncPrint("Failed to delete features file at %s" % path)
+
+
 def checkParams(params, names, values, epsilon):
   """ params: the actual parameters to use.
       names: names of parameters in the CSV file.
@@ -311,6 +320,15 @@ def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.
     syncPrint("Could not load pointmatches for pair %s, %s" % (img1_filename, img2_filename))
     printException()
     return None
+
+
+def deletePointMatches(img_filename, img2_filename, directory):
+  path = os.path.join(directory, basename(img1_filename) + '.' + basename(img2_filename) + ".pointmatches.csv")
+  try:
+    if os.path.exists(path):
+      os.remove(path)
+  except:
+    syncPrint("Failed to delete pointmatches file at %s" % path)
 
 
 def makeFeatures(img_filename, img_loader, getCalibration, csv_dir, params):
