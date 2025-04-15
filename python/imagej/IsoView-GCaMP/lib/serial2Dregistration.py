@@ -53,12 +53,12 @@ from java.util.concurrent import Executors, TimeUnit
 from jarray import zeros, array
 from functools import partial
 from itertools import izip, islice
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 # From lib
 from io import SectionCellLoader, writeN5, serialize, deserialize, ensureDirsExist
 from img import lazyCachedCellImg
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException, isThreadDead
-from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures, PointMatches
+from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures, PointMatches, deleteFeatures, deletePointMatches
 from registration import loadMatrices, saveMatrices
 from ui import showStack, wrap, ExecutorCloser
 from tables import showTable
@@ -1217,24 +1217,29 @@ def samplePointMatches(pointmatches, maximum=1000):
 
 
 
-def computeShifts(groupNames, csvDir, threshold, params, properties, shifts_filename):
+def computeShifts(groupNames, csvDir, threshold, paramsPM, properties, edit=False):
   """
   For each groupName,
   reads the pointmatches file in csvDir with its subsequent section only (ignoring the rest),
-  takes the median subset via samplePointMatches,
   then computes the translation via fitting a TransformModel2D,
   determines whether the translation is bigger than threshold,
-  and prints a list of translations for each section to be used as section shifts.
+  and returns, for each section, the cummulative shifts in X and Y, as a dictionary.
+  
+  When remove is True, the csv file for the pointmatches will be removed when there is a shift.
   
   These shifts are useful for re-rendering images prior to re-extracting features,
-  to avoid large shifts that the optimizer would need a lot of iterations to resolve.
+  to avoid large shifts that the optimizer would need a lot of iterations to resolve,
+  and which the alignInChunks can't resolve, only smooth out, by design.
+  
+  Returns a list of cumulative (dx, dy) values, indexed like groupNames.
   """
+  shifts = {}
+  shifts[groupNames[0]] = (0, 0)
+  cummulative_dx, cummulative_dy = 0, 0
   with open(os.path.join(csvDir, shifts_filename), 'w') as f:
-    for j in xrange(len(groupNames)):
-      if 0 == j:
-        continue
+    for j in xrange(1, len(groupNames)):
       # Load pointmatches
-      i, j, pointmatches = loadPointMatchesPlus(groupNames, j-1, j, csvDir, params, properties)
+      i, j, pointmatches = loadPointMatchesPlus(groupNames, j-1, j, csvDir, paramsPM, properties)
       # Compute translation model
       model = TranslationModel2D()
       modelFound = model.fit(pointmatches)
@@ -1243,12 +1248,19 @@ def computeShifts(groupNames, csvDir, threshold, params, properties, shifts_file
       model.toArray(matrix)
       dx = matrix[4]
       dy = matrix[5]
-      # If larger than 1 pixel in X or Y, consider this a shift
+      # If larger than threshold pixel in X or Y, consider this a shift
       if abs(dx) > threshold or abs(dy) > threshold:
-        s = "[%i, %i, %.1f, %.1f, '%s.%s']," % (i, j, dx, dy, groupNames[i], groupNames[j])
-        syncPrintQ(s)
-        f.write(s)
-        f.write('\n')
+        cummulative_dx += dx
+        cummulative_dy += dy
+      # Delete all extracted SIFT features and associated pointmatches after the first shift:
+      # they'd be out of sync with the shifted images
+      if edit and (0 != cummulative_dx or 0 != cummulative_dy):
+        deleteFeatures(groupNames[j], csvDir) # will need to be re-extracted, since their location won't match the underlying image
+        deletePointMatches(groupNames[i], groupNames[j], csvDir)
+      # 
+      shifts[groupNames[j]] = (cummulative_dx, cummulative_dy)
+  #
+  return shifts
 
 
 def makeFilterFeaturesFn(model_path, model_width):
@@ -1508,3 +1520,76 @@ def loadAlignedImage(srcDir, repairedDir, montageDir,
                             rotate=None, # None, "right", "left", or "180"
                             title_addendum=" aligned", show=False)
   return img, imp
+  
+
+def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
+                      paramsSIFT, paramsPMs, paramsTileConfiguration):
+  """
+  Ensure SIFT features and pointmatches for all adjacent pairs of sections exist,
+  and then compute the translation between sections.
+  When the translation is larger than properties['shift_threshold'], it gets accumulated.
+  The dictionary of shifts with groupName keys and (x, y) translation values for each section is returned.
+  It is also cached to disk under SIFTdir.
+  And from the point onwards that a shift is found, the SIFT features files are deleted.
+  """
+  path = os.path.join(SIFTdir, "shifts.csv")
+  if os.path.exists(path):
+    try:
+      with open(path, 'r') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+        # Parse and validate
+        shifts = {}
+        for i, (groupName, dx, dy) in enumerate(reader):
+          if groupName != groupNames[i]:
+            syncPrintQ("shifts.csv is invalid: will recompute shifts.")
+            break
+          shifts[groupName] = (dx, dy)
+        return shifts
+    except:
+      syncPrintQ("Could not load shifts from path %s" % path)
+      syncPrintQ(str(sys.exc_info()))
+  
+  n_adjacent = 1
+  # Ensure all SIFT features and all pairwise pointmatches have been extracted.
+  ensurePointMatches(filepaths, SIFTdir, paramsPMs, paramsSIFT, n_adjacent,
+                     properties, loaderImp=makeSliceLoader(groupNames, imgMontaged))
+  
+  # Threshold value in pixels, in the coordinate space of the exported scaled down montages
+  threshold = int(properties.get("shift_threshold", 10) * properties['scale'] + 0.5)
+  shifts = computeShifts(groupNames, SIFTdir, threshold, paramsPMs, properties, edit=True)
+  
+  try:
+    with open(path, 'w') as csvfile:
+      w = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
+      for groupName in sorted(shifts.keys()):
+        dx, dy = shifts[groupName]
+        w.writerow((groupName, dx, dy))
+      # Ensure file is written to disk
+      csvfile.flush()
+      os.fsync(csvfile.fileno())
+  except:
+    syncPrint("Failed to save shifts at path %s" % path)
+    syncPrint(str(sys.exc_info()))
+  
+  # Express shifts as translation matrices
+  matrices = [array([1, 0, dx, 0, 1, dy], 'd')
+              for dx, dy in (shifts[groupName] for groupName in groupNames)]
+  
+  # Prepare parameters for showAlignedImg
+  cropInterval = FinalInterval([imgMontaged.dimension(0), imgMontaged.dimension(1)]) # The whole 2D view
+  properties = {
+    "name": name,
+    "pixelType": type(imgMontaged.randomAccess().get()),
+    "img_dimensions": Intervals.dimensionsAsLongArray(imgMontaged),
+    "preload": 0, # don't
+  }
+  
+  # View the imgMontaged with shifts
+  img, imp = showAlignedImg(imgMontaged, cropInterval, groupNames, properties,
+                            matrices,
+                            rotate=None, # None, "right", "left", or "180"
+                            title_addendum=" shifted", show=False)
+  
+  return img, imp, shifts
+
+
