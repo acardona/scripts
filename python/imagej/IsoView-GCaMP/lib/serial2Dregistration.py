@@ -1522,8 +1522,7 @@ def loadAlignedImage(srcDir, repairedDir, montageDir,
   return img, imp
   
 
-def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
-                      paramsSIFT, paramsPMs, paramsTileConfiguration):
+def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, paramsPMs):
   """
   Ensure SIFT features and pointmatches for all adjacent pairs of sections exist,
   and then compute the translation between sections.
