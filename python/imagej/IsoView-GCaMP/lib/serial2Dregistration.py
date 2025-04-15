@@ -1500,10 +1500,18 @@ def loadAlignedImage(srcDir, repairedDir, montageDir,
         section_width, section_height, crop_roi, params_pixels,
         cache_size=0) # no cache, each slice will be loaded only once
 
-  # Load matrices and fuse them, since the BM one is relative to the SIFT one
+  # Load matrices and fuse them, since they depend on each other
+  matricesList = []
+  matricesShifts = loadMatrices("matrices-shifts", SIFTdir)
+  if matricesShifts:
+    matricesList.append(matricesShifts)
   matricesSIFT = loadMatrices("matrices", SIFTdir)
+  if matricesSIFT:
+    matricesList.append(matricesSIFT)
   matricesBM = loadMatrices("matrices", BMdir)
-  matricesFused = fuseTranslationMatrices(matricesSIFT, matricesBM)
+  if matricesBM:
+    matricesList.append(matricesBM)
+  matricesFused = fuseTranslationMatrices(matricesList)
 
   # Prepare parameters for showAlignedImg
   cropInterval = FinalInterval([imgMontaged.dimension(0), imgMontaged.dimension(1)]) # The whole 2D view
