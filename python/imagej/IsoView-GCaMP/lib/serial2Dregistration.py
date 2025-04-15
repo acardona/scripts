@@ -1574,6 +1574,9 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, 
   matrices = [array([1, 0, dx, 0, 1, dy], 'd')
               for dx, dy in (shifts[groupName] for groupName in groupNames)]
   
+  # Write shift matrices to disk
+  saveMatrices("matrices-shifts", matrices, SIFTdir)
+  
   # Prepare parameters for showAlignedImg
   cropInterval = FinalInterval([imgMontaged.dimension(0), imgMontaged.dimension(1)]) # The whole 2D view
   properties = {
@@ -1589,6 +1592,6 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, 
                             rotate=None, # None, "right", "left", or "180"
                             title_addendum=" shifted", show=False)
   
-  return img, imp, shifts
+  return img, imp, matrices, shifts
 
 
