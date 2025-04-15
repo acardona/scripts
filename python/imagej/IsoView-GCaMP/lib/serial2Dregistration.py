@@ -1464,7 +1464,7 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
                              clearCacheFn=clearCacheFn)
   
   # Combine matricesSIFT with matricesBM
-  matricesFused = fuseTranslationMatrices(matricesSIFT, matricesBM)
+  matricesFused = fuseTranslationMatrices([matricesSIFT, matricesBM])
   
   # Show the full image (not the cropped one used for aligning)
   # with the combined SIFT and blockmatching translations in one single fused matrix
