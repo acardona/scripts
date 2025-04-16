@@ -597,12 +597,7 @@ class MontageAndSave(Callable):
     else:
       img = ms.montagedImg(section_width, section_height, None, params_pixels, sdx=0, sdy=0)
       ip = ShortProcessor(section_width, section_height, img.update(None).getCurrentStorageArray(), None)
-    # Save the image, scaled if required
-    imp = ImagePlus(groupName, ip)
-    k = params_pixels.get("interim_scale", 1.0)
-    if k < 1.0:
-      imp = imp.resize(int(section_width * k + 0.5), int(section_height * k + 0.5), "bilinear")
-    return imp
+    return ImagePlus(groupName, ip)
   
   def callImpl(self):
     groupName = self.args[0]
@@ -621,12 +616,15 @@ class MontageAndSave(Callable):
         return True
     # Else, generate both, overwriting the image.
     # If the matrices exists but the scaled image doesn't, the matrices will simply be loaded, not computed.
+    section_width, section_height, params_pixels = self.args[10:13]
     if len(tilePaths) > 1:
       imp = self.montageAndSnapshot(groupName)
     else:
-      section_width, section_height, params_pixels = self.args[10:13]
       aimg, imp = singleTile(tilePaths[0], section_width, section_height, params_pixels, sdx=0, sdy=0, matrix=None, center=True)
-    #
+    # Save the image, scaled if required
+    k = params_pixels.get("interim_scale", 1.0)
+    if k < 1.0:
+      imp = imp.resize(int(section_width * k + 0.5), int(section_height * k + 0.5), "bilinear")
     FileSaver(imp).saveAsTiff(scaled_image_path)
     return True
 
