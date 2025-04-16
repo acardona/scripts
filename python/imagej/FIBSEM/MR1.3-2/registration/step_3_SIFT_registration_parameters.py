@@ -31,10 +31,10 @@ properties = {
  'name': name,
  'scale': 0.5, # Compounds with montaging interim_scale
  'n_threads': numCPUs(),
- 'roi': [3600, # x      -  [x, y, width, height] or None. To e.g. extract SIFT features from center part only.
-         1800, # y     NOTE: in full image resolution coordinates.
-         7200, # width
-         8200], # height
+ 'roi': None, #[3600, # x      -  [x, y, width, height] or None. To e.g. extract SIFT features from center part only.
+         #1800, # y     NOTE: in full image resolution coordinates.
+         #7200, # width
+         #8200], # height
  'RANSAC_iterations': 1000,
  'RANSAC_maxEpsilon': 25, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
  'RANSAC_minInlierRatio': 0.01,
