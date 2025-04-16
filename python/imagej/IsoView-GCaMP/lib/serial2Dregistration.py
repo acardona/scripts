@@ -58,7 +58,7 @@ from collections import defaultdict, OrderedDict
 from io import SectionCellLoader, writeN5, serialize, deserialize, ensureDirsExist
 from img import lazyCachedCellImg
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException, isThreadDead
-from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures, PointMatches, deleteFeatures, deletePointMatches
+from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures, PointMatches, deletePointMatches
 from registration import loadMatrices, saveMatrices
 from ui import showStack, wrap, ExecutorCloser
 from tables import showTable
@@ -345,6 +345,15 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
   except:
     printException()
   return features
+
+
+def deleteFeatures(img_filename, directory):
+  path = os.path.join(directory, basename(img_filename)) + ".SIFT-features.obj"
+  try:
+    if os.path.exists(path):
+      os.remove(path)
+  except:
+    syncPrint("Failed to delete features file at %s" % path)
 
 
 def extractSIFTMatches(filepaths, index1, index2, params, paramsSIFT, properties, csvDir, loaderImp=None):

@@ -164,15 +164,6 @@ def saveFeatures(img_filename, directory, features, params):
     syncPrint(str(sys.exc_info()))
 
 
-def deleteFeatures(img_filename, directory):
-  path = os.path.join(directory, basename(img_filename)) + ".features.csv"
-  try:
-    if os.path.exists(path):
-      os.remove(path)
-  except:
-    syncPrint("Failed to delete features file at %s" % path)
-
-
 def checkParams(params, names, values, epsilon):
   """ params: the actual parameters to use.
       names: names of parameters in the CSV file.
