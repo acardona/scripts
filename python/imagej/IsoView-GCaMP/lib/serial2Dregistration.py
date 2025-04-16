@@ -1236,29 +1236,28 @@ def computeShifts(groupNames, csvDir, threshold, paramsPM, properties, edit=Fals
   shifts = {}
   shifts[groupNames[0]] = (0, 0)
   cummulative_dx, cummulative_dy = 0, 0
-  with open(os.path.join(csvDir, shifts_filename), 'w') as f:
-    for j in xrange(1, len(groupNames)):
-      # Load pointmatches
-      i, j, pointmatches = loadPointMatchesPlus(groupNames, j-1, j, csvDir, paramsPM, properties)
-      # Compute translation model
-      model = TranslationModel2D()
-      modelFound = model.fit(pointmatches)
-      # Extract translation
-      matrix = zeros(6, 'd')
-      model.toArray(matrix)
-      dx = matrix[4]
-      dy = matrix[5]
-      # If larger than threshold pixel in X or Y, consider this a shift
-      if abs(dx) > threshold or abs(dy) > threshold:
-        cummulative_dx += dx
-        cummulative_dy += dy
-      # Delete all extracted SIFT features and associated pointmatches after the first shift:
-      # they'd be out of sync with the shifted images
-      if edit and (0 != cummulative_dx or 0 != cummulative_dy):
-        deleteFeatures(groupNames[j], csvDir) # will need to be re-extracted, since their location won't match the underlying image
-        deletePointMatches(groupNames[i], groupNames[j], csvDir)
-      # 
-      shifts[groupNames[j]] = (cummulative_dx, cummulative_dy)
+  for j in xrange(1, len(groupNames)):
+    # Load pointmatches
+    i, j, pointmatches = loadPointMatchesPlus(groupNames, j-1, j, csvDir, paramsPM, properties)
+    # Compute translation model
+    model = TranslationModel2D()
+    modelFound = model.fit(pointmatches)
+    # Extract translation
+    matrix = zeros(6, 'd')
+    model.toArray(matrix)
+    dx = matrix[4]
+    dy = matrix[5]
+    # If larger than threshold pixel in X or Y, consider this a shift
+    if abs(dx) > threshold or abs(dy) > threshold:
+      cummulative_dx += dx
+      cummulative_dy += dy
+    # Delete all extracted SIFT features and associated pointmatches after the first shift:
+    # they'd be out of sync with the shifted images
+    if edit and (0 != cummulative_dx or 0 != cummulative_dy):
+      deleteFeatures(groupNames[j], csvDir) # will need to be re-extracted, since their location won't match the underlying image
+      deletePointMatches(groupNames[i], groupNames[j], csvDir)
+    # 
+    shifts[groupNames[j]] = (cummulative_dx, cummulative_dy)
   #
   return shifts
 
