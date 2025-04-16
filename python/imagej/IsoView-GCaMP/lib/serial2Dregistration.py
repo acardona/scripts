@@ -1538,7 +1538,7 @@ def loadAlignedImage(srcDir, repairedDir, montageDir,
   return img, imp
   
 
-def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, paramsPMs):
+def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, paramsPMs, show=False):
   """
   Ensure SIFT features and pointmatches for all adjacent pairs of sections exist,
   and then compute the translation between sections.
@@ -1571,7 +1571,7 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, 
   else:
     n_adjacent = 1
     # Ensure all SIFT features and all pairwise pointmatches have been extracted.
-    ensurePointMatches(filepaths, SIFTdir, paramsPMs, paramsSIFT, n_adjacent,
+    ensurePointMatches(groupNames, SIFTdir, paramsPMs, paramsSIFT, n_adjacent,
                        properties, loaderImp=makeSliceLoader(groupNames, imgMontaged))
     # Threshold value in pixels, in the coordinate space of the exported scaled down montages
     threshold = int(properties.get("shift_threshold", 10) * properties['scale'] + 0.5)
@@ -1600,18 +1600,13 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, 
 
   # Prepare parameters for showAlignedImg
   cropInterval = FinalInterval([imgMontaged.dimension(0), imgMontaged.dimension(1)]) # The whole 2D view
-  properties = {
-    "name": name,
-    "pixelType": type(imgMontaged.randomAccess().get()),
-    "img_dimensions": Intervals.dimensionsAsLongArray(imgMontaged),
-    "preload": 0, # don't
-  }
+  properties["preload"] = 0 # don't
   
   # View the imgMontaged with shifts
   img, imp = showAlignedImg(imgMontaged, cropInterval, groupNames, properties,
                             matrices,
                             rotate=None, # None, "right", "left", or "180"
-                            title_addendum=" shifted", show=False)
+                            title_addendum=" shifted", show=show)
   
   return img, imp, matrices, shifts
 
