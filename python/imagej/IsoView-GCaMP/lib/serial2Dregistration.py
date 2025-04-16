@@ -1539,6 +1539,12 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, 
   It is also cached to disk under SIFTdir.
   And from the point onwards that a shift is found, the SIFT features files are deleted.
   """
+  properties = dict(properties) # duplicate then edit
+  properties["use_SIFT"] = True
+  properties["SIFT_validateByFileExists"] = True # Avoid loading and parsing SIFT features just to make sure they are fine.
+  properties["pixelType"] = type(imgMontaged.randomAccess().get())
+  properties["img_dimensions"] = Intervals.dimensionsAsLongArray(imgMontaged)
+  
   path_shifts = os.path.join(SIFTdir, "shifts.csv")
   if os.path.exists(path_shifts):
     try:
