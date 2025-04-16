@@ -1564,7 +1564,6 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, 
     # Ensure all SIFT features and all pairwise pointmatches have been extracted.
     ensurePointMatches(filepaths, SIFTdir, paramsPMs, paramsSIFT, n_adjacent,
                        properties, loaderImp=makeSliceLoader(groupNames, imgMontaged))
-  
     # Threshold value in pixels, in the coordinate space of the exported scaled down montages
     threshold = int(properties.get("shift_threshold", 10) * properties['scale'] + 0.5)
     shifts = computeShifts(groupNames, SIFTdir, threshold, paramsPMs, properties, edit=True)
