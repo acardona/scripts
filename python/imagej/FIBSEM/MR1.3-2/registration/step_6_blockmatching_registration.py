@@ -36,14 +36,19 @@ volumeImgMontaged, groupNames, tileGroups = runMontaging(
              showTable=False, show=False)
 
 # Open the stack pre-aligned with SIFT features using chunks
-imgSIFT, impSIFT, matricesSIFT = runSIFTAlignment(
+#imgSIFT, impSIFT, matricesSIFT = runSIFTAlignment(
+#             volumeImgMontaged, groupNames, SIFTdir,
+#             properties, paramsSIFT, paramsPMs, paramsTileConfiguration,
+#             params_pixels, show=False)
+
+# Open the stack of shifted montages, with shifts computed with a TranslationModel2D using SIFT features and pointmatches
+imgShift, impShift, matricesShifts, shifts = runShiftDetection(
              volumeImgMontaged, groupNames, SIFTdir,
-             properties, paramsSIFT, paramsPMs, paramsTileConfiguration,
-             params_pixels, show=False)
+             properties, paramsSIFT, paramsPMs, show=False)
 
 # Open the blockmatching finely aligned using chunks
 imgBM, impBM, matricesBM = runBlockMatchingAlignment(
-             imgSIFT, matricesSIFT, volumeImgMontaged,
+             imgShift, matricesShifts, volumeImgMontaged,
              groupNames, BMdir, propertiesBM,
              paramsSIFT, paramsBlockMatching, paramsTileConfigurationBM,
              params_pixels)
