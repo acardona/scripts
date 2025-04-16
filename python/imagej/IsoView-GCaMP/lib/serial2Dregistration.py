@@ -1539,10 +1539,10 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, 
   It is also cached to disk under SIFTdir.
   And from the point onwards that a shift is found, the SIFT features files are deleted.
   """
-  path = os.path.join(SIFTdir, "shifts.csv")
-  if os.path.exists(path):
+  path_shifts = os.path.join(SIFTdir, "shifts.csv")
+  if os.path.exists(path_shifts):
     try:
-      with open(path, 'r') as csvfile:
+      with open(path_shifts, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         # Parse and validate
         shifts = {}
@@ -1551,40 +1551,40 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, 
             syncPrintQ("shifts.csv is invalid: will recompute shifts.")
             break
           shifts[groupName] = (dx, dy)
-        return shifts
     except:
       syncPrintQ("Could not load shifts from path %s" % path)
       syncPrintQ(str(sys.exc_info()))
+  else:
+    n_adjacent = 1
+    # Ensure all SIFT features and all pairwise pointmatches have been extracted.
+    ensurePointMatches(filepaths, SIFTdir, paramsPMs, paramsSIFT, n_adjacent,
+                       properties, loaderImp=makeSliceLoader(groupNames, imgMontaged))
   
-  n_adjacent = 1
-  # Ensure all SIFT features and all pairwise pointmatches have been extracted.
-  ensurePointMatches(filepaths, SIFTdir, paramsPMs, paramsSIFT, n_adjacent,
-                     properties, loaderImp=makeSliceLoader(groupNames, imgMontaged))
+    # Threshold value in pixels, in the coordinate space of the exported scaled down montages
+    threshold = int(properties.get("shift_threshold", 10) * properties['scale'] + 0.5)
+    shifts = computeShifts(groupNames, SIFTdir, threshold, paramsPMs, properties, edit=True)
   
-  # Threshold value in pixels, in the coordinate space of the exported scaled down montages
-  threshold = int(properties.get("shift_threshold", 10) * properties['scale'] + 0.5)
-  shifts = computeShifts(groupNames, SIFTdir, threshold, paramsPMs, properties, edit=True)
+    try:
+      with open(path_shifts, 'w') as csvfile:
+        w = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
+        for groupName in sorted(shifts.keys()):
+          dx, dy = shifts[groupName]
+          w.writerow((groupName, dx, dy))
+        # Ensure file is written to disk
+        csvfile.flush()
+        os.fsync(csvfile.fileno())
+    except:
+      syncPrint("Failed to save shifts at path %s" % path)
+      syncPrint(str(sys.exc_info()))
   
-  try:
-    with open(path, 'w') as csvfile:
-      w = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
-      for groupName in sorted(shifts.keys()):
-        dx, dy = shifts[groupName]
-        w.writerow((groupName, dx, dy))
-      # Ensure file is written to disk
-      csvfile.flush()
-      os.fsync(csvfile.fileno())
-  except:
-    syncPrint("Failed to save shifts at path %s" % path)
-    syncPrint(str(sys.exc_info()))
-  
-  # Express shifts as translation matrices
-  matrices = [array([1, 0, dx, 0, 1, dy], 'd')
-              for dx, dy in (shifts[groupName] for groupName in groupNames)]
-  
-  # Write shift matrices to disk
-  saveMatrices("matrices-shifts", matrices, SIFTdir)
-  
+  matrices = loadMatrices("matrices-shifts", SIFTdir)
+  if not matrices:
+    # Express shifts as translation matrices
+    matrices = [array([1, 0, dx, 0, 1, dy], 'd')
+                for dx, dy in (shifts[groupName] for groupName in groupNames)]
+    # Write shift matrices to disk
+    saveMatrices("matrices-shifts", matrices, SIFTdir)
+
   # Prepare parameters for showAlignedImg
   cropInterval = FinalInterval([imgMontaged.dimension(0), imgMontaged.dimension(1)]) # The whole 2D view
   properties = {
