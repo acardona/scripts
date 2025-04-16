@@ -1258,8 +1258,8 @@ def computeShifts(groupNames, csvDir, threshold, paramsPM, properties, edit=Fals
     dy = matrix[5]
     # If larger than threshold pixel in X or Y, consider this a shift
     if abs(dx) > threshold or abs(dy) > threshold:
-      cummulative_dx += dx
-      cummulative_dy += dy
+      cummulative_dx -= dx # subtract: the inverse transform
+      cummulative_dy -= dy
     # Delete all extracted SIFT features and associated pointmatches after the first shift:
     # they'd be out of sync with the shifted images
     if edit and (0 != cummulative_dx or 0 != cummulative_dy):
