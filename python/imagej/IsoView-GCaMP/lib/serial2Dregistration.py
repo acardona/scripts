@@ -603,7 +603,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   if io:
     saveMatrices(name, matrices, csvDir)
  
-  if logDict:
+  if logDict is not None:
     logDict["maxIterations"] = maxIterations
     logDict["stats_min"] = stats_min
     logDict["stats_max"] = stats_max
