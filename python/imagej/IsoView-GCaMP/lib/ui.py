@@ -412,24 +412,28 @@ def addWindowListener(window, fn, methods=["windowClosed"]):
 
 
 class CopyStackSlice(Callable):
-  def __init__(self, stack, slice_index, shallow=False, scale=1.0):
+  def __init__(self, stack, slice_index, shallow=False, scale=1.0, roi=None):
     self.stack = stack
     self.slice_index = slice_index # 1-based
     self.shallow = shallow
     self.scale = scale
+    self.roi = roi
   def call(self):
     t = Thread.currentThread()
     if t.isInterrupted() or not t.isAlive():
       return None
     ip = self.stack.getProcessor(self.slice_index)
+    if self.roi:
+      ip.setRoi(self.roi)
+      ip = ip.crop()
     if self.scale < 1.0:
       return ip.resize(int(ip.getWidth() * self.scale + 0.5),
                        int(ip.getHeight() * self.scale + 0.5),
                        True) # averaging
-    return ip if self.shallow else ip.duplicate()
+    return ip if self.shallow or self.roi else ip.duplicate()
 
 # Duplicate a stack in parallel
-def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=True, scale=1.0):
+def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=True, scale=1.0, roi=None):
   """ imp: defaults to None, meaning get the current image.
       slices: defaults to None, meaning all. Otherwise a list of 1-based indices.
       n_threads: defaults to 0, meaning as many as possible.
@@ -440,8 +444,8 @@ def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=
   stack = imp.getStack()
   exe = newFixedThreadPool(n_threads=n_threads if n_threads > 0 else min(Runtime.getRuntime().availableProcessors(), stack.getSize()), name="duplicate-stack")
   try:
-    stack2 = ImageStack(imp.getWidth(), imp.getHeight())
-    futures = [(i, exe.submit(CopyStackSlice(stack, i, shallow=shallow, scale=scale))) for i in slices]
+    stack2 = ImageStack() # dimensions will be set by the first slice added
+    futures = [(i, exe.submit(CopyStackSlice(stack, i, shallow=shallow, scale=scale, roi=roi))) for i in slices]
     for i, fu in futures:
       t = Thread.currentThread()
       if t.isInterrupted() or not t.isAlive():
