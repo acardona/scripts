@@ -1487,7 +1487,7 @@ def loadAlignedImage(srcDir, repairedDir, montageDir,
         to_remove, ignore_images, replace_images,
         first_section, last_section, replace_sections,
         section_width, section_height, crop_roi, params_pixels,
-        rotate=None):
+        rotate=None, preload=0):
   """
   Load the volume in full resolution in 8-bit after both SIFT and blockmatching alignment.
   Will fail unless both sets of matrices exist.
@@ -1496,31 +1496,42 @@ def loadAlignedImage(srcDir, repairedDir, montageDir,
   
   # Load the montages in full resolution, unaligned, and cropped as per crop_roi
   imgMontaged, groupNames, tileGroups, filepaths = loadMontagedImg(
-        srcDir, montageDir, repairedDir,
+        name, srcDir, montageDir, repairedDir,
         to_remove, ignore_images, replace_images,
         first_section, last_section, replace_sections,
-        section_width, section_height, crop_roi, params_pixels,
+        section_width, section_height, crop_roi, z_range, params_pixels,
         cache_size=0) # no cache, each slice will be loaded only once
 
   # Load matrices and fuse them, since they depend on each other
   matricesList = []
+  
   matricesShifts = loadMatrices("matrices-shifts", SIFTdir)
   if matricesShifts:
     matricesList.append(matricesShifts)
+  
   matricesSIFT = loadMatrices("matrices", SIFTdir)
   if matricesSIFT:
     matricesList.append(matricesSIFT)
+  
   matricesBM = loadMatrices("matrices", BMdir)
   if matricesBM:
     matricesList.append(matricesBM)
+  
   matricesFused = fuseTranslationMatrices(matricesList)
+  
+  # Correct scaling of the translation transforms, since they were measured on scaled snapshots
+  k = params_pixels["interim_scale"]
+  if k < 1:
+    for matrix in matricesFused:
+      matrix[2] /= k
+      matrix[5] /= k
 
   # Prepare parameters for showAlignedImg
-  cropInterval = FinalInterval([imgMontaged.dimension(0), imgMontaged.dimension(1)]) # The whole 2D view
+  cropInterval = FinalInterval([crop_roi[0], crop_roi[1]],
+                               [crop_roi[2] -1, crop_roi[3] -1])
   properties = {
     "name": name,
     "pixelType": type(imgMontaged.randomAccess().get()),
-    "img_dimensions": Intervals.dimensionsAsLongArray(imgMontaged),
     "preload": preload, # Should match the number of sections in Z of block_size for exporting to N5
   }
 
