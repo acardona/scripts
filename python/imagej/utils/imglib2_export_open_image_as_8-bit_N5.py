@@ -1,7 +1,6 @@
 # Export as 8-bit N5 an open virtual stack that shows an ImgLib2 LazyCellImg
 import os, sys
 sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
-from lib.serial2Dregistration import exportN5
 from lib.converter import convert2
 from lib.io import writeN5
 from ij import IJ
