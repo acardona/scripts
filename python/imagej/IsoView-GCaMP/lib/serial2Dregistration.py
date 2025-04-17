@@ -1493,7 +1493,7 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
   return imgBM, impBM, matricesFused
 
 
-def loadAlignedImage(srcDir, repairedDir, montageDir,
+def loadAlignedImage(name, srcDir, repairedDir, montageDir,
         SIFTdir, BMdir,
         to_remove, ignore_images, replace_images,
         first_section, last_section, replace_sections,
@@ -1507,7 +1507,7 @@ def loadAlignedImage(srcDir, repairedDir, montageDir,
   
   # Load the montages in full resolution, unaligned, and cropped as per crop_roi
   imgMontaged, groupNames, tileGroups, filepaths = loadMontagedImg(
-        name, srcDir, montageDir, repairedDir,
+        srcDir, montageDir, repairedDir,
         to_remove, ignore_images, replace_images,
         first_section, last_section, replace_sections,
         section_width, section_height, crop_roi, z_range, params_pixels,
