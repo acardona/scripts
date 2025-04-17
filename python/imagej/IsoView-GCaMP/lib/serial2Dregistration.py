@@ -1460,7 +1460,7 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
 
   # Compute and save to disk all transforms for all sections
   # From paramsSIFT reads its field initialSigma
-  propertiesBM["img_dimensions"] = Intervals.dimensionsAsLongArray(img)
+  propertiesBM["img_dimensions"] = Intervals.dimensionsAsLongArray(img) # NEEDED for making the TransformMesh for blockmatching
   matricesBM = alignInChunks(groupNames, BMdir, paramsBlockMatching, paramsSIFT, paramsTileConfigurationBM, propertiesBM,
                              groupNames, img, fixed_tile_index=paramsTileConfigurationBM["fixed_tile_index"],
                              clearCacheFn=clearCacheFn)
