@@ -1557,7 +1557,7 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
   properties["use_SIFT"] = True
   properties["SIFT_validateByFileExists"] = True # Avoid loading and parsing SIFT features just to make sure they are fine.
   properties["pixelType"] = type(imgMontaged.randomAccess().get())
-  properties["img_dimensions"] = Intervals.dimensionsAsLongArray(imgMontaged)
+  #properties["img_dimensions"] = Intervals.dimensionsAsLongArray(imgMontaged)
   
   path_shifts = os.path.join(SIFTdir, "shifts.csv")
   if os.path.exists(path_shifts):
