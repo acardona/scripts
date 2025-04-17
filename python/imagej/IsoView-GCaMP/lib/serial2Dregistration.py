@@ -1409,7 +1409,7 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
   
   # Crop image if required
   if properties.get("roi", None) is not None:
-    img = cropImageView(volumeImgMontaged, properties["roi"], params_pixels["interim_scale"])
+    img = cropImageView(volumeImgMontaged, properties["roi"], interim_scale=params_pixels["interim_scale"])
   else:
     img = volumeImgMontaged
   
@@ -1448,7 +1448,7 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
   
   # Crop image if required
   if propertiesBM.get("roi", None) is not None:
-    img = cropImageView(imgSIFT, propertiesBM["roi"], params_pixels["interim_scale"])
+    img = cropImageView(imgSIFT, propertiesBM["roi"], interim_scale=params_pixels["interim_scale"])
   else:
     img = imgSIFT
 
