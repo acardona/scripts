@@ -1510,7 +1510,7 @@ def loadAlignedImage(name, srcDir, repairedDir, montageDir,
         srcDir, montageDir, repairedDir,
         to_remove, ignore_images, replace_images,
         first_section, last_section, replace_sections,
-        section_width, section_height, crop_roi, z_range, params_pixels,
+        section_width, section_height, crop_roi, params_pixels,
         cache_size=0) # no cache, each slice will be loaded only once
 
   # Load matrices and fuse them, since they depend on each other
