@@ -20,9 +20,7 @@ from step_7_export_parameters import n5Dir, crop_roi, rotate, paramsN5
 
 # Import registration library functions
 sys.path.append(libDir)
-from lib.montage2d import loadMontagedImage
 from lib.serial2Dregistration import loadAlignedImage
-from registration import loadMatrices
 from lib.io import writeN5
 
 
