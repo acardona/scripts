@@ -27,12 +27,12 @@ from lib.io import writeN5
 
 
 # Load the montages in full resolution, unaligned, and cropped as per crop_roi
-img, imp = loadAlignedImage(srcDir, repairedDir, montageDir,
+img, imp = loadAlignedImage(name, srcDir, repairedDir, montageDir,
         SIFTdir, BMdir,
         to_remove, ignore_images, replace_images,
         first_section, last_section, replace_sections,
         section_width, section_height, crop_roi, params_pixels,
-        rotate=rotate)
+        rotate=rotate, preload=paramsN5["block_size"][2])
 
 # Write N5 volume
 writeN5(img, n5Dir, name,
