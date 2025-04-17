@@ -15,8 +15,8 @@ from lib.util import numCPUs
 
 
 # Folder for storing blockmatching features per montage and pointmatches across montages, and the matrices.csv files
-#BMdir = tgtDir + "BM-csv/"
-BMdir = "/data1/acardona/MR1.3-2/registration/BM-csv/" # local to cardona-cpu1 server
+BMdir = tgtDir + "BM-csv/"
+#BMdir = "/data1/acardona/MR1.3-2/registration/BM-csv/" # local to cardona-cpu1 server
 
 
 propertiesBM = {
@@ -26,7 +26,7 @@ propertiesBM = {
  'roi': [2000,  # To extract SIFT features from e.g., center part only, reducing ops by 4x
          2400, # [x, y, width, height] or None.
          8000,
-         10000],
+         12500],
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
  'filterFeaturesFn': None, #makeFilterFeaturesFn(model_path, model_width), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
 }
@@ -34,11 +34,11 @@ propertiesBM = {
 # Parameters for blockmatching
 paramsBlockMatching = {
  'scale': propertiesBM['scale'], # Compounds with montaging interim_scale, so 0.5 would mean half of that
- 'meshResolution': 5, # 10x10 = 100 points
+ 'meshResolution': 20, # 10x10 = 100 points
  'minR': 0.2, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 100, # Maximum expected displacement between slices after SIFT-based registration.
+ 'searchRadius': 20, # Maximum expected displacement between slices after SIFT-based registration.
                       # Make it large enough, 300 is a good first searcRadius value. 50 to a 100 for a fast run.
  'blockRadius': 200, # small, yet enough: size of the window to use for comparing across images.
 }

@@ -15,8 +15,8 @@ from java.lang import Double
 
 
 # Folder for storing SIFT features per montage and pointmatches across montages, and the matrices.csv file
-#SIFTdir = tgtDir + "SIFT-csv/"
-SIFTdir = "/data1/acardona/MR1.3-2/registration/SIFT-csv/" # local to cardona-cpu1 server
+SIFTdir = tgtDir + "SIFT-csv/"
+#SIFTdir = "/data1/acardona/MR1.3-2/registration/SIFT-csv/" # local to cardona-cpu1 server
 
 # EDIT below until the end if needed
 
