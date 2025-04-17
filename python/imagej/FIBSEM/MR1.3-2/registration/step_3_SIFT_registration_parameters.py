@@ -30,6 +30,7 @@ model_width = None # 400 # target width for resizing so as to match the dimensio
 properties = {
  'name': name,
  'scale': 0.5, # Compounds with montaging interim_scale
+ 'shift_threshold': 10, # pixels, in world coordinates (not scaled)
  'n_threads': numCPUs(),
  'roi': None, #[3600, # x      -  [x, y, width, height] or None. To e.g. extract SIFT features from center part only.
          #1800, # y     NOTE: in full image resolution coordinates.
