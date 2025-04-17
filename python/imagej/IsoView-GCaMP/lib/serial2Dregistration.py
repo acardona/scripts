@@ -1531,7 +1531,8 @@ def loadAlignedImage(srcDir, repairedDir, montageDir,
   return img, imp
   
 
-def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, paramsPMs, show=False):
+def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
+                      paramsSIFT, paramsPMs, params_pixels, show=False):
   """
   Ensure SIFT features and pointmatches for all adjacent pairs of sections exist,
   and then compute the translation between sections.
@@ -1567,7 +1568,7 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties, paramsSIFT, 
     ensurePointMatches(groupNames, SIFTdir, paramsPMs, paramsSIFT, n_adjacent,
                        properties, loaderImp=makeSliceLoader(groupNames, imgMontaged))
     # Threshold value in pixels, in the coordinate space of the exported scaled down montages
-    threshold = int(properties.get("shift_threshold", 10) * properties['scale'] + 0.5)
+    threshold = int(properties.get("shift_threshold", 10) * params_pixels['interim_scale'] * properties['scale'] + 0.5)
     shifts = computeShifts(groupNames, SIFTdir, threshold, paramsPMs, properties, edit=True)
   
     try:
