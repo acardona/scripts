@@ -668,6 +668,8 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
         f.write(", ".join(keys))
         f.write("\n")
         f.write(", ".join(str(logDict[key]) for key in keys)) # all are numeric
+        f.flush()
+        os.fsync(f.fileno())
       # clear cache
       if clearCacheFn:
         clearCacheFn(overlap)
