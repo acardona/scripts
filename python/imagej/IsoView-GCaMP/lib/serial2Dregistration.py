@@ -610,13 +610,6 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
  
   return matrices
 
-def writeOptimizerSummaryLog():
-  # The only way is to read the data from the log window
-  text = IJ.getLog()
-  # Last line starting with a number that should match the number of iterations should contain the ending and starting error values
-  # Then starting from the last line, parse an find the highest value.:
-  # TODO
-
 
 def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
                   groupNames, volumeImg, fixed_tile_index=None, clearCacheFn=None):
