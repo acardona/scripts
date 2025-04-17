@@ -5,7 +5,7 @@ from net.imglib2.img.cell import CellImg, CellGrid
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.util import Intervals
 from net.imglib2.cache.ref import SoftRefLoaderCache, BoundedSoftRefLoaderCache
-from net.imglib2.cache.img import CellLoader, CachedCellImg, ReadOnlyCachedCellImgFactory, ReadOnlyCachedCellImgOptions
+from net.imglib2.cache.img import CachedCellImg, ReadOnlyCachedCellImgFactory, ReadOnlyCachedCellImgOptions
 from net.imglib2.img.basictypeaccess import ArrayDataAccessFactory, AccessFlags
 from lib.ui import addWindowListener, wrap8bit
 from lib.util import newFixedThreadPool, syncPrintQ
@@ -34,11 +34,10 @@ class GetSectionTask(Callable):
 
 
 class CellLoader(CacheLoader):
-  def __init__(self, filepaths, loadImg, matrices, img_dimensions, cell_dimensions, interval):
+  def __init__(self, filepaths, loadImg, matrices, cell_dimensions, interval):
     self.filepaths = filepaths
     self.loadImg = loadImg # function to load images
     self.matrices = matrices
-    self.img_dimensions = img_dimensions
     self.cell_dimensions = cell_dimensions # x,y must match dims of interval
     self.interval = interval # when smaller than the image, will crop
     self.exe = None
@@ -96,7 +95,7 @@ class CellLoader(CacheLoader):
                aimg.update(None))
 
 
-def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterval, preload):
+def makeImg(filepaths, pixelType, loadImg, matrices, cropInterval, preload):
   """ Note that when preload > 0, the returned CellLoader will have created an ExecutorService
       that can be shutdown by invoking destroy() on it.
   """
@@ -116,8 +115,7 @@ def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterva
 
   # New approach: delegate the cache entirely to ImgLib2
   cell_loader = CellLoader(filepaths, loadImg, matrices,
-                           img_dimensions, cell_dimensions,
-                           cropInterval)
+                           cell_dimensions, cropInterval)
   # Create the cache, which can load any Cell when needed using CellLoader
   cache = SoftRefLoaderCache() if 0 == preload else BoundedSoftRefLoaderCache(preload)
   loading_cache = cache.withLoader(cell_loader).unchecked()
@@ -155,7 +153,7 @@ def showAlignedImg(img, cropInterval, groupNames, properties, matrices,
       
   
   cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"],
-                             partial(loadImg, img), properties["img_dimensions"],
+                             partial(loadImg, img),
                              matrices, cropInterval, properties.get('preload', 0))
 
 
