@@ -972,7 +972,6 @@ def export8bitN5(*args, **kwargs):
 
 def exportN5(filepaths,
             loadFn,
-            img_dimensions,
             matrices,
             name,
             exportDir,
