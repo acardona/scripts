@@ -1389,6 +1389,7 @@ def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtC
 
 
 def cropImageView(img, roi, interim_scale=1.0):
+  # roi is in full size coordinates
   x, y, width, height = map(lambda v: int(v * interim_scale + 0.5), roi)
   img = Views.zeroMin(Views.interval(img,
                                      [x, y, 0],
@@ -1563,6 +1564,9 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
   It is also cached to disk under SIFTdir.
   And from the point onwards that a shift is found, the SIFT features files are deleted.
   """
+  
+  ensureDirsExist(SIFTdir)
+  
   properties = dict(properties) # duplicate then edit
   properties["use_SIFT"] = True
   properties["SIFT_validateByFileExists"] = True # Avoid loading and parsing SIFT features just to make sure they are fine.
