@@ -1479,6 +1479,16 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
                                 rotate=None, # None, "right", "left", or "180"
                                 title_addendum=" blockmatching", show=show)
   
+  # Show the cropped image
+  IL.wrap(img, "shifted cropped").show()
+  
+  # Show the shifted, cropped image as aligned with BM matrices
+  cropInterval2 = FinalInterval([img.dimension(0), img.dimension(1)])
+  img2, imp2 = showAlignedImg(img, cropInterval2, groupNames, propertiesBM,
+                              matricesBM,
+                              rotate=None,
+                              title_addendum=" shift + BM", show=show)
+  
   return imgBM, impBM, matricesFused
 
 
