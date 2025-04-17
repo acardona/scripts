@@ -902,7 +902,7 @@ def viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfigurat
   matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=loaderImp)
   def loadImg(filepath):
     return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"], loaderImp=loaderImp)
-  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
+  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, matrices, cropInterval, properties.get('preload', 0))
   print "cropInterval", cropInterval
   print "viewAlignedPlain, cellImg:", cellImg
   print "viewAlignedPlain:", cellImg.getCellGrid()
@@ -921,7 +921,7 @@ def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, 
   matrices = alignFn(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=loaderImp)  
   def loadImg(filepath):
     return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"], loaderImp=loaderImp)
-  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
+  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, matrices, cropInterval, properties.get('preload', 0))
   print cellImg
   comp = showStack(cellImg, title=properties["srcDir"].split('/')[-2], proper=True)
   # Add the SourcePanning KeyListener as the first one
@@ -1427,7 +1427,7 @@ def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
   # Show the full image (not the cropped one used for aligning)
   cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
   properties["pixelType"] = type(volumeImgMontaged.randomAccess().get())
-  properties["img_dimensions"] = Intervals.dimensionsAsLongArray(volumeImgMontaged)
+  #properties["img_dimensions"] = Intervals.dimensionsAsLongArray(volumeImgMontaged)
   imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
                                     matrices,
                                     rotate=None, # None, "right", "left", or "180"
@@ -1474,7 +1474,7 @@ def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNam
   # so that the original pixels are interpolated only once.
   cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
   propertiesBM["pixelType"] = type(volumeImgMontaged.randomAccess().get())
-  propertiesBM["img_dimensions"] = Intervals.dimensionsAsLongArray(volumeImgMontaged)
+  #propertiesBM["img_dimensions"] = Intervals.dimensionsAsLongArray(volumeImgMontaged) # NOT NEEDED for showAlignedImg
   imgBM, impBM = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertiesBM,
                                 matricesFused,
                                 rotate=None, # None, "right", "left", or "180"
