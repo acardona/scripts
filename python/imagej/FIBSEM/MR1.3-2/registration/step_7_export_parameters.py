@@ -4,7 +4,7 @@ import sys, os
 # Add current directory to path
 sys.path.append(os.path.dirname(sys.argv[0]))
 # Import parameters used for montaging
-from step_1_montage_parameters import libDir, name, tgtDir, section_width, section_height, params_pixels
+from step_1_montage_parameters import libDir, name, srcDir, tgtDir, section_width, section_height, params_pixels
 # Import registration library functions
 sys.path.append(libDir)
 from lib.util import numCPUs
@@ -12,7 +12,8 @@ from lib.util import numCPUs
 
 
 # Directory for exporting the N5 volume
-n5Dir = tgtDir + "n5/"
+#n5Dir = tgtDir + "n5/" # would be zstore1 which is almost full
+n5Dir = srcDir + "registration/n5/"
 
 # Region of interest in 2D for exporting
 k = params_pixels["interim_scale"]
