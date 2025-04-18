@@ -620,7 +620,7 @@ class MontageAndSave(Callable):
     if len(tilePaths) > 1:
       imp = self.montageAndSnapshot(groupName)
     else:
-      aimg, imp = singleTile(tilePaths[0], section_width, section_height, params_pixels, sdx=0, sdy=0, matrix=None, center=True)
+      aimg, imp = singleTile(tilePaths[0], section_width, section_height, params_pixels, sdx=0, sdy=0, matrix=None)
     # Save the image, scaled if required
     k = params_pixels.get("interim_scale", 1.0)
     if k < 1.0:
