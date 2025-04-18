@@ -50,6 +50,7 @@ params_pixels = {
   "contrast": (500, 1000), # thresholds in pixel counts per histogram bin
   "roiFn": lambda sp: Roi(sp.width / 6, sp.height / 6, 2 * sp.width / 3, 2 * sp.height / 3), # middle 2/3rds to discard edges
   "interim_scale": 0.25, # for saving montaged snapshops to disk to be used for evaluation and serial alignment
+  "single_tile_position": ( int((16000 - 13750) / 2 + 0.5), int((16000 - 6750) / 2 + 0.5) ), # FIX issue with resizing canvas later since single-tile sections were rendered as centered in the montage snapshots.
 }
 
 # Parameters for SIFT features
