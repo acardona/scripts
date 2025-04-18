@@ -487,6 +487,8 @@ def singleTile(tilePath, width, height, params_pixels, sdx=0, sdy=0, matrix=None
     ip = ShortProcessor(width, height)
   if matrix:
     dx, dy = (matrix[2], matrix[5])
+  elif params_pixels.has_key('single_tile_position'):
+    dx, dy = params_pixels['single_tile_position']
   elif center:
     # WARNING this can be a breaking change
     dx, dy = int((width - imp.getWidth()) / 2), int((height - imp.getHeight()) / 2)
