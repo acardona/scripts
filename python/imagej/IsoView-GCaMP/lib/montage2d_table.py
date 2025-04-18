@@ -9,9 +9,13 @@ from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, W
 from javax.swing.event import ListSelectionListener
 
 from ij import IJ
+from ij.io import FileSaver
+
+from ini.trakem2 import Project
+from ini.trakem2.display import Display
 
 from lib.io import readFIBSEMHeader
-from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool
+from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, ensureDirsExist
 from lib.ui import duplicateInParallel, saveInParallel, ExecutorCloser
 
 
@@ -71,8 +75,9 @@ class TypingInSearchField(KeyAdapter):
     SwingUtilities.invokeLater(lambda: self.table.updateUI()) # executed by the event dispatch thread 
 
 class OpenDAT(Runnable):
-  def __init__(self, filepath):
+  def __init__(self, filepath, show=True):
     self.filepath = filepath
+    self.show = show
   def run(self):
     try:
       syncPrintQ("OpenDAT filepath: %s" % self.filepath)
@@ -80,7 +85,8 @@ class OpenDAT(Runnable):
       if self.filepath.endswith(".dat"):
         syncPrintQ(readFIBSEMHeader(self.filepath))
       imp.setTitle(os.path.basename(self.filepath))
-      imp.show()
+      if self.show:
+        imp.show()
     except:
       print sys.exc_info()
 
@@ -179,17 +185,120 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     # then add a new tab to the project to export the montage coordinates as a CSV file.
     if 0 == self.table.getSelectedRowCount():
       return
-    if self.table.getSelectedRowCount() > 1:
-      JOptionPane.showMessageDialog(self.table, "Please select only one row.", "Message", JOptionPane.INFORMATION_MESSAGE)
-      return
-    # One row selected
+    # Rows selected:
     rowIndices = list(self.table.getSelectedRows())
-    row = self.model.rows[rowIndices[0]]
-    groupName = row[1]
-    tilePaths = self.model.tileGroups[row[0]]
-    print groupName
-    print tilePaths
-
+    newThread(self.manualMontage, self, rowIndices)
+  
+  def manualMontage(self, rowIndices):
+    """
+    Open a TrakEM2 project for the set of sections selected.
+    """
+    # Make a tmp directory under self.csvDir
+    tmpDir = os.path.join(self.csvDir, "tmp")
+    ensureDirsExist(tmpDir)
+    # Check if a project for this set of sections already exists
+    first = self.model.rows[rowIndices[0]][0]
+    last = self.model.rows[rowIndicies[-1]][0]
+    xml_path = os.path.join(folder, "montages-%i-%i.xml" % (first, last)
+    if os.path.exists(xml_path):
+      syncPrintQ("TrakEM2 project for sections %i-% exists already." % (first, last))
+      # Check if it is open already
+      for p in Project.getProjects():
+        if xml_path == p.getLoader().getProjectXMLPath():
+          syncPrintQ("TrakEM2 project is open: bringing its display to the front.")
+          Display.getOrCreateFront(p)
+          return
+      # Otherwise open it
+      syncPrintQ("TrakEM2 project exists, will open it now.")
+      p = Project.openFSProject(xml_path)
+      Display.getOrCreateFront(p)
+      self.addTrakEM2Tab(p)
+      return
+    # Create a TrakEM2 project
+    project = Project.newFSProject("blank", None, tmpDir)
+    layerset = project.getRootLayerSet()
+    # Open image tiles and copy them there (repeats from montage2d "load" function, but can't have circular dependencies
+    for rowIndex in rowIndices:
+      row = self.model.rows[rowIndex]
+      groupName = row[1]
+      tilePaths = self.model.tileGroups[row[0]]
+      print "Will setup for montage:", groupName
+      print "With tile filepaths: \n  %s" % "\n  ".join(tilePaths)
+      # Create a TrakEM2 Layer for this section
+      layer = layerset.getLayer(row[0], 1, True)
+      # Save all tile images in the tmpDir folder and add them as Patch instances to the Layer
+      pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
+      for tilePath in tilePaths:
+        path = os.path.join(tmpDir, os.path.basename(tilePath) + ".tif")
+        if os.path.exists(path):
+          syncPrintQ("Tile already as TIFF under tmpDir:\n%s" % path)
+          continue
+        if tilePath.endswith(".dat"):
+          imp = readFIBSEMdat(tilePath, channel_index=0, asImagePlus=True)[0]
+        else:
+          imp = IJ.openImage(tilePath)
+        FileSaver(imp).saveAsTIFF(path)
+        patch = Patch.createPatch(project, path)
+        patch.setProperty("groupName", groupName)
+        layer.add(patch)
+        # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
+        i_row, i_col = map(int, re.match(pattern, tilePath[tilePath.rfind('_')+1:]).groups())
+        # Position tiles so as to overlap tiles by 10%
+        x = i_row * 0.9 * imp.getWidth()
+        y = i_col * 0.9 * imp.getHeight()
+        patch.setLocation(x, y)
+      # Update internal quadtree of the layer so it can find the Patch instances
+     layer.recreateBuckets()
+   # Update TrakEM2 UI
+   project.getLayerTree().updateList(layerset)
+   # ... and the display slider
+   Display.updateLayerScroller(layerset)
+   # Show the TrakEM2 display
+   Display.getOrCreateFront(project)
+   # Ensure the display shows the tab for exporting the CSV file of the montage
+   self.addTrakEM2Tab(project)
+   # Save the TrakEM2 Project
+   project.saveAs(xml_path), False)
+   
+  def saveTrakEM2MontageCSV(self, project, printOnly):
+    display = Display.getOrCreateFront(project)
+    tiles = {}
+    for patch in display.getLayer().getPatches(False): # visible or invisible: all
+      path = patch.getImageFilePath()
+      tiles[path] = patch
+    matrices = []
+    groupName = None
+    for path in sorted(tiles.keys()):
+      patch = tiles[path]
+      x, y = patch.getX(), patch.getY()
+      matrices.append([1, 0, x, 0, 1, y])
+      groupName = patch.getProperty("groupName")
+    if printOnly:
+      IJ.log("Matrices fdescribing tile montage for section %s" % groupName)
+      IJ.log("\n".join(map(str, matrices)))
+    else:
+      # Write or overwrite montage matrices CSV file
+      if JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None,
+             "Confirm", "Write montage file\n%s.csv ?" % groupName, JOptionPane.YES_NO_OPTION)
+        saveMatrices(groupName, matrices, self.csvDir)
+   
+  def addTrakEM2Tab(self, project):
+   display = Display.getOrCreateFront(project)
+   tabs = display.getTabbedPane()
+   title = "Manual Montage"
+   # Check if the tab is already there
+   for i in xrange(tags.getTabCount()):
+     if tags.getTitleAt(i) == title:
+       syncPrintQ("'Manual Montage' tab already exists.")
+       return
+   # Add it new
+   pane = JPanel()
+   b1 = JButton("Save montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, self, project, False))
+   pane.add(b1)
+   b2 = JButton("Print montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, self, project, True))
+   pane.add(b2)
+   tabs.add(title, pane)
+    
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
