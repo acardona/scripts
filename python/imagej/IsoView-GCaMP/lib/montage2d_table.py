@@ -247,6 +247,8 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
         x = i_row * 0.9 * imp.getWidth()
         y = i_col * 0.9 * imp.getHeight()
         patch.setLocation(x, y)
+      # Resize the display canvas
+      layerset.setMinimumDimensions()
       # Update internal quadtree of the layer so it can find the Patch instances
      layer.recreateBuckets()
    # Update TrakEM2 UI
@@ -261,6 +263,9 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
    project.saveAs(xml_path), False)
    
   def saveTrakEM2MontageCSV(self, project, printOnly):
+    """
+    To be executed from a button in a custom tab in the TrakEM2 Display.
+    """
     display = Display.getOrCreateFront(project)
     tiles = {}
     for patch in display.getLayer().getPatches(False): # visible or invisible: all
@@ -298,6 +303,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
    b2 = JButton("Print montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, self, project, True))
    pane.add(b2)
    tabs.add(title, pane)
+   display.pack() # repaint
     
 
   def mouseReleased(self, event):
