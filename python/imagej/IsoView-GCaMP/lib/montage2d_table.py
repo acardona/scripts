@@ -2,7 +2,7 @@ import os, sys, re
 
 from java.lang import Integer, Runnable, String
 from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities,\
-                        BorderFactory, JPopupMenu, JMenuItem, AbstractAction, KeyStroke, JOptionPane
+                        JLabel, BorderFactory, JPopupMenu, JMenuItem, AbstractAction, KeyStroke, JOptionPane
 from javax.swing.table import AbstractTableModel, DefaultTableCellRenderer
 from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font, Insets, Color
 from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, WindowAdapter
