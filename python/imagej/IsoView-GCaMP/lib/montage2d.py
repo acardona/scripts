@@ -748,7 +748,7 @@ class CheckSectionFiles(Callable):
       # Parse the row and col from the e.g., 0-0-0 string in the file name
       row, col = re.match(pattern, filepath[filepath.rfind('_')+1:]).groups()
       return int(row) * 10 + int(col) # Assumes no more than 9 rows or cols
-    
+
     self.tilePaths_.sort(key=coordsFn) # in place
 
     # Replace and remove filepaths as needed
@@ -874,7 +874,10 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
     w.destroy()    
 
   for groupName_ in to_remove:
-    del groups[groupName_]
+    if groupName_ in groups:
+      del groups[groupName_]
+    else:
+      syncPrintQ("Unexpectedly %s is not in groups." % groupName_)
     syncPrintQ("Will ignore section: " + groupName_, copy_to_stdout=True)
   
   if check:
