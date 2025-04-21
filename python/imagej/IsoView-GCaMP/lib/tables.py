@@ -8,6 +8,7 @@ from net.imglib2 import FinalInterval
 from functools import partial
 from java.lang import String, Number
 from net.imglib2.view import Views
+from collections import defaultdict
 
 
 
@@ -67,25 +68,46 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
       and open it in another, sortable table.
   """
   # Find all "matrices_\d+-\d+.csv" files:
-  chunks = {}
-  pattern = re.compile("^matrices_(\d+)-(\d+).csv$")
+  chunks = defaultdict(lambda: [None] * 6)
+  pattern1 = re.compile("^matrices_(\d+)-(\d+).csv$")
+  pattern2 = re.compile("^matrices_(\d+)-(\d+)_optimizer_stats.csv$")
   for root, dirs, filenames in os.walk(csvDir):
     for filename in filenames:
       if filename.startswith("matrices_"):
-        m = pattern.search(filename)
+        m = pattern1.search(filename)
         if m:
           start, end = map(int, m.groups())
-          chunks[start] = [filename, start, end]
+          entry = chunks[start]
+            entry[0] = filename
+            entry[1] = start
+            entry[2] = end
+            continue
         else:
-          syncPrintQ("No match for file: " + filename)
+          m = pattern2.search(filename)
+          if m:
+            start, end = map(int, m.groups())
+            with open(filename, 'r') as csvfile:
+              reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+              # First line contains parameter names
+              headerParams = reader.next()
+              # Second line the values
+              maxIterations, stats_min, stats_max = reader.next() # as strings
+              #
+              entry = chunks[start]
+              entry[3] = int(maxIterations)
+              entry[4] = float(stats_min)
+              entry[5] = float(stats_max)
+              continue       
+        # Else
+        syncPrintQ("No match for file: " + filename)
   
   rows = [chunks[key] for key in sorted(chunks.keys())]
   
   table, frame = showTable(rows,
       title="Table of chunks",
-      column_names=["file", "start", "end"],
+      column_names=["file", "start", "end", "maxIterations", "stats_min", "stats_max"],
       dataType=String,
-      width=400, height=500,
+      width=800, height=500,
       showTable=True,
       windowClosing=None, onCellClickFn=None, onRowClickFn=None,
       singleBlockSelection=True, renderRightColumns=[1, 2])
