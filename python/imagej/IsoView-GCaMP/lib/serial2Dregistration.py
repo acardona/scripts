@@ -347,11 +347,14 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
   return features
 
 
-def deleteFeatures(img_filename, directory):
+def deleteFeatures(img_filename, directory, moveToDir=None):
   path = os.path.join(directory, basename(img_filename)) + ".SIFT-features.obj"
   try:
     if os.path.exists(path):
-      os.remove(path)
+      if moveToDir is not None:
+        os.rename(path, os.path.join(moveToDir, basename(path)))
+      else:
+        os.remove(path)
   except:
     syncPrint("Failed to delete features file at %s" % path)
 
@@ -1239,6 +1242,8 @@ def computeShifts(groupNames, csvDir, threshold, paramsPM, properties, edit=Fals
   shifts = {}
   shifts[groupNames[0]] = (0, 0)
   cummulative_dx, cummulative_dy = 0, 0
+  tmp_del_dir = os.path.join(csvDir, "tmp_del")
+  ensureDirsExist(tmp_del_dir)
   for j in xrange(1, len(groupNames)):
     # Load pointmatches
     i, j, pointmatches = loadPointMatchesPlus(groupNames, j-1, j, csvDir, paramsPM, properties)
@@ -1257,8 +1262,8 @@ def computeShifts(groupNames, csvDir, threshold, paramsPM, properties, edit=Fals
     # Delete all extracted SIFT features and associated pointmatches after the first shift:
     # they'd be out of sync with the shifted images
     if edit and (0 != cummulative_dx or 0 != cummulative_dy):
-      deleteFeatures(groupNames[j], csvDir) # will need to be re-extracted, since their location won't match the underlying image
-      deletePointMatches(groupNames[i], groupNames[j], csvDir)
+      deleteFeatures(groupNames[j], csvDir, moveToDir=tmp_del_dir) # will need to be re-extracted, since their location won't match the underlying image
+      deletePointMatches(groupNames[i], groupNames[j], csvDir, moveToDir=tmp_del_dir)
     # 
     shifts[groupNames[j]] = (cummulative_dx, cummulative_dy)
   #
