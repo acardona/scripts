@@ -21,7 +21,7 @@ from step_5_blockmatching_parameters import BMdir, propertiesBM, paramsBlockMatc
 # Import registration library functions
 sys.path.append(libDir)
 from lib.montage2d import runMontaging
-from lib.serial2Dregistration import runSIFTAlignment
+from lib.serial2Dregistration import runShiftDetection
 from lib.serial2Dregistration import runBlockMatchingAlignment
 
 
