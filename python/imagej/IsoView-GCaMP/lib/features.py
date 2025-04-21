@@ -313,11 +313,14 @@ def loadPointMatches(img1_filename, img2_filename, directory, params, epsilon=0.
     return None
 
 
-def deletePointMatches(img1_filename, img2_filename, directory):
+def deletePointMatches(img1_filename, img2_filename, directory, moveToDir=None):
   path = os.path.join(directory, basename(img1_filename) + '.' + basename(img2_filename) + ".pointmatches.csv")
   try:
     if os.path.exists(path):
-      os.remove(path)
+      if moveToDir is not None:
+        os.rename(path, os.path.join(moveToDir, basename(path)))
+      else:
+        os.remove(path)
   except:
     syncPrint("Failed to delete pointmatches file at %s" % path)
 
