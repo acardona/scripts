@@ -451,8 +451,15 @@ def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=
       if t.isInterrupted() or not t.isAlive():
         syncPrintQ("Interrupted duplicateInParallel.")
         return
-      label = stack.getSliceLabel(i)
-      stack2.addSlice(label if label else str(i), fu.get())
+      label = None
+      try:
+        label = stack.getSliceLabel(i)
+      except:
+        syncPrintQ("Failed to retrieve slice labet at section %i" % i)
+      try:
+        stack2.addSlice(label if label else str(i), fu.get())
+      except:
+        syncPrintQ("Failed to add slice for section %i" % i)
     imp = ImagePlus("%s - [%i, %i]" % (imp.getTitle(), slices[0], slices[-1]), stack2)
     if show:
       imp.show()
