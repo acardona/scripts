@@ -17,6 +17,7 @@ from ini.trakem2.display import Display
 from lib.io import readFIBSEMHeader
 from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, ensureDirsExist
 from lib.ui import duplicateInParallel, saveInParallel, ExecutorCloser
+from lib.registration import saveMatrices
 
 
 class SliceTableModel(AbstractTableModel):
@@ -270,7 +271,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     tiles = {}
     for patch in display.getLayer().getPatches(False): # visible or invisible: all
       path = patch.getImageFilePath()
-      tiles[path] = patch
+      tiles[os.path.basename(path)] = patch # the folder can be different if the file was repaired. The basename suffices and will sort well.
     matrices = []
     groupName = None
     for path in sorted(tiles.keys()):
@@ -279,7 +280,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       matrices.append([1, 0, x, 0, 1, y])
       groupName = patch.getProperty("groupName")
     if printOnly:
-      IJ.log("Matrices fdescribing tile montage for section %s" % groupName)
+      IJ.log("Matrices describing tile montage for section %s" % groupName)
       IJ.log("\n".join(map(str, matrices)))
     else:
       # Write or overwrite montage matrices CSV file
