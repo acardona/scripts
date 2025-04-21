@@ -6,7 +6,7 @@ from lib.ui import RowClickListener, showTable
 from lib.pixels import pairwiseCosyneSimilarity
 from net.imglib2 import FinalInterval
 from functools import partial
-from java.lang import String, Number
+from java.lang import String, Number, Integer, Double
 from net.imglib2.view import Views
 from collections import defaultdict
 
@@ -74,6 +74,7 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
   for root, dirs, filenames in os.walk(csvDir):
     for filename in filenames:
       if filename.startswith("matrices_"):
+        # Test against chunk matrix filename pattern
         m = pattern1.search(filename)
         if m:
           start, end = map(int, m.groups())
@@ -82,22 +83,22 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
             entry[1] = start
             entry[2] = end
             continue
-        else:
-          m = pattern2.search(filename)
-          if m:
-            start, end = map(int, m.groups())
-            with open(filename, 'r') as csvfile:
-              reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-              # First line contains parameter names
-              headerParams = reader.next()
-              # Second line the values
-              maxIterations, stats_min, stats_max = reader.next() # as strings
-              #
-              entry = chunks[start]
-              entry[3] = int(maxIterations)
-              entry[4] = float(stats_min)
-              entry[5] = float(stats_max)
-              continue       
+        # Test against chunk matrix optimizer stats CSV filename pattern
+        m = pattern2.search(filename)
+        if m:
+          start, end = map(int, m.groups())
+          with open(filename, 'r') as csvfile:
+            reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+            # First line contains parameter names
+            headerParams = reader.next()
+            # Second line the values
+            maxIterations, stats_min, stats_max = reader.next() # as strings
+            #
+            entry = chunks[start]
+            entry[3] = int(maxIterations)
+            entry[4] = float(stats_min)
+            entry[5] = float(stats_max)
+            continue
         # Else
         syncPrintQ("No match for file: " + filename)
   
@@ -106,7 +107,7 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
   table, frame = showTable(rows,
       title="Table of chunks",
       column_names=["file", "start", "end", "maxIterations", "stats_min", "stats_max"],
-      dataType=String,
+      dataType=[String, Integer, Integer, Integer, Double, Double]
       width=800, height=500,
       showTable=True,
       windowClosing=None, onCellClickFn=None, onRowClickFn=None,
@@ -115,7 +116,13 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
   def launchCosSimForChunk(table_model, rowIndex):
     newThread(makeTableCosyneSimilarityForChunk, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 0))
   
-  commands = [("Compute cosyne similarity", launchCosSimForChunk)]
+  def launchCosSimForAll(table_model, rowIndex):
+    #newThread()
+    # TODO
+    pass
+
+  commands = [("Compute cosyne similarity", launchCosSimForChunk),
+               "Compute cosyne similrity (all)", launchCosSimForall)]
   
   listener = RowClickListener(table,
                               double_click_fn=partial(uiOpenChunkVolume, groupNames, montage_img, csvDir, properties),
