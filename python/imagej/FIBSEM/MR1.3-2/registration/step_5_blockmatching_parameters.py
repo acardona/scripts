@@ -28,7 +28,7 @@ propertiesBM = {
          8000,
          12500],
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
- 'filterFeaturesFn': None, #makeFilterFeaturesFn(model_path, model_width), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
+ 'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width, as3D=True), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
 }
 
 # Parameters for blockmatching

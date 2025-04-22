@@ -6,7 +6,7 @@ from ij.gui import Roi
 # Add current directory to path
 sys.path.append(os.path.dirname(sys.argv[0]))
 # Import parameters used for montaging
-from step_1_montage_parameters import libDir, name, tgtDir, montageDir, section_width, section_height, params_pixels
+from step_1_montage_parameters import libDir, name, srcDir, tgtDir, montageDir, section_width, section_height, params_pixels
 # Import registration library functions
 sys.path.append(libDir)
 from lib.serial2Dregistration import handleNoPointMatches, makeFilterFeaturesFn
@@ -22,8 +22,8 @@ SIFTdir = tgtDir + "SIFT-csv/"
 
 # Parameters to filter out features outside the tissue using a LabKit model
 # Can be None
-model_path = None # os.path.join("/net/zstore1/FIBSEM/MR1.4-3/registration/MR1.4-3_section1+6000_0.025.labkit.classifier") # from LabKit
-model_width = None # 400 # target width for resizing so as to match the dimensions of the image used when training the model.
+model_path = os.path.join(os.path.join(srcDir, "registration"), "MR1.3-2_labkit.classifier") # from LabKit
+model_width = 400 # target width for resizing so as to match the dimensions of the image used when training the model.
 
 
 # Parameters for extracting SIFT features
@@ -40,7 +40,7 @@ properties = {
  'RANSAC_maxEpsilon': 25, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
  'RANSAC_minInlierRatio': 0.01,
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
- 'filterFeaturesFn': None, # makeFilterFeaturesFn(model_path, model_width), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
+ 'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width, as3D=True), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
 }
 
 
