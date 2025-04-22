@@ -1074,3 +1074,29 @@ def writeDictToCSV(filepath, dictionary):
     f.write(", ".join(keys))
     f.write("\n")
     f.write(", ".join(str(logDict[key]) for key in keys))
+
+
+def moveToTmpDir(parentDir, filename):
+  """
+  Move filename to a "tmp" directory under parentDir
+  ensuring not to overwrite any file in that tmp directory.
+  The moved file will always take a name that ends in .1, or .2, etc.
+  """
+  # Check that filename exists under parentDir
+  oldPath = os.path.join(parentDir, filename)
+  if not os.path.exists(oldPath):
+    syncPrintQ("File does not exist:\n" + oldPath)
+    return
+  # Ensure the tmp directory exists under parentDir
+  tmpDir = os.path.join(parentDir, "tmp")
+  ensureDirsExist(tmpDir)
+  # Find a suitable filename to avoid overwriting
+  i = 1
+  newPath = os.path.join(tmpDir, "%s.%i" % (filename, i))
+  while os.path.exists(newPath):
+    i += 1
+    newPath = os.path.join(tmpDir, "%s.%i" % (filename, i))
+  # Move the file
+  os.rename(oldPath, newPath)
+  return newPath
+
