@@ -24,6 +24,7 @@ from ij import IJ, ImagePlus, ImageStack, VirtualStack
 from ij.io import FileSaver
 from net.imglib2.img.display.imagej import ImageJVirtualStackUnsignedByte
 from net.imglib2.converter import TypeIdentity
+from java.awt.event import ActionListener
 
 
 
@@ -256,7 +257,16 @@ class ExecutorCloser(WindowAdapter):
       self.exe.shutdownNow()
     except:
       printException()
-    
+
+
+class MenuItemListener(ActionListener):
+  def __init__(self, fn, *args, **kwargs):
+    self.fn = fn
+    self.args = args
+    self.kwargs = kwargs
+  def actionPerformed(self, event):
+    self.fn(*self.args, **self.kwargs)
+
 
 class RowClickListener(MouseAdapter, ListSelectionListener):
   def __init__(self, table,
@@ -282,9 +292,11 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
       popup = JPopupMenu()
       rowIndex = event.getSource().rowAtPoint(event.getPoint())
+      
       for title, fn in self.right_click_fns:
-        popup.add(JMenuItem(title,
-                            actionPerformed=lambda event: fn(self.table.getModel(), rowIndex)))
+        item = JMenuItem(title)
+        item.addActionListener(MenuItemListener(fn, self.table.getModel(), rowIndex))
+        popup.add(item)
       popup.show(event.getComponent(), event.getX(), event.getY())
   
   def valueChanged(self, event):
@@ -358,9 +370,8 @@ def showTable(rows, title="Table", column_names=None, dataType=Number, width=400
   table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
   #table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
   sorter = TableRowSorter(table_data)
-  sorter.setComparator(0, Comparator.naturalOrder())
-  sorter.setComparator(1, Comparator.naturalOrder())
-  sorter.setComparator(2, Comparator.naturalOrder())
+  for i in xrange(len(column_names)):
+    sorter.setComparator(i, Comparator.naturalOrder())
   table.setRowSorter(sorter)
   
   table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
@@ -380,7 +391,8 @@ def showTable(rows, title="Table", column_names=None, dataType=Number, width=400
   
   frame = JFrame(title) if windowClosing is None else JFrame(title, windowClosing=windowClosing)
   jsp = JScrollPane(table)
-  jsp.setMinimumSize(Dimension(width, height))
+  jsp.setMinimumSize(Dimension(400, 500))
+  jsp.setPreferredSize(Dimension(width, height))
   frame.getContentPane().add(jsp)
   
   def show():
