@@ -36,7 +36,7 @@ last_section = -1 # last
 # Add entries like: 1718: 1719,  indicating that section 1718 is to be replaced by section at 1719, effectively duplicating the latter
 # This is desirable to keep the true Euclidean distances and dimensions while overriding a faulty section with e.g, truncated images.
 replace_sections = {
-
+  6345: 6344,
 }
 
 # Image contrast parameters
