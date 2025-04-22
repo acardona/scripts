@@ -87,18 +87,21 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
         m = pattern2.search(filename)
         if m:
           start, end = map(int, m.groups())
-          with open(filename, 'r') as csvfile:
-            reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-            # First line contains parameter names
-            headerParams = reader.next()
-            # Second line the values
-            maxIterations, stats_min, stats_max = reader.next() # as strings
-            #
-            entry = chunks[start]
-            entry[3] = int(maxIterations)
-            entry[4] = float(stats_min)
-            entry[5] = float(stats_max)
-            continue
+          try:
+            with open(filename, 'r') as csvfile:
+              reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+              # First line contains parameter names
+              headerParams = reader.next()
+              # Second line the values
+              maxIterations, stats_min, stats_max = reader.next() # as strings
+              #
+              entry = chunks[start]
+              entry[3] = int(maxIterations)
+              entry[4] = float(stats_min)
+              entry[5] = float(stats_max)
+              continue
+            except:
+              syncPrintQ("Failed to parse CSV file %s" % filename)
         # Else
         syncPrintQ("No match for file: " + filename)
   
