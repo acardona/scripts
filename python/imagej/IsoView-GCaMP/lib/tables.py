@@ -165,9 +165,20 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties, reRunFn):
     moveToTmpDir(csvDir, "matrices.csv")
     # Re-run the overall alignment
     newThread(reRunFn)
+  
+  def removePointMatches(table_model, rowIndex):
+    start = table_model.getValueAt(rowIndex, 2)
+    end   = table_model.getValueAt(rowIndex, 3)
+    pointmatches_files = set(filter(lambda filename: filename.endswith(".pointmatches.csv"), os.listdir(csvDir)))
+    for groupName in groupNames[start, end+1]:
+      for filename in list(pointmatches_files): # iterate a copy
+        if filename.find(groupName) > -1:
+          pointmatches_files.remove(filename)
+          os.remove(os.path.join(csvDir, filename))
 
   commands = [("Open chunk volume", partial(uiOpenChunkVolume, groupNames, montage_img, csvDir, properties)),
               ("Re-run chunk-wise alignment for section ...", reRunChunkAlignmentForSection),
+              ("Remove pointmatches", removePointMatches),
               ("Compute cosyne similarity", launchCosSimForChunk),
               ("Compute cosyne similarity (all)", launchCosSimForAll)]
   
