@@ -11,6 +11,16 @@ from net.imglib2.view import Views
 from collections import defaultdict
 
 
+def openVolume(groupNames, img, matrices, properties, matrices_csv_filename):
+  # Alias showAlignedImg to also return the first and last slice indices
+  imgA, impA = showAlignedImg(img,
+                 FinalInterval([img.dimension(0), img.dimension(1)]), # whole 2D
+                 groupNames,
+                 properties,
+                 matrices, # a list as long as the number of slices
+                 rotate=None,
+                 title_addendum=" - %s" % matrices_csv_filename)
+  return imgA, impA, 0, img.dimension(2) - 1
 
 def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename):
   # Extract Z interval from the name of the matrices CSV file
@@ -26,7 +36,7 @@ def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_
                  FinalInterval(dim2d), # whole 2D
                  groupNames[start:end], # Only the interval within the chunk
                  properties,
-                 matrices, # a list as long as the number of chunks
+                 matrices, # a list as long as the number of slices in a chunk
                  rotate=None,
                  title_addendum=" - %s" % chunk_matrices_csv_filename)
    
@@ -44,9 +54,9 @@ def uiOpenChunkVolume(groupNames, montage_img, csvDir, properties, table_model, 
     printException()
 
 
-def makeTableCosyneSimilarityForChunk(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename):
+def makeTableCosyneSimilarity(openVolumeFn):
   # Load a virtual aligned volume
-  imgA, impA, start, end = openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_csv_filename)
+  imgA, impA, start, end = openVolumeFn()
   # Compute for all pairs of adjacent sections, in parallel
   cs = pairwiseCosyneSimilarity(imgA)
   
@@ -117,15 +127,13 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
       singleBlockSelection=True, renderRightColumns=[1, 2])
   
   def launchCosSimForChunk(table_model, rowIndex):
-    newThread(makeTableCosyneSimilarityForChunk, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 0))
+    newThread(makeTableCosyneSimilarity, partial(openChunkVolume, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 0)))
   
   def launchCosSimForAll(table_model, rowIndex):
-    #newThread()
-    # TODO
-    pass
+    newThread(makeTableCosyneSimilarity, partial(openVolume, groupNames, montage_img, csvDir, properties, "matrices.csv"))
 
   commands = [("Compute cosyne similarity", launchCosSimForChunk),
-               "Compute cosyne similrity (all)", launchCosSimForall)]
+               "Compute cosyne similrity (all)", launchCosSimForAll)]
   
   listener = RowClickListener(table,
                               double_click_fn=partial(uiOpenChunkVolume, groupNames, montage_img, csvDir, properties),
