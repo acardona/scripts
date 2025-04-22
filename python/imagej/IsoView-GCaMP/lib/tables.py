@@ -89,10 +89,10 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
         if m:
           start, end = map(int, m.groups())
           entry = chunks[start]
-            entry[0] = filename
-            entry[1] = start
-            entry[2] = end
-            continue
+          entry[0] = filename
+          entry[1] = start
+          entry[2] = end
+          continue
         # Test against chunk matrix optimizer stats CSV filename pattern
         m = pattern2.search(filename)
         if m:
@@ -110,8 +110,8 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
               entry[4] = float(stats_min)
               entry[5] = float(stats_max)
               continue
-            except:
-              syncPrintQ("Failed to parse CSV file %s" % filename)
+          except:
+            syncPrintQ("Failed to parse CSV file %s" % filename)
         # Else
         syncPrintQ("No match for file: " + filename)
   
