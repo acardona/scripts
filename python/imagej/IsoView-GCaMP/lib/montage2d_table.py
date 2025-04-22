@@ -200,7 +200,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     # Check if a project for this set of sections already exists
     first = self.model.rows[rowIndices[0]][0]
     last = self.model.rows[rowIndicies[-1]][0]
-    xml_path = os.path.join(folder, "montages-%i-%i.xml" % (first, last)
+    xml_path = os.path.join(folder, "montages-%i-%i.xml" % (first, last))
     if os.path.exists(xml_path):
       syncPrintQ("TrakEM2 project for sections %i-% exists already." % (first, last))
       # Check if it is open already
