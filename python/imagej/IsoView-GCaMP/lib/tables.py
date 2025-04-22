@@ -120,7 +120,7 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties):
   table, frame = showTable(rows,
       title="Table of chunks",
       column_names=["file", "start", "end", "maxIterations", "stats_min", "stats_max"],
-      dataType=[String, Integer, Integer, Integer, Double, Double]
+      dataType=[String, Integer, Integer, Integer, Double, Double],
       width=800, height=500,
       showTable=True,
       windowClosing=None, onCellClickFn=None, onRowClickFn=None,
