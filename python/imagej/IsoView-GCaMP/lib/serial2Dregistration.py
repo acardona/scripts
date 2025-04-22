@@ -622,11 +622,17 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   The size of the chunks should be small, like 400, and the overlap between consecutive chunks should be 50%.
   Needs only one fixed section (tile) for the overall; when aligning each chunk, the middle tile is kept fixed.
   """
+  
+  # Avoid circular dependencies: pass self function as argument to makeTableChunks
+  reRunFn = partial(alignInChunks, filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+                    groupNames, volumeImg, fixed_tile_index=fixed_tile_index, clearCacheFn=clearCacheFn)
+  
   if not os.path.exists(csvDir):
     os.makedirs(csvDir) # recursively
   name = "matrices"
   matrices = loadMatrices(name, csvDir)
   if matrices:
+    makeTableChunks(groupNames, volumeImg, csvDir, properties, reRunFn)
     return matrices
   
   # Determine fixed tile for the whole series
@@ -784,7 +790,7 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   
   saveMatrices(name, matrices, csvDir)
   
-  makeTableChunks(groupNames, volumeImg, csvDir, properties)
+  makeTableChunks(groupNames, volumeImg, csvDir, properties, reRunFn)
   
   return matrices
 
