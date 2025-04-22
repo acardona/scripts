@@ -1270,17 +1270,21 @@ def computeShifts(groupNames, csvDir, threshold, paramsPM, properties, edit=Fals
   return shifts
 
 
-def makeFilterFeaturesFn(model_path, model_width):
+def makeFilterFeaturesFn(model_path, model_width, as3D=False):
   return partial(filterFeatures,
                  model_width,
-                 segThreadCache(model_path, 1, cache_size=numCPUs())) # 1 thread for running the inference on the image
+                 segThreadCache(model_path, 1, cache_size=numCPUs()),
+                 as3D=as3D) # 1 thread for running the inference on the image
 
-def filterFeatures(model_width, seg_cache, section_ip, positions, points=False, ip_scale=1.0, process_mask=True):
+def filterFeatures(model_width, seg_cache, section_ip, positions, points=False, ip_scale=1.0, process_mask=True, as3D=False):
   """ Compute a mask for the section_ip (a ByteProcessor) using a LabKit Segmenter, obtained from the seg_cache.
   If points=False, assume features contain Feature instances, otherwise Point instances. """
   section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
   resized_ip = section_ip.resize(model_width)
   resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [model_width, resized_ip.getHeight()])
+  if as3D:
+    resized_img = Views.addDimension(resized_img, 0, 1) # A bogus third dimension of size 1.
+                                                        # Necessary when the model was trained on a 3D stack, since here it's applied to a 2D image.
   
   """
   # Trainable Weka Segmentation fails for mysterious reasons, works on isolated scripts
