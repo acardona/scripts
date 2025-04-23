@@ -14,6 +14,7 @@ from ij.io import FileSaver
 
 from ini.trakem2 import Project
 from ini.trakem2.display import Display, Patch
+from ini.trakem2.imaging.filters import Invert, ResetMinAndMax, EnhanceContrast
 
 from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist, imageInfo
 from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread
@@ -246,6 +247,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
                   "height": imp.getHeight()}
         # Add Patches to Layer
         patch = Patch.createPatch(project, path)
+        patch.setFilters([Invert(), ResetMinAndMax(), EnhanceContrast()])
         patch.setProperty("groupName", groupName)
         layer.add(patch)
         # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
