@@ -84,7 +84,7 @@ class OpenDAT(Runnable):
   def run(self):
     try:
       syncPrintQ("OpenDAT filepath: %s" % self.filepath)
-      imp = load(self.filepath)
+      imp = readFIBSEMdat(self.filepath, channel_index=0, asImagePlus=True, toUnsigned=True)[0]
       if self.filepath.endswith(".dat"):
         syncPrintQ(readFIBSEMHeader(self.filepath))
       imp.setTitle(os.path.basename(self.filepath))
