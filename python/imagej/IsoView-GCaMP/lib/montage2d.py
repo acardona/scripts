@@ -4,7 +4,7 @@ from datetime import datetime
 
 from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task, ParallelTasks
 from lib.registration import saveMatrices, loadMatrices
-from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, imageInfo, ensureDirsExist, SectionCellLoader
+from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, readFIBSEM, imageInfo, ensureDirsExist, SectionCellLoader
 from lib.img import lazyCachedCellImg
 from lib.ui import wrap, wrap8bit
 from lib.loop import createBiConsumerTypeSet
@@ -175,19 +175,24 @@ def getPointMatches(sp0, roi0, sp1, roi1, offset,
   return pointmatches
 
 # Load images
-def load(filepath):
+def load(filepath, params_pixels):
   """ Return an ImagePlus """
   if filepath.endswith(".dat"):
-    return readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0]
+    asFloatFn = params_pixels.get("loadAsFloatFn", None)
+    if asFloatFn and asFloatFn(filepath):
+      # Slower but can open with floats
+      return readFIBSEM(filepath, openAsFloat=True, channel_index=0)
+    else:
+      return readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0]
   return IJ.openImage(filepath)
 
-def loadShortProcessors(tilePaths, asDict=False):
+def loadShortProcessors(tilePaths, params_pixels, asDict=False):
   for filepath in tilePaths:
     syncPrintQ("#%s#" % filepath)
   if asDict:
-    return {filepath: load(filepath).getProcessor()
+    return {filepath: load(filepath, params_pixels).getProcessor()
             for filepath in tilePaths}
-  return [load(filepath).getProcessor()
+  return [load(filepath, params_pixels).getProcessor()
           for filepath in tilePaths]
 
 
@@ -257,7 +262,7 @@ def process(sp, params_pixels):
 
 class MontageSlice(Callable):
   def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset,
-               paramsSIFT, paramsRANSAC, paramsTileConfiguration,
+               paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels,
                csvDir, failed):
     """
     Generic montager, reads out i,j position from the file name.
@@ -281,6 +286,7 @@ class MontageSlice(Callable):
                    "max_id": Double.MAX_VALUE, # max_id: maximal distance in image space
                    "rod": 0.9} # rod: ratio of best vs second best
     self.paramsTileConfiguration = paramsTileConfiguration
+    self.params_pixels = params_pixels
 
     # Determine rows and columns
     self.rows = defaultdict(partial(defaultdict, str))
@@ -318,7 +324,7 @@ class MontageSlice(Callable):
     # Fix top-left tile at 0,0 position
     tc.fixTile(tiles[self.rows[0][0]])
 
-    sps = dict(zip(self.tilePaths, sps)) if sps is not None else loadShortProcessors(self.tilePaths, asDict=True)
+    sps = dict(zip(self.tilePaths, sps)) if sps is not None else loadShortProcessors(self.tilePaths, self.params_pixels, asDict=True)
 
     # Assumes images have the same dimensions
     width = sps[self.tilePaths[0]].getWidth()
@@ -401,20 +407,20 @@ class MontageSlice(Callable):
   def call(self):
     return self.getMatrices()
 
-  def montagedImg(self, width, height, section_matrix, params_pixels, sdx=0, sdy=0):
+  def montagedImg(self, width, height, section_matrix, sdx=0, sdy=0):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
                         Here, only the translation is applied, ultimately as integers.
     """
     # Load the ShortProcessors once, if matrices need to be computed
-    sps = loadShortProcessors(self.tilePaths)
+    sps = loadShortProcessors(self.tilePaths, self.params_pixels)
     matrices = self.getMatrices(sps=sps)
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
     # Start pasting from the end, to bury the bad left edges
     for sp, matrix in reversed(zip(sps, matrices)):
-      spMontage.insert(process(sp, params_pixels),  # TODO don't process separately, see above
+      spMontage.insert(process(sp, self.params_pixels),  # TODO don't process separately, see above
                        int(sdx + matrix[2] + dx + 0.5),
                        int(sdy + matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
     
@@ -422,14 +428,14 @@ class MontageSlice(Callable):
 
 
 
-  def montagedImg8bit(self, width, height, section_matrix, params_pixels, sdx=0, sdy=0):
+  def montagedImg8bit(self, width, height, section_matrix, sdx=0, sdy=0):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
                         Here, only the translation is applied, ultimately as integers.
     """
     # Load the ShortProcessors once, if matrices need to be computed
-    sps = loadShortProcessors(self.tilePaths)
+    sps = loadShortProcessors(self.tilePaths, self.params_pixels)
     matrices = self.getMatrices(sps=sps)
     # TODO if scale and shear values aren't 1.0, 0.0 then apply an affine transform.
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
@@ -456,9 +462,9 @@ class MontageSlice(Callable):
       spMontage.insert(sp, x, y)
       rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     sps = None
-    bpMontage = processTo8bit(spMontage, params_pixels)
+    bpMontage = processTo8bit(spMontage, self.params_pixels)
     spMontage = None
-    if params_pixels["invert"]:
+    if self.params_pixels["invert"]:
       # paint white background as black
       # (Can't invert earlier as the min, max wouldn't match, leading to uneven illumination across tiles)
       sp = ShapeRoi(rois[0])
@@ -471,7 +477,7 @@ class MontageSlice(Callable):
 
 
 def singleTile(tilePath, width, height, params_pixels, sdx=0, sdy=0, matrix=None, center=False):
-  imp = load(tilePath)
+  imp = load(tilePath, params_pixels)
   as8bit = params_pixels.get("as8bit", True)
   if as8bit:
     ipTile = processTo8bit(imp.getProcessor(), params_pixels)
@@ -544,15 +550,15 @@ class SectionLoader(CacheLoader):
     #
     if len(tilePaths) > 1:
       m = MontageSlice(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
-                       self.paramsSIFT, self.paramsRANSAC, self.paramsTileConfiguration,
+                       self.paramsSIFT, self.paramsRANSAC, self.paramsTileConfiguration, self.params_pixels,
                        self.csvDir, Vector())
       if as8bit:
         aimg = m.montagedImg8bit(width, height,
-                                 matrix, self.params_pixels,
+                                 matrix,
                                  sdx=sdx, sdy=sdy)
       else:
         aimg = m.montagedImg(width, height,
-                             matrix, self.params_pixels,
+                             matrix,
                              sdx=sdx, sdy=sdy)        
     elif 1 == len(tilePaths):
       aimg, imp = singleTile(tilePaths[0], width, height, self.params_pixels, sdx=sdx, sdy=sdy, matrix=matrix)
@@ -583,24 +589,25 @@ class MontageAndSave(Callable):
       
   def montageAndSnapshot(self, groupName):
     syncPrintQ("Generating montage for " + groupName)
-    args = self.args[:10]
+    args = self.args[:11]
     ms = MontageSlice(*args)
-    section_width, section_height, params_pixels = self.args[10:13]
+    params_pixels = self.args[8]
+    section_width, section_height = self.args[11:13]
     ip = None
     # Generate the matrices and an image of the montage.
     # The call to montagedImg or montagedImg8bit will generate and store the montage matrices.
     if params_pixels.get("as8bit", True):
-      img = ms.montagedImg8bit(section_width, section_height, None, params_pixels, sdx=0, sdy=0)
+      img = ms.montagedImg8bit(section_width, section_height, None, sdx=0, sdy=0)
       ip = ByteProcessor(section_width, section_height, img.update(None).getCurrentStorageArray(), None)
     else:
-      img = ms.montagedImg(section_width, section_height, None, params_pixels, sdx=0, sdy=0)
+      img = ms.montagedImg(section_width, section_height, None, sdx=0, sdy=0)
       ip = ShortProcessor(section_width, section_height, img.update(None).getCurrentStorageArray(), None)
     return ImagePlus(groupName, ip)
   
   def callImpl(self):
     groupName = self.args[0]
     tilePaths = self.args[1]
-    montageDir = self.args[8]
+    montageDir = self.args[9]
     scaled_image_path = montageDir + "scaled-montages/" + groupName + ".tif"
     # Check if scaled image exists
     if os.path.exists(scaled_image_path):
@@ -614,7 +621,8 @@ class MontageAndSave(Callable):
         return True
     # Else, generate both, overwriting the image.
     # If the matrices exists but the scaled image doesn't, the matrices will simply be loaded, not computed.
-    section_width, section_height, params_pixels = self.args[10:13]
+    params_pixels = self.args[8]
+    section_width, section_height = self.args[11:13]
     if len(tilePaths) > 1:
       imp = self.montageAndSnapshot(groupName)
     else:
@@ -658,8 +666,8 @@ def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overla
     for groupName, tilePaths in izip(groupNames, tileGroups):
       # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
       futures.append(exe.submit(MontageAndSave(groupName, tilePaths, overlap, nominal_overlap, offset,
-                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, montageDir, failed,
-                                               section_width, section_height, params_pixels)))
+                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels, montageDir, failed,
+                                               section_width, section_height)))
 
     # Await them all
     for future in futures:
@@ -681,7 +689,7 @@ def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overla
 
 
 def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
-                   paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, nThreads):
+                   paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels, csvDir, nThreads):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
   The overlap between tiles is defined by overlap.
@@ -707,7 +715,7 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
       if len(tilePaths) > 1:
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
         futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset,
-                                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed)))
+                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels, csvDir, failed)))
 
     # Await them all
     for future in futures:
