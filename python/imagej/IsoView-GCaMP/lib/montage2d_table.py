@@ -1,4 +1,5 @@
 import os, sys, re
+from functools import partial
 
 from java.lang import Integer, Runnable, String
 from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities,\
@@ -14,7 +15,7 @@ from ij.io import FileSaver
 from ini.trakem2 import Project
 from ini.trakem2.display import Display, Patch
 
-from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist
+from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist, imageInfo
 from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread
 from lib.ui import duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.registration import saveMatrices
@@ -226,27 +227,32 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       print "Will setup for montage:", groupName
       print "With tile filepaths: \n  %s" % "\n  ".join(tilePaths)
       # Create a TrakEM2 Layer for this section
-      layer = layerset.getLayer(row[0], 1, True)
+      layer = layerset.getLayer(row[0], 0, True)
       # Save all tile images in the tmpDir folder and add them as Patch instances to the Layer
       pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
       for tilePath in tilePaths:
         path = os.path.join(tmpDir, os.path.basename(tilePath) + ".tif")
+        # Save TIFF versions of the original DAT image tiles
         if os.path.exists(path):
           syncPrintQ("Tile already as TIFF under tmpDir:\n%s" % path)
-          continue
-        if tilePath.endswith(".dat"):
-          imp = readFIBSEMdat(tilePath, channel_index=0, asImagePlus=True)[0]
+          info = imageInfo(path)
         else:
-          imp = IJ.openImage(tilePath)
-        FileSaver(imp).saveAsTiff(path)
+          if tilePath.endswith(".dat"):
+            imp = readFIBSEMdat(tilePath, channel_index=0, asImagePlus=True)[0]
+          else:
+            imp = IJ.openImage(tilePath)
+          FileSaver(imp).saveAsTiff(path)
+          info = {"width": imp.getWidth(),
+                  "height": imp.getHeight()}
+        # Add Patches to Layer
         patch = Patch.createPatch(project, path)
         patch.setProperty("groupName", groupName)
         layer.add(patch)
         # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
         i_row, i_col = map(int, re.match(pattern, tilePath[tilePath.rfind('_')+1:]).groups())
         # Position tiles so as to overlap tiles by 10%
-        x = i_row * 0.9 * imp.getWidth()
-        y = i_col * 0.9 * imp.getHeight()
+        x = i_col * 0.9 * info["width"]
+        y = i_row * 0.9 * info["height"]
         patch.setLocation(x, y)
       # Update internal quadtree of the layer so it can find the Patch instances
       layer.recreateBuckets()
@@ -299,9 +305,9 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
        return
    # Add it new
    pane = JPanel()
-   b1 = JButton("Save montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, self, project, False))
+   b1 = JButton("Save montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, project, False))
    pane.add(b1)
-   b2 = JButton("Print montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, self, project, True))
+   b2 = JButton("Print montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, project, True))
    pane.add(b2)
    tabs.add(title, pane)
    display.pack() # repaint
