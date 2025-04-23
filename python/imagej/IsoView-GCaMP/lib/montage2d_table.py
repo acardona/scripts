@@ -6,10 +6,11 @@ from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSel
                         JLabel, BorderFactory, JPopupMenu, JMenuItem, AbstractAction, KeyStroke, JOptionPane, JButton
 from javax.swing.table import AbstractTableModel, DefaultTableCellRenderer
 from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font, Insets, Color
+from java.awt.geom import AffineTransform
 from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, WindowAdapter
 from javax.swing.event import ListSelectionListener
 
-from ij import IJ
+from ij import IJ, ImagePlus
 from ij.io import FileSaver
 
 from ini.trakem2 import Project
@@ -246,8 +247,19 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
           info = {"width": imp.getWidth(),
                   "height": imp.getHeight()}
         # Add Patches to Layer
-        patch = Patch.createPatch(project, path)
+        # Can't use, loads the image from the path before setting the filters, would have to flush TrakEM2's image cache and reload
+        #patch = Patch.createPatch(project, path)
+        # Create the Patch manually, which avoids loading the image
+        patch = Patch(project, os.path.basename(path),
+             info["width"], info["height"],
+             info["width"], info["height"],
+             ImagePlus.GRAY16, 1.0,
+             Color.yellow, False,
+             0, pow(2, 16) -1,
+             AffineTransform(),
+             path)
         patch.setFilters([Invert(), ResetMinAndMax(), EnhanceContrast()])
+        project.getLoader().addedPatchFrom(path, patch);
         patch.setProperty("groupName", groupName)
         layer.add(patch)
         # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
@@ -258,6 +270,8 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
         patch.setLocation(x, y)
       # Update internal quadtree of the layer so it can find the Patch instances
       layer.recreateBuckets()
+      # Start off mipmap regeneration
+      project.getLoader().generateMipMaps(layer.getPatches(True), True)
       # Resize the display canvas
       layerset.setMinimumDimensions()
     # Update TrakEM2 UI
