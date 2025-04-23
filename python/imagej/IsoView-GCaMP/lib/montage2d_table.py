@@ -2,7 +2,7 @@ import os, sys, re
 
 from java.lang import Integer, Runnable, String
 from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities,\
-                        JLabel, BorderFactory, JPopupMenu, JMenuItem, AbstractAction, KeyStroke, JOptionPane
+                        JLabel, BorderFactory, JPopupMenu, JMenuItem, AbstractAction, KeyStroke, JOptionPane, JButton
 from javax.swing.table import AbstractTableModel, DefaultTableCellRenderer
 from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font, Insets, Color
 from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, WindowAdapter
@@ -12,9 +12,9 @@ from ij import IJ
 from ij.io import FileSaver
 
 from ini.trakem2 import Project
-from ini.trakem2.display import Display
+from ini.trakem2.display import Display, Patch
 
-from lib.io import readFIBSEMHeader, ensureDirsExist
+from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist
 from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread
 from lib.ui import duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.registration import saveMatrices
@@ -188,7 +188,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       return
     # Rows selected:
     rowIndices = list(self.table.getSelectedRows())
-    newThread(self.manualMontage, self, rowIndices)
+    newThread(self.manualMontage, rowIndices)
   
   def manualMontage(self, rowIndices):
     """
@@ -198,9 +198,9 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     tmpDir = os.path.join(self.csvDir, "tmp")
     ensureDirsExist(tmpDir)
     # Check if a project for this set of sections already exists
-    first = self.model.rows[rowIndices[0]][0]
-    last = self.model.rows[rowIndicies[-1]][0]
-    xml_path = os.path.join(folder, "montages-%i-%i.xml" % (first, last))
+    first = self.model.rows[rowIndices[ 0]][0]
+    last  = self.model.rows[rowIndices[-1]][0]
+    xml_path = os.path.join(tmpDir, "montages-%i-%i.xml" % (first, last))
     if os.path.exists(xml_path):
       syncPrintQ("TrakEM2 project for sections %i-% exists already." % (first, last))
       # Check if it is open already
@@ -238,7 +238,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
           imp = readFIBSEMdat(tilePath, channel_index=0, asImagePlus=True)[0]
         else:
           imp = IJ.openImage(tilePath)
-        FileSaver(imp).saveAsTIFF(path)
+        FileSaver(imp).saveAsTiff(path)
         patch = Patch.createPatch(project, path)
         patch.setProperty("groupName", groupName)
         layer.add(patch)
@@ -248,10 +248,10 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
         x = i_row * 0.9 * imp.getWidth()
         y = i_col * 0.9 * imp.getHeight()
         patch.setLocation(x, y)
-      # Resize the display canvas
-      layerset.setMinimumDimensions()
       # Update internal quadtree of the layer so it can find the Patch instances
       layer.recreateBuckets()
+      # Resize the display canvas
+      layerset.setMinimumDimensions()
     # Update TrakEM2 UI
     project.getLayerTree().updateList(layerset)
     # ... and the display slider
@@ -291,10 +291,10 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   def addTrakEM2Tab(self, project):
    display = Display.getOrCreateFront(project)
    tabs = display.getTabbedPane()
-   title = "Manual Montage"
+   title = "FIBSEM section montage"
    # Check if the tab is already there
-   for i in xrange(tags.getTabCount()):
-     if tags.getTitleAt(i) == title:
+   for i in xrange(tabs.getTabCount()):
+     if tabs.getTitleAt(i) == title:
        syncPrintQ("'Manual Montage' tab already exists.")
        return
    # Add it new
