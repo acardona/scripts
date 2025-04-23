@@ -9,7 +9,7 @@ libDir = "/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/"
 # VOLUME
 name = "MR1.3-2" # Name of the folder containing the .dat files, e.g., "MR1.4-3"
 sourceServer = "/net/fibserver1/raw/"
-targetServer = "/net/zstore1/FIBSEM/"
+targetServer = "/net/fibserver1/raw/"
 
 
 # Folders
