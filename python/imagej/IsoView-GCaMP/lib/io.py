@@ -28,7 +28,7 @@ from net.imglib2.cache.ref import SoftRefLoaderCache, BoundedSoftRefLoaderCache
 from net.imglib2.cache.img import CachedCellImg
 from loci.formats import ChannelSeparator
 from ij.io import FileSaver, ImageReader, FileInfo
-from ij import ImagePlus, IJ
+from ij import ImagePlus, IJ, ImageStack
 from ij.process import ShortProcessor, ByteProcessor
 from synchronize import make_synchronized
 from util import syncPrint, syncPrintQ, newFixedThreadPool, printException
@@ -272,7 +272,71 @@ def _readFIBSEMdatBuffered(ra, width, height, numChannels, channel_index=-1, buf
   shorts = None
   return channels
   
+
+def readFIBSEM(path, openAsFloat=False, channel_index=0):
+  """
+  Parse DAT file using the sc.fiji.io.FIBSEM_Reader plugin.
+  Optionally open as float.
+  Optionally return a single-slice ImagePlus containing the specified channel.
+  Returns an ImagePlus.
+  Note this method is far more memory intensive than readFIBSEMdat,
+  but has the advantage of using the standard reader and is able to open as float.
+  """
+  reader = FIBSEM_Reader()
+  f = File(path)
+  fi = None
+  header = None
+  imp = None
+  try:
+    fi = FileInputStream(f)
+    header = reader.parseHeader(fi)
+  finally:
+    if fi:
+      fi.close()
+    fi = None
+  try:
+    fi = FileInputStream(f)
+    imp = reader.readFIBSEM(header, fi, openAsFloat)
+    cal = imp.getCalibration()
+    cal.setXUnit("nm")
+    cal.setYUnit("mn")
+    cal.pixelWidth = header.pixelSize
+    cal.pixelHeight = header.pixelSize
+  finally:
+    if fi:
+      fi.close()
   
+  def convertToShort(imp):
+    if not openAsFloat:
+      return imp # It's already 16-bit
+    # Convert every slice to 16-bit:
+    stack16bit = ImageStack()
+    for i in xrange(imp.getNSlices()):
+      fp = imp.getStack().getProcessor(i+1) # A FloatProcessor
+      fp.findMinAndMax()
+      minimum = fp.getMin()
+      if minimum < 0:
+        fp.add(abs(minimum))
+      elif minimum > 0:
+        fp.add(-minimum)
+      sp = fp.convertToShort(False) # no scaling
+      stack16bit.addSlice(sp)
+    # Return as ImagePlus
+    imp2 = ImagePlus(imp.getTitle(), stack16bit)
+    imp2.setCalibration(imp.getCalibration())
+    return imp2
+  
+  # If there's only one slice, return now
+  if 1 == imp.getNSlices():
+    return convertToShort(imp)
+  # Remove all slices except the desired one if requested
+  if channel_index is not None:
+    for i in xrange(imp.getNSlices(), 0, -1): # iterate from the end so slice indices don't change
+      if i == channel_index:
+        continue
+      imp.getStack().deleteSlice(i)
+  #
+  return convertToShort(imp)
 
 
 def readFIBSEMHeader(filepath):
