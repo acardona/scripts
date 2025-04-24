@@ -38,7 +38,7 @@ class SliceTableModel(AbstractTableModel):
   def getColumnClass(self, col):
     return String if 1 == col else Integer
   def getRowCount(self):
-    return len(self.groupNames)
+    return len(self.rows)
   def getColumnCount(self):
     return 3
   def getValueAt(self, row, col):
