@@ -332,7 +332,7 @@ def readFIBSEM(path, openAsFloat=False, channel_index=0):
   # Remove all slices except the desired one if requested
   if channel_index is not None:
     for i in xrange(imp.getNSlices(), 0, -1): # iterate from the end so slice indices don't change
-      if i == channel_index:
+      if i -1 == channel_index: # channel_index is 0-based but i is 1-based
         continue
       imp.getStack().deleteSlice(i)
   #
