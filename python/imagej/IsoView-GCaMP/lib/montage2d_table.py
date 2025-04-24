@@ -24,26 +24,30 @@ from lib.registration import saveMatrices
 
 
 class SliceTableModel(AbstractTableModel):
-  def __init__(self, groupNames, tileGroups):
+  def __init__(self, groupNames, tileGroups, failed):
     self.groupNames = groupNames
     self.tileGroups = tileGroups
     self.rows = []
     self.restore() # populate rows
-    self.header = ["Slice index", "Group name", "Num. tiles"]
+    self.header = ["Slice index", "Group name", "Num. tiles", "Failed"]
+    self.column_class = [Integer, String, Integer, String]
+    self.failed = failed
   def restore(self):
     self.rows = [[i+1, groupName, self.tileGroups[i]]
                  for i, groupName in enumerate(self.groupNames)]
   def getColumnName(self, col):
     return self.header[col]
   def getColumnClass(self, col):
-    return String if 1 == col else Integer
+    return self.column_class[col]
   def getRowCount(self):
     return len(self.rows)
   def getColumnCount(self):
-    return 3
+    return 4
   def getValueAt(self, row, col):
     if 2 == col:
       return len(self.rows[row][2])
+    if 3 == col:
+      return "failed" if self.failed.contains(self.rows[row][1]) else ""
     return self.rows[row][col]
   def isCellEditable(self, row, col):
     return False # none editable
@@ -363,8 +367,28 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
 #  return modelIndex
 
 
+class ColorCellRenderer(DefaultTableCellRenderer):
+  def __init__(self, colorFn):
+    self.colorFn = colorFn
+  def getTableCellRendererComponent(self, table, value, isSelected, hasFocus, row, col):
+    # Invoke super to get the JLabel of the table cell
+    label = DefaultTableCellRenderer.getTableCellRendererComponent(self, table, value, isSelected, hasFocus, row, col)
+    # Get a color for the cell background, if any, as a function of cell value
+    color = self.colorFn(value)
+    if color:
+      label.setBackground(color)
+    return label
+
 def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
-  model = SliceTableModel(groupNames, tileGroups)
+  failed = filter(lambda filename: filename.startswith("failed_montages_"), os.listdir(srcDir))
+  failed_groupNames = set()
+  if len(failed) > 0:
+    failed.sort() # descending, so newest last
+    with open(os.path.join(csvDir, failed[-1]), 'r') as f:
+      for line in f:
+        failed_groupNames.add(line.rstrip()) # without the ending newline character
+  #
+  model = SliceTableModel(groupNames, tileGroups, failed_groupNames)
   # GUI:
   all = JPanel()
   all.setBackground(Color.white)
@@ -388,6 +412,7 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
   centerRenderer.setHorizontalAlignment(JLabel.CENTER);
   table.getColumnModel().getColumn(0).setCellRenderer(centerRenderer)
   table.getColumnModel().getColumn(2).setCellRenderer(centerRenderer)
+  table.getColumnModel().getColumn(3).setCellRenderer(ColorCellRenderer(lambda v: Color.red if "failed" == v))
   c.gridx = 0
   c.gridy = 1
   c.anchor = GridBagConstraints.NORTHWEST
