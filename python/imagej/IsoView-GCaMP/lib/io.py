@@ -62,7 +62,12 @@ def findFilePaths(srcDir, extension):
         paths.append(os.path.join(root, filename))
   paths.sort()
   return paths
-  
+
+
+def findFilenames(srcDir, pattern):
+  """ Find filenames in srcDir that match the regex pattern. """
+  return filter(lambda filename: pattern.search(filename), os.listdir(srcDir))
+
 
 def loadFilePaths(srcDir, extension, csvDir, cache_name, ignore_cache=False):
   """ Find file paths that match the filename extension,
