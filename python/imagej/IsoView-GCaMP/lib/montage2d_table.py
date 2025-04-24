@@ -55,11 +55,15 @@ class SliceTableModel(AbstractTableModel):
       if 0 == len(text):
         self.restore()
       else:
-        pattern = re.compile(text)
-        # Search in middle column
+        if text.startswith("section "):
+          pattern = re.compile(text[8:])
+          match = lambda i, groupName: pattern.search(str(i))
+        else:
+          pattern = re.compile(text)
+          match = lambda i, groupName: pattern.search(groupName)
         self.rows = [[i+1, groupName, self.tileGroups[i]]
                      for i, groupName in enumerate(self.groupNames)
-                     if pattern.search(groupName)]
+                     if match(i, groupName)]
       return True
     except:
       print "Malformed regex pattern: " + text
