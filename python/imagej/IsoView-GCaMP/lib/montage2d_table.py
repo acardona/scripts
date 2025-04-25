@@ -130,6 +130,9 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     self.table = table
     self.firstIndex = -1
     self.lastIndex = -1
+    
+  def getRow(self, index):
+    return self.model.rows[self.table.convertRowIndexToModel(index)]
   
   def mousePressed(self, event):
     if 2 == event.getClickCount():
@@ -138,7 +141,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       self.openImages(rowIndex)
     
   def openImages(self, rowIndex):
-    for filepath in self.model.rows[rowIndex][2]:
+    for filepath in self.getRow(rowIndex)[2]:
       # Execute in a separate set of threads
       if filepath.endswith(".dat"):
         self.exe.submit(OpenDAT(filepath))
@@ -154,15 +157,15 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   def openStackOfSliceMontages(self):
     if self.firstIndex > -1 and self.lastIndex > -1:
       # ij.ImageStack is 1-based, so add +1 to start and end of selection
-      slice_indices = [self.model.rows[rowIndex][0] for rowIndex in xrange(self.firstIndex, self.lastIndex + 1)] # Already 1-based 
+      slice_indices = [self.getRow(rowIndex)[0] for rowIndex in xrange(self.firstIndex, self.lastIndex + 1)] # Already 1-based 
       self.exe.submit(Task(duplicateInParallel, self.imp, slice_indices, n_threads=max(1, numCPUs() -2), shallow=True, show=True, scale=1.0))
 
   def saveStackOfSliceMontages(self):
     if self.firstIndex > -1 and self.lastIndex > -1:
       gd = GenericDialog("Save stack")
       gd.addMessage("1-based slice indices")
-      gd.addNumericField("First slice: ", self.model.rows[self.firstIndex][0], 0, 6, "")
-      gd.addNumericField("Last slice: ", self.model.rows[self.lastIndex][0], 0, 6, "")
+      gd.addNumericField("First slice: ", self.getRow(firstIndex)[0], 0, 6, "")
+      gd.addNumericField("Last slice: ", self.getRow(lastIndex)[0], 0, 6, "")
       gd.addNumericField("Scale (0 to 1): ", 1.0, 3, 7, "")
       gd.addNumericField("Number of threads: ", max(1, int(numCPUs() / 2)), 0, 4, "")
       gd.addCheckbox("Incremental (avoid overwriting image files): ", True)
@@ -186,8 +189,8 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   def deleteMontageCSVFiles(self):
     if self.table.getSelectedRowCount() > 0:
       rowIndices = list(self.table.getSelectedRows())
-      first = self.model.rows[rowIndices[0]]
-      last = self.model.rows[rowIndices[-1]]
+      first = self.getRow(rowIndices[0])
+      last = self.getRow(rowIndices[-1])
       sp = max(len(str(first[0])), len(str(last[0])))
       msg = "Delete CSV files for " + str(last[0] - first[0] + 1) + " montages\n"\
             + "from slice " + str(first[0]).rjust(sp) + " " + first[1] + "\n"\
@@ -196,7 +199,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       yn = JOptionPane.showConfirmDialog(self.table, msg, "Delete CSV montage files",
            JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
       if JOptionPane.YES_OPTION == yn:
-        for i in xrange(self.firstIndex, self.lastIndex +1):
+        for i in xrange(first[0] -1, last[0]): # xrange works in 0-based but section indices are on 1-based
           path = os.path.join(self.csvDir, "%s.csv" % self.model.rows[i][1])
           if os.path.exists(path):
             syncPrintQ("Deleting CSV file at:\n%s" % path)
@@ -219,8 +222,8 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     tmpDir = os.path.join(self.csvDir, "tmp")
     ensureDirsExist(tmpDir)
     # Check if a project for this set of sections already exists
-    first = self.model.rows[rowIndices[ 0]][0]
-    last  = self.model.rows[rowIndices[-1]][0]
+    first = self.getRow(rowIndices[ 0])[0] # 1-based
+    last  = self.getRow(rowIndices[-1])[0]
     xml_path = os.path.join(tmpDir, "montages-%i-%i.xml" % (first, last))
     if os.path.exists(xml_path):
       syncPrintQ("TrakEM2 project for sections %i-% exists already." % (first, last))
@@ -240,7 +243,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     project = Project.newFSProject("blank", None, tmpDir)
     layerset = project.getRootLayerSet()
     # Open image tiles and copy them there (repeats from montage2d "load" function, but can't have circular dependencies
-    for rowIndex in rowIndices:
+    for rowIndex in xrange(first-1, last): # xrange in 0-based, first and last in 1-based
       row = self.model.rows[rowIndex]
       groupName = row[1]
       tilePaths = self.model.tileGroups[row[0]]
