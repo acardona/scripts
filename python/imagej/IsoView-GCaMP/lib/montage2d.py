@@ -305,7 +305,7 @@ class MontageSlice(Callable):
       return len(pointmaches), n_inliers
     # Else
     syncPrintQ("No pointmatches found for %s vs %s of section %s" % (filepath1, filepath2, self.groupName))
-    return len(pointmaches), n_inliers
+    return len(pointmatches), n_inliers
 
 
   def getMatrices(self, sps=None):
