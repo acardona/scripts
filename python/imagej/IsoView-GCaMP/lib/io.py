@@ -1156,7 +1156,7 @@ def makeNonOverwritingName(parentDir, filename):
   # Find a non-existing filename under parentDir
   i = 1
   makeName = lambda i: "%s-%i%s" % (name, i, extension)
-  while os.path.exists(os.path.join(parentDir, makeName(i)):
+  while os.path.exists(os.path.join(parentDir, makeName(i))):
     i += 1
   return makeName(i)
 

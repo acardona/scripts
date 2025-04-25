@@ -18,7 +18,15 @@ from ini.trakem2 import Project
 from ini.trakem2.display import Display, Patch
 from ini.trakem2.imaging.filters import Invert, ResetMinAndMax, EnhanceContrast
 
-from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist, imageInfo
+__labkit_present__ = False
+try:
+  from sc.fiji.labkit.ui.inputimage import DatasetInputImage
+  from sc.fiji.labkit.ui import LabkitFrame
+  __labkit_present__ = True
+except:
+  print "WARNING Labkit isn't installed. Install it via the Fiji updater."
+
+from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist, imageInfo, makeNonOverwritingName
 from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread
 from lib.ui import duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.registration import saveMatrices
@@ -338,8 +346,13 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
    display.pack() # repaint
   
   
-  def openSampledStackForLabKit(self):
-    gd = GenericDialog("Sample for LabKit")
+  def openSampledStackForLabkit(self):
+    if not __labkit_present__:
+      msg = "Labkit needs to be installed from the Fiji updater."
+      print msg
+      IJ.error(msg)
+      return
+    gd = GenericDialog("Sample for Labkit")
     gd.addNumericField("Number of sections:", 6, 0)
     gd.addNumericField("Target width:", 400, 0)
     gd.showDialog()
@@ -354,15 +367,17 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       for i in xrange(spacing, imp.getNSlices(), spacing):
         syncPrintQ("Adding slice %i" % (i+1))
         stack.addSlice(imp.getStack().getProcessor(i).resize(width))
-      sample = ImagePlus(imp.getTitle() + " sample for LabKit", stack)
+      sample = ImagePlus(imp.getTitle() + " sample for Labkit", stack)
       sample.show() # become the current image
       labkitDir = os.path.join(csvDir, "labkit")
       ensureDirsExist(labkitDir)
-      syncPrintQ("Saving sample stack for LabKit under %s" % labkitDir)
-      FileSaver(sample).saveAsTiff(os.path.join(labkitDir, "sample_sections.tif"))
+      syncPrintQ("Saving sample stack for Labkit under %s" % labkitDir)
+      FileSaver(sample).saveAsTiff(os.path.join(labkitDir, makeNonOverwritingName(labkitDir, "sample_sections.tif")))
       OpenDialog.setLastDirectory(labkitDir) # make it easy to then save the classifier and labels into the labkit folder
-      syncPrintQ("Opening sample sections with LabKit")
-      IJ.run(sample, "Open Current Image With Labkit", "dataset=sample_sections.tif") # does not respect "sample" as argument, takes the current image anyway
+      syncPrintQ("Opening sample sections with Labkit")
+      # Does not respect the 'sample' as argument, takes the current image anyway
+      # IJ.run(sample, "Open Current Image With Labkit", "dataset=sample_sections.tif")
+      LabkitFrame.show(None, DatasetInputImage(IL.wrap(sample)))
     #
     newThread(sampleStack, self.imp, spacing, width, self.csvDir)
   
@@ -381,8 +396,8 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       popup.add(JMenuItem("Montage manually...",
                           actionPerformed=lambda event: self.montageManually()))
       popup.addSeparator()
-      popup.add(JMenuItem("Open sampled stack for LabKit...",
-                          actionPerformed=lambda event: self.openSampledStackForLabKit()))
+      popup.add(JMenuItem("Open sampled stack for Labkit...",
+                          actionPerformed=lambda event: self.openSampledStackForLabkit()))
       popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):
