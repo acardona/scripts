@@ -41,12 +41,12 @@ class SliceTableModel(AbstractTableModel):
     self.rows = []
     self.header = ["Slice index", "Group name", "Num. tiles", "Failed", "Least inliers", "Num. inliers"]
     self.column_class = [Integer, String, Integer, String, Integer, String]
-    self.failed = failed
+    self.failed = failed # a set of groupName
     self.montage_stats = montage_stats # list of [least inliers, "<comma-separated list of inliers>"]
     self.restore() # populate rows
     
   def restore(self):
-    self.rows = [[i+1, groupName, self.tileGroups[i], self.failed.get(groupName, "")] + self.montage_stats[i]
+    self.rows = [[i+1, groupName, self.tileGroups[i], "failed" if groupName in self.failed else ""] + self.montage_stats[i]
                  for i, groupName in enumerate(self.groupNames)]
   def getColumnName(self, col):
     return self.header[col]
