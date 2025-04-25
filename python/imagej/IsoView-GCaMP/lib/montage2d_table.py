@@ -1,5 +1,6 @@
 import os, sys, re, csv, math
 from functools import partial
+from itertools import batched
 
 from java.lang import Integer, Runnable, String
 from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities,\
@@ -189,18 +190,14 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
 
   def deleteMontageCSVFiles(self):
     if self.table.getSelectedRowCount() > 0:
-      rowIndices = list(self.table.getSelectedRows())
-      first = self.getRow(rowIndices[0])
-      last = self.getRow(rowIndices[-1])
-      sp = max(len(str(first[0])), len(str(last[0])))
-      msg = "Delete CSV files for " + str(last[0] - first[0] + 1) + " montages\n"\
-            + "from slice " + str(first[0]).rjust(sp) + " " + first[1] + "\n"\
-            + "to slice   " + str(last[0]).rjust(sp)  + " " + last[1] + "\n"\
-            + "\nPlease confirm."
+      #rowIndices = list(self.table.getSelectedRows())  # Can be wrong if sorting by some other column that the first
+      rowIndices = [self.table.convertRowIndexToModel(i) for i in self.table.getSelectedRows()]
+      affected = "\n".join(", ".join(map(str, batch)) for batch in batched(rowIndices, 8))
+      msg = "Delete CSV files for %i montages:\n%s\nPlease confirm" % (len(rowIndices), affected)
       yn = JOptionPane.showConfirmDialog(self.table, msg, "Delete CSV montage files",
            JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
       if JOptionPane.YES_OPTION == yn:
-        for i in xrange(first[0] -1, last[0]): # xrange works in 0-based but section indices are on 1-based
+        for i in rowIndices:
           path = os.path.join(self.csvDir, "%s.csv" % self.model.rows[i][1])
           if os.path.exists(path):
             syncPrintQ("Deleting CSV file at:\n%s" % path)
