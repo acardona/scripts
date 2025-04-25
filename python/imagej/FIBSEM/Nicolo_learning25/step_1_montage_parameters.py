@@ -28,8 +28,8 @@ section_width  = 16000      # pixels, after section-wise montaging
 section_height = 16000     # So a canvas of 256,000,000 pixels: 256 MB
 
 # Skip sections. Define a range to work with.
-first_section = 0  # 0-based
-last_section = -1
+first_section = 280  # 0-based
+last_section = 14200
 
 # Replace sections: (0-based, not 1-based !)
 # NOTE indices are relative to the first_section as specified above
