@@ -449,7 +449,7 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
   # Load stats of pairwise tile connections in each montage
   montage_stats = [] # as long as groupNames
   for groupName in groupNames:
-    path = os.path.join(self.csvDir, groupName + ".montage_stats.csv")
+    path = os.path.join(csvDir, groupName + ".montage_stats.csv")
     if os.path.exists(path):
       with open(path, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
