@@ -302,7 +302,7 @@ class MontageSlice(Callable):
                                               self.paramsSIFT, self.paramsRANSAC, self.params)
     if pointmatches.size() > 0:
       tiles[filepath1].connect(tiles[filepath2], pointmatches) # reciprocal connection
-      return len(pointmaches), n_inliers
+      return len(pointmatches), n_inliers
     # Else
     syncPrintQ("No pointmatches found for %s vs %s of section %s" % (filepath1, filepath2, self.groupName))
     return len(pointmatches), n_inliers
