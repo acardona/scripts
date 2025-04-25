@@ -10,8 +10,9 @@ from java.awt.geom import AffineTransform
 from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, WindowAdapter
 from javax.swing.event import ListSelectionListener
 
-from ij import IJ, ImagePlus
-from ij.io import FileSaver
+from ij import IJ, ImagePlus, ImageStack
+from ij.io import FileSaver, OpenDialog
+from ij.gui import GenericDialog
 
 from ini.trakem2 import Project
 from ini.trakem2.display import Display, Patch
@@ -335,7 +336,35 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
    pane.add(b2)
    tabs.add(title, pane)
    display.pack() # repaint
-    
+  
+  
+  def openSampledStackForLabKit(self):
+    gd = GenericDialog("Sample for LabKit")
+    gd.addNumericField("Number of sections:", 6, 0)
+    gd.addNumericField("Target width:", 400, 0)
+    gd.showDialog()
+    if gd.wasCancelled():
+      return
+    num = int(gd.getNextNumber())
+    width = int(gd.getNextNumber())
+    spacing = int(self.imp.getNSlices() / (num + 1))
+    #
+    def sampleStack(imp, spacing, width, csvDir):
+      stack = ImageStack()
+      for i in xrange(spacing, imp.getNSlices(), spacing):
+        syncPrintQ("Adding slice %i" % (i+1))
+        stack.addSlice(imp.getStack().getProcessor(i))
+      sample = ImagePlus(imp.getTitle() + " sample for LabKit", stack)
+      labkitDir = os.path.join(csvDir, "labkit")
+      ensureDirsExist(labkitDir)
+      syncPrintQ("Saving sample stack for LabKit under %s" % labkitDir)
+      FileSaver(sample).saveAsTiff(os.path.join(labkitDir, "sample_sections.tif"))
+      OpenDialog.setLastDirectory(labkitDir) # make it easy to then save the classifier and labels into the labkit folder
+      syncPrintQ("Opening sample sections with LabKit")
+      IJ.run(sample, "Open Current Image With Labkit", "dataset=sample_sections.tif")
+    #
+    newThread(sampleStack, self.imp, spacing, width, self.csvDir)
+  
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
@@ -350,6 +379,9 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
                           actionPerformed=lambda event: self.deleteMontageCSVFiles()))
       popup.add(JMenuItem("Montage manually...",
                           actionPerformed=lambda event: self.montageManually()))
+      popup.addSeparator()
+      popup.add(JMenuItem("Open sampled stack for LabKit...",
+                          actionPerformed=lambda event: self.openSampledStackForLabKit()))
       popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):
