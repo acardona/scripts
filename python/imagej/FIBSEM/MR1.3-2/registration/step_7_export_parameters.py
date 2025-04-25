@@ -17,13 +17,10 @@ n5Dir = srcDir + "registration/n5/"
 
 # Region of interest in 2D for exporting
 k = params_pixels["interim_scale"]
-crop_roi = [int(186 / k + 0.5), # X
-            0, # Y
-            int(3150 / k + 0.5),  # width
-            int(4200 / k + 0.5)] # height
-
-# Make the canvas taller, since tiles have been moved down 
-section_height += 1000
+crop_roi = [int(192 / k + 0.5), # X
+            int(208 / k + 0.5), # Y
+            int(2912 / k + 0.5),  # width
+            int(3680 / k + 0.5)] # height
 
 # Rotate the view: None, "right", "left", or "180"
 rotate = None
