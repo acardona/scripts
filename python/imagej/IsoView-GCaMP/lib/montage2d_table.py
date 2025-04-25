@@ -132,6 +132,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     self.lastIndex = -1
     
   def getRow(self, index):
+    # To convert from a table index (which could be sorted differently) to the model index
     return self.model.rows[self.table.convertRowIndexToModel(index)]
   
   def mousePressed(self, event):
