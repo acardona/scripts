@@ -1,4 +1,4 @@
-import os, sys, re
+import os, sys, re, csv, math
 from functools import partial
 
 from java.lang import Integer, Runnable, String
@@ -35,16 +35,17 @@ from lib.registration import saveMatrices
 
 
 class SliceTableModel(AbstractTableModel):
-  def __init__(self, groupNames, tileGroups, failed):
+  def __init__(self, groupNames, tileGroups, failed, montage_stats):
     self.groupNames = groupNames
     self.tileGroups = tileGroups
     self.rows = []
     self.restore() # populate rows
-    self.header = ["Slice index", "Group name", "Num. tiles", "Failed"]
-    self.column_class = [Integer, String, Integer, String]
+    self.header = ["Slice index", "Group name", "Num. tiles", "Failed", "Least inliers", "Num. inliers"]
+    self.column_class = [Integer, String, Integer, String, Integer, String]
     self.failed = failed
+    self.montage_stats = montage_stats # list of [least inliers, "<comma-separated list of inliers>"] 
   def restore(self):
-    self.rows = [[i+1, groupName, self.tileGroups[i]]
+    self.rows = [[i+1, groupName, self.tileGroups[i], self.failed.get(groupName, "")] + self.montage_stats[i]
                  for i, groupName in enumerate(self.groupNames)]
   def getColumnName(self, col):
     return self.header[col]
@@ -53,12 +54,10 @@ class SliceTableModel(AbstractTableModel):
   def getRowCount(self):
     return len(self.rows)
   def getColumnCount(self):
-    return 4
+    return 6
   def getValueAt(self, row, col):
     if 2 == col:
       return len(self.rows[row][2])
-    if 3 == col:
-      return "failed" if self.rows[row][1] in self.failed else ""
     return self.rows[row][col]
   def isCellEditable(self, row, col):
     return False # none editable
@@ -437,6 +436,7 @@ class ColorCellRenderer(DefaultTableCellRenderer):
     return label
 
 def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
+  # Load data for all failed montages
   failed = filter(lambda filename: filename.startswith("failed_montages_"), os.listdir(csvDir))
   failed_groupNames = set()
   if len(failed) > 0:
@@ -444,8 +444,21 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
     with open(os.path.join(csvDir, failed[-1]), 'r') as f:
       for line in f:
         failed_groupNames.add(line.rstrip()) # without the ending newline character
+  # Load stats of pairwise tile connections in each montage
+  montage_stats = [] # as long as groupNames
+  for groupName in groupNames:
+    path = os.path.join(self.csvDir, groupName + ".montage_stats.csv")
+    if os.path.exists(path):
+      with open(path, 'r') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+        reader.next() # skip the header
+        inlier_counts = [n_inliers for _, _, n_inliers in reader]
+        montage_stats.append(min(inlier_counts), ", ".join(n_inliers))
+    else:
+      # Either it was deleted or was never written, from a prior version of this software
+      montage_stats.append([float('nan'), ""])
   #
-  model = SliceTableModel(groupNames, tileGroups, failed_groupNames)
+  model = SliceTableModel(groupNames, tileGroups, failed_groupNames, montage_stats)
   # GUI:
   all = JPanel()
   all.setBackground(Color.white)
