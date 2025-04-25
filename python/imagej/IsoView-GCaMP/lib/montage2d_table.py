@@ -48,7 +48,7 @@ class SliceTableModel(AbstractTableModel):
     if 2 == col:
       return len(self.rows[row][2])
     if 3 == col:
-      return "failed" if self.failed.contains(self.rows[row][1]) else ""
+      return "failed" if self.rows[row][1] in self.failed else ""
     return self.rows[row][col]
   def isCellEditable(self, row, col):
     return False # none editable
@@ -412,7 +412,7 @@ class ColorCellRenderer(DefaultTableCellRenderer):
     return label
 
 def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
-  failed = filter(lambda filename: filename.startswith("failed_montages_"), os.listdir(srcDir))
+  failed = filter(lambda filename: filename.startswith("failed_montages_"), os.listdir(csvDir))
   failed_groupNames = set()
   if len(failed) > 0:
     failed.sort() # descending, so newest last
@@ -444,7 +444,7 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
   centerRenderer.setHorizontalAlignment(JLabel.CENTER);
   table.getColumnModel().getColumn(0).setCellRenderer(centerRenderer)
   table.getColumnModel().getColumn(2).setCellRenderer(centerRenderer)
-  table.getColumnModel().getColumn(3).setCellRenderer(ColorCellRenderer(lambda v: Color.red if "failed" == v))
+  table.getColumnModel().getColumn(3).setCellRenderer(ColorCellRenderer(lambda v: (Color.red if "failed" == v else None)))
   c.gridx = 0
   c.gridy = 1
   c.anchor = GridBagConstraints.NORTHWEST
