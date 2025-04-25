@@ -303,7 +303,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     # Save the TrakEM2 Project
     project.saveAs(xml_path, False)
   
-  def saveTrakEM2MontageCSV(self, project, printOnly):
+  def saveTrakEM2MontageCSV(self, project, printOnly, event): # used as actionPerformed for a button
     """
     To be executed from a button in a custom tab in the TrakEM2 Display.
     """
