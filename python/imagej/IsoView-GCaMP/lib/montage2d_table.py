@@ -353,7 +353,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       stack = ImageStack()
       for i in xrange(spacing, imp.getNSlices(), spacing):
         syncPrintQ("Adding slice %i" % (i+1))
-        stack.addSlice(imp.getStack().getProcessor(i))
+        stack.addSlice(imp.getStack().getProcessor(i).resize(width))
       sample = ImagePlus(imp.getTitle() + " sample for LabKit", stack)
       labkitDir = os.path.join(csvDir, "labkit")
       ensureDirsExist(labkitDir)
