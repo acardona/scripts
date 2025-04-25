@@ -343,7 +343,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     gd.addNumericField("Number of sections:", 6, 0)
     gd.addNumericField("Target width:", 400, 0)
     gd.showDialog()
-    if gd.wasCancelled():
+    if gd.wasCanceled():
       return
     num = int(gd.getNextNumber())
     width = int(gd.getNextNumber())
