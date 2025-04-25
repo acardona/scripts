@@ -1145,6 +1145,22 @@ def writeDictToCSV(filepath, dictionary):
     f.write(", ".join(str(logDict[key]) for key in keys))
 
 
+def makeNonOverwritingName(parentDir, filename):
+  # Find a suitable filename to avoid overwriting
+  if not os.path.exists(os.path.join(parentDir, filename)):
+    return filename
+  # Detect extension
+  iext = filename.rfind('.')
+  extension = "" if -1 == iext else filename[iext:]
+  name = filename if -1 == iext else filename[0:iext]
+  # Find a non-existing filename under parentDir
+  i = 1
+  makeName = lambda i: "%s-%i%s" % (name, i, extension)
+  while os.path.exists(os.path.join(parentDir, makeName(i)):
+    i += 1
+  return makeName(i)
+
+
 def moveToTmpDir(parentDir, filename):
   """
   Move filename to a "tmp" directory under parentDir
