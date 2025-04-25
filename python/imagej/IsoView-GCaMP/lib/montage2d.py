@@ -679,6 +679,9 @@ def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overla
       # Save failed montages to disk
       with open(os.path.join(montageDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss") + ".csv"), 'w') as f:
         f.write("\n".join(map(str, failed)))
+        # Ensure it's written
+        f.flush()
+        os.fsync(f.fileno())
     else:
       syncPrintQ("No montages known to have failed.")
 
@@ -727,6 +730,9 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
       # Save failed montages to disk
       with open(os.path.join(csvDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss") + ".csv"), 'w') as f:
         f.write("\n".join(map(str, failed)))
+        # Ensure it's written
+        f.flush()
+        os.fsync(f.fileno())
     else:
       syncPrintQ("No montages known to have failed.")
 
@@ -910,6 +916,9 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
     if not os.path.exists(path):
       with open(path, 'w') as fh:
         fh.write("\n".join("%s = [%s]" % (groupName, ", ".join(groups[groupName])) for groupName in groupNames))
+        # Ensure it's written
+        fh.flush()
+        os.fsync(fh.fileno())
 
   return groupNames, tileGroups
 
@@ -1063,6 +1072,9 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
       rows.append("%i,%s,%i" % (i+1, groupName, len(tilePaths)))
     with open(os.path.join(montageDir, "sections-list.csv"), 'w') as f:
       f.write("\n".join(rows))
+      # Ensure it's written
+      f.flush()
+      os.fsync(f.fileno())
 
   syncPrintQ("Number of sections found valid: %i" % len(groupNames))
 
