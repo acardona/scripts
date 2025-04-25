@@ -315,3 +315,24 @@ class SoftMemoize:
       return o
     finally:
       lock.unlock()
+
+
+def batched(iterable, n):
+  """
+  Given a sequence, return it chunked in blocks of length n.
+  The last chunk may be shorter.
+  So [0, 1, 2, 3, 4, 5, 6] chunked by 3 becomes [[0, 1, 2], [3, 4, 5], [6]]
+  """
+  group = []
+  iterator = iter(iterable)
+  sentinel = object()
+  item = next(iterator, sentinel)
+  while item is not sentinel:
+    group.append(item)
+    item = next(iterator, sentinel)
+    if n == len(group):
+      g = group
+      group = [] # reset
+      yield g
+  if len(group) < n:
+    yield group
