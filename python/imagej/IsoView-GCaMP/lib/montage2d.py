@@ -137,7 +137,7 @@ def getPointMatches(sp0, roi0, sp1, roi1, offset,
                                                   params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
                                                   params.get("rod", 0.9)) # rod: ratio of best vs second best
   if 0 == pointmatches.size():
-    return pointmatches
+    return pointmatches, 0
 
   # Filter matches by geometric consensus
   inliers = ArrayList()
@@ -150,7 +150,7 @@ def getPointMatches(sp0, roi0, sp1, roi1, offset,
     pointmatches = inliers
   else:
     syncPrintQ("model NOT FOUND")
-    return ArrayList() # empty
+    return ArrayList(), 0 # empty
   
   # Correct pointmatches position: roi0 is on the right or the bottom of the image
   bounds = roi0.getBounds()
@@ -172,7 +172,7 @@ def getPointMatches(sp0, roi0, sp1, roi1, offset,
     #w2 = p2.getW()
     #w2[0] += offset
   #
-  return pointmatches
+  return pointmatches, len(inliers)
 
 # Load images
 def load(filepath, params_pixels):
@@ -298,14 +298,14 @@ class MontageSlice(Callable):
 
 
   def connectTiles(self, filepath1, filepath2, sps, tiles, roi0, roi1, offset):
-    pointmatches = getPointMatches(sps[filepath1], roi0, sps[filepath2], roi1, offset,
-                                   self.paramsSIFT, self.paramsRANSAC, self.params)
+    pointmatches, n_inliers = getPointMatches(sps[filepath1], roi0, sps[filepath2], roi1, offset,
+                                              self.paramsSIFT, self.paramsRANSAC, self.params)
     if pointmatches.size() > 0:
       tiles[filepath1].connect(tiles[filepath2], pointmatches) # reciprocal connection
-      return True
+      return len(pointmaches), n_inliers
     # Else
     syncPrintQ("No pointmatches found for %s vs %s of section %s" % (filepath1, filepath2, self.groupName))
-    return False
+    return len(pointmaches), n_inliers
 
 
   def getMatrices(self, sps=None):
@@ -340,6 +340,7 @@ class MontageSlice(Callable):
 
     # Link the tiles by image registration
     booleans = []
+    pairs = []
     for i, row in self.rows.items():
       for j, filepath2 in row.items():
         # Link each tile with the tile on its left and on top, if any
@@ -348,18 +349,33 @@ class MontageSlice(Callable):
           filepath1 = self.rows[i-1][j]
           if not filepath1: # an empty string
             continue # tile is missing from the montage
-          booleans.append(self.connectTiles(filepath1, filepath2, sps, tiles, roiSouth, roiNorth, 0))
+          n_pointmatches, n_inliers = self.connectTiles(filepath1, filepath2, sps, tiles, roiSouth, roiNorth, 0)
+          booleans.append(n_pointmaches > 0)
+          pairs.append([("%i-%i vs %i-%i" % (i-1, j, i, j)), n_pointmatches, n_inliers])
         if j > 0:
           # Link with tile to the left
           filepath1 = self.rows[i][j-1]
           if not filepath1: # an empty string
             continue # tile is missing from the montage
-          booleans.append(self.connectTiles(filepath1, filepath2, sps, tiles, roiEast, roiWest, self.offset))
+          n_pointmatches, n_inliers = self.connectTiles(filepath1, filepath2, sps, tiles, roiEast, roiWest, self.offset)
+          booleans.append(n_pointmatches > 0)
+          pairs.append([("%i-%i vs %i-%i" % (i, j-1, i, j)), n_pointmatches, n_inliers])
+
+    # Record the number of pointmatches and of inliers for each pair of tiles
+    with open(os.path.join(self.csvDir, self.groupName + ".montage_stats.csv", 'w')) as f:
+      f.write("tile_pair, n_pointmatches, n_inliers\n")
+      for pair in pairs:
+        f.write(", ".join(str(v) for v in pair))
+        f.write("\n")
+      # Ensure it's written
+      f.flush()
+      os.fsync(f.fileno())
 
     if not any(booleans):
       syncPrintQ("All tiles failed to connect for section %s " % (self.groupName))
       self.failed.add(self.groupName)
       return self.defaultPositions(width, height)
+      
 
     try:
       # Optimise tile positions
