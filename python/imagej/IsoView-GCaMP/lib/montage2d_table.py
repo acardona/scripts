@@ -18,6 +18,8 @@ from ini.trakem2 import Project
 from ini.trakem2.display import Display, Patch
 from ini.trakem2.imaging.filters import Invert, ResetMinAndMax, EnhanceContrast
 
+from net.imglib2.img.array import ArrayImgs
+
 __labkit_present__ = False
 try:
   from sc.fiji.labkit.ui.inputimage import DatasetInputImage
@@ -372,12 +374,19 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       labkitDir = os.path.join(csvDir, "labkit")
       ensureDirsExist(labkitDir)
       syncPrintQ("Saving sample stack for Labkit under %s" % labkitDir)
-      FileSaver(sample).saveAsTiff(os.path.join(labkitDir, makeNonOverwritingName(labkitDir, "sample_sections.tif")))
+      sample_path = os.path.join(labkitDir, makeNonOverwritingName(labkitDir, "sample_sections.tif"))
+      FileSaver(sample).saveAsTiff(sample_path)
       OpenDialog.setLastDirectory(labkitDir) # make it easy to then save the classifier and labels into the labkit folder
       syncPrintQ("Opening sample sections with Labkit")
       # Does not respect the 'sample' as argument, takes the current image anyway
       # IJ.run(sample, "Open Current Image With Labkit", "dataset=sample_sections.tif")
-      LabkitFrame.show(None, DatasetInputImage(IL.wrap(sample)))
+      # Make an ImgLib2 image so there's no issues with additional dimensions
+      #img = Views.stack([ArrayImgs.unsignedBytes(stack.getProcessor(i+1).getPixels(), [stack.getWidth(), stack.getHeight()])
+      #                   for i in xrange(stack.getSize())])
+      #LabKitFrame.showForImage(DatasetInputImage(img)) # works
+      # Just tell Labkit to load the file, so the folder for saving labels and the classifier will be the same
+      LabkitFrame.showForFile(None, sample_path)
+
     #
     newThread(sampleStack, self.imp, spacing, width, self.csvDir)
   
