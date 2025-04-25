@@ -1,6 +1,5 @@
 import os, sys, re, csv, math
 from functools import partial
-from itertools import batched
 
 from java.lang import Integer, Runnable, String
 from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities,\
@@ -30,7 +29,7 @@ except:
   print "WARNING Labkit isn't installed. Install it via the Fiji updater."
 
 from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist, imageInfo, makeNonOverwritingName
-from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread
+from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, batched
 from lib.ui import duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.registration import saveMatrices
 
