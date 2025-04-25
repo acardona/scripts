@@ -362,7 +362,7 @@ class MontageSlice(Callable):
           pairs.append([("%i-%i vs %i-%i" % (i, j-1, i, j)), n_pointmatches, n_inliers])
 
     # Record the number of pointmatches and of inliers for each pair of tiles
-    with open(os.path.join(self.csvDir, self.groupName + ".montage_stats.csv", 'w')) as f:
+    with open(os.path.join(self.csvDir, self.groupName + ".montage_stats.csv"), 'w') as f:
       f.write("tile_pair, n_pointmatches, n_inliers\n")
       for pair in pairs:
         f.write(", ".join(str(v) for v in pair))
