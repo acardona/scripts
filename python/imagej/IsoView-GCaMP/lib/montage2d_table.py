@@ -214,14 +214,16 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   
   def manualMontage(self, rowIndices):
     """
-    Open a TrakEM2 project for the set of sections selected.
+    Open a TrakEM2 project for the set of sections selected, or almost:
+    for the set of sections between the section with the lowest index and the section with the highest.
+    May not coincide with what is selected on the table if sorted by any column other than the first or second.
     """
     # Make a tmp directory under self.csvDir
     tmpDir = os.path.join(self.csvDir, "tmp")
     ensureDirsExist(tmpDir)
     # Check if a project for this set of sections already exists
-    first = self.getRow(rowIndices[ 0])[0] # 1-based
-    last  = self.getRow(rowIndices[-1])[0]
+    first = self.getRow(min(rowIndices))[0] # 1-based
+    last  = self.getRow(max(rowIndices))[0]
     xml_path = os.path.join(tmpDir, "montages-%i-%i.xml" % (first, last))
     if os.path.exists(xml_path):
       syncPrintQ("TrakEM2 project for sections %i-% exists already." % (first, last))
