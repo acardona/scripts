@@ -355,13 +355,14 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
         syncPrintQ("Adding slice %i" % (i+1))
         stack.addSlice(imp.getStack().getProcessor(i).resize(width))
       sample = ImagePlus(imp.getTitle() + " sample for LabKit", stack)
+      sample.show() # become the current image
       labkitDir = os.path.join(csvDir, "labkit")
       ensureDirsExist(labkitDir)
       syncPrintQ("Saving sample stack for LabKit under %s" % labkitDir)
       FileSaver(sample).saveAsTiff(os.path.join(labkitDir, "sample_sections.tif"))
       OpenDialog.setLastDirectory(labkitDir) # make it easy to then save the classifier and labels into the labkit folder
       syncPrintQ("Opening sample sections with LabKit")
-      IJ.run(sample, "Open Current Image With Labkit", "dataset=sample_sections.tif")
+      IJ.run(sample, "Open Current Image With Labkit", "dataset=sample_sections.tif") # does not respect "sample" as argument, takes the current image anyway
     #
     newThread(sampleStack, self.imp, spacing, width, self.csvDir)
   
