@@ -350,7 +350,7 @@ class MontageSlice(Callable):
           if not filepath1: # an empty string
             continue # tile is missing from the montage
           n_pointmatches, n_inliers = self.connectTiles(filepath1, filepath2, sps, tiles, roiSouth, roiNorth, 0)
-          booleans.append(n_pointmaches > 0)
+          booleans.append(n_pointmatches > 0)
           pairs.append([("%i-%i vs %i-%i" % (i-1, j, i, j)), n_pointmatches, n_inliers])
         if j > 0:
           # Link with tile to the left
