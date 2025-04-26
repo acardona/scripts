@@ -278,7 +278,7 @@ def _readFIBSEMdatBuffered(ra, width, height, numChannels, channel_index=-1, buf
   return channels
   
 
-def readFIBSEM(path, openAsFloat=False, channel_index=0):
+def readFIBSEM(path, openAsFloat=False, channel_index=0, scale=False):
   """
   Parse DAT file using the sc.fiji.io.FIBSEM_Reader plugin.
   Optionally open as float.
@@ -324,7 +324,7 @@ def readFIBSEM(path, openAsFloat=False, channel_index=0):
         fp.add(abs(minimum))
       elif minimum > 0:
         fp.add(-minimum)
-      sp = fp.convertToShort(False) # no scaling
+      sp = fp.convertToShort(scale)
       stack16bit.addSlice(sp)
     # Return as ImagePlus
     imp2 = ImagePlus(imp.getTitle(), stack16bit)
