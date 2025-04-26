@@ -455,8 +455,8 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
       with open(path, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         reader.next() # skip the header
-        inlier_counts = [n_inliers for _, _, n_inliers in reader]
-        montage_stats.append(min(inlier_counts), ", ".join(n_inliers))
+        inlier_counts = [n_inliers for _, _, n_inliers in reader] # all as strings
+        montage_stats.append([min(inlier_counts), ", ".join(inlier_counts)])
     else:
       # Either it was deleted or was never written, from a prior version of this software
       montage_stats.append([float('nan'), ""])
