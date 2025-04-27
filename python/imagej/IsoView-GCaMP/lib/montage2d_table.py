@@ -459,7 +459,7 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
         montage_stats.append([min(inlier_counts), ", ".join(inlier_counts)])
     else:
       # Either it was deleted or was never written, from a prior version of this software
-      montage_stats.append([float('nan'), ""])
+      montage_stats.append([0, "no stats file"])
   #
   model = SliceTableModel(groupNames, tileGroups, failed_groupNames, montage_stats)
   # GUI:
