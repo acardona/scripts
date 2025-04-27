@@ -449,9 +449,11 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
         failed_groupNames.add(line.rstrip()) # without the ending newline character
   # Load stats of pairwise tile connections in each montage
   montage_stats = [] # as long as groupNames
-  for groupName in groupNames:
+  for i, groupName in enumerate(groupNames):
     path = os.path.join(csvDir, groupName + ".montage_stats.csv")
-    if os.path.exists(path):
+    if 1 == len(tileGroups[i]):
+      montage_stats.append([0, ""]) # single tile, no montage necessary
+    elif os.path.exists(path):
       with open(path, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         reader.next() # skip the header
