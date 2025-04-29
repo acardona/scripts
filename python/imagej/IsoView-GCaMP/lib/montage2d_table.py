@@ -76,7 +76,7 @@ class SliceTableModel(AbstractTableModel):
         else:
           pattern = re.compile(text)
           match = lambda i, groupName: pattern.search(groupName)
-        self.rows = [[i+1, groupName, self.tileGroups[i]]
+        self.rows = [[i+1, groupName, self.tileGroups[i],  "failed" if groupName in self.failed else ""] + self.montage_stats[i]
                      for i, groupName in enumerate(self.groupNames)
                      if match(i, groupName)]
       return True
@@ -90,12 +90,17 @@ class TypingInSearchField(KeyAdapter):
     self.model = model
     self.search_field = search_field
   def keyPressed(self, event):
-    if KeyEvent.VK_ENTER == event.getKeyCode():
-      self.model.filterTable(self.search_field.getText())
-    elif KeyEvent.VK_ESCAPE == event.getKeyCode():
-      self.search_field.setText("")
-      self.model.restore()
-    SwingUtilities.invokeLater(lambda: self.table.updateUI()) # executed by the event dispatch thread 
+    def filterTable(event, self):
+      if KeyEvent.VK_ENTER == event.getKeyCode():
+        self.model.filterTable(self.search_field.getText())
+      elif KeyEvent.VK_ESCAPE == event.getKeyCode():
+        self.search_field.setText("")
+        self.model.restore()
+      def repaint():
+        self.table.updateUI()
+        self.table.repaint()
+      SwingUtilities.invokeLater(repaint) # executed by the event dispatch thread
+    newThread(filterTable, event, self)
 
 class OpenDAT(Runnable):
   def __init__(self, filepath, show=True):
