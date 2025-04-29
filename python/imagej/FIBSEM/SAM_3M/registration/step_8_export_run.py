@@ -22,6 +22,7 @@ from step_7_export_parameters import n5Dir, crop_roi, rotate, paramsN5
 sys.path.append(libDir)
 from lib.serial2Dregistration import loadAlignedImage
 from lib.io import writeN5
+from net.imglib2.view import Views
 
 # Enlarge canvas from the bottom by 10%
 section_height = int(1.1 * section_height + 0.5)
@@ -34,7 +35,11 @@ img, imp = loadAlignedImage(name, srcDir, repairedDir, montageDir,
         section_width, section_height, crop_roi, params_pixels,
         rotate=rotate, preload=paramsN5["block_size"][2])
 
-#imp.show()
+# Rotate 180 degrees
+img = Views.rotate(Views.rotate(img, 0, 1), 0, 1)
+
+# Change target directory
+#n5Dir = os.path.join(os.path.split(n5Dir)[0], "n5-180")
 
 # Write N5 volume
 writeN5(img, n5Dir, name,
