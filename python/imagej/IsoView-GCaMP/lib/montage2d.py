@@ -793,11 +793,11 @@ class CheckSectionFiles(Callable):
           drop.append(i)
         # Check if tilePath has to be replaced
         elif filename in self.alternative_filenames:
-          tilePaths_[i] = os.path.join(alternative_dir, filename)
-          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
+          self.tilePaths_[i] = os.path.join(self.alternative_dir, filename)
+          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, self.tilePaths_[i]))
         elif filename in self.replace_images:
-          tilePaths_[i] = os.path.join(self.alternative_dir, self.replace_images[filename])
-          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
+          self.tilePaths_[i] = os.path.join(self.alternative_dir, self.replace_images[filename])
+          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, self.tilePaths_[i]))
       # Remove from group any tilePath to ignore
       for i in drop:
         syncPrintQ("Will ignore image %s" % self.tilePaths_[i])
