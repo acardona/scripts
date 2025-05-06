@@ -5,7 +5,8 @@ from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths
 from lib.util import syncPrintQ
 from lib.serial2Dregistration import align, alignInChunks, handleNoPointMatches, computeShifts, makeFilterFeaturesFn
-from lib.montage2d import ensureMontages, makeMontageGroups, makeVolume, makeSliceLoader, showAlignedImg, fuseMatrices, fuseTranslationMatrices
+from lib.montage2d import ensureMontages, makeMontageGroups, makeVolume, makeSliceLoader, fuseMatrices, fuseTranslationMatrices
+from lib.img import showAlignedImg
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from itertools import izip
@@ -99,7 +100,7 @@ nThreadsMontaging = Runtime.getRuntime().availableProcessors() / 2 # e.g., 128 f
 
 
 # Find all .dat files, as a sorted list
-filepaths = loadFilePaths(srcDir, ".dat", csvDir, "imagefilepaths")
+filepaths, cached = loadFilePaths(srcDir, ".dat", csvDir, "imagefilepaths")
 
 
 # Sections known to have problems (found via check = True above)
@@ -191,7 +192,7 @@ syncPrintQ("Number of sections found valid: %i" % len(groupNames))
 
 
 # Montage all sections
-ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, csvDir, nThreadsMontaging)
+ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConf, params_pixels, csvDir, nThreadsMontaging)
 
 # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
 # NOTE: it's 8-bit
