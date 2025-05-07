@@ -11,7 +11,7 @@ from java.lang import String, Number, Integer, Double
 from net.imglib2.view import Views
 from collections import defaultdict
 from javax.swing import JOptionPane
-from ij.gui import GenericDialog
+from ij.gui import GenericDialog, Plot
 
 
 def openVolume(groupNames, img, csvDir, properties, matrices_csv_filename):
@@ -72,6 +72,10 @@ def makeTableCosyneSimilarity(openVolumeFn):
       showTable=True,
       windowClosing=None, onCellClickFn=None, onRowClickFn=None,
       singleBlockSelection=True, renderRightColumns=[0, 1])
+  
+  # Show as a plot
+  plot = Plot("Pairwise cosyne similarity", "section", "Cosyne similarity", range(1, len(cs) + 1), cs)
+  plot.show()
   
 
 def makeTableChunks(groupNames, montage_img, csvDir, properties, reRunFn):
