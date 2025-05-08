@@ -13,6 +13,7 @@ from javax.swing.event import ListSelectionListener
 from ij import IJ, ImagePlus, ImageStack
 from ij.io import FileSaver, OpenDialog
 from ij.gui import GenericDialog
+from ij.process import ImageProcessor
 
 from ini.trakem2 import Project
 from ini.trakem2.display import Display, Patch
