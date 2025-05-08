@@ -214,6 +214,10 @@ volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_he
 properties = {
  'name': name,
  'img_dimensions': Intervals.dimensionsAsLongArray(volumeImgMontaged),
+ 'roi': [int(section_width / 6),  # use middle 2/3rds   # [x, y, width, height] or None.
+         int(section_height / 6),
+         int(section_width / 3) * 2,
+         int(section_height / 3) * 2],
  'srcDir': srcDir,
  'pixelType': UnsignedByteType,
  'n_threads': 32, # use a low number when having to load images (e.g., montaging and feature extraction) and a high number when computing pointmatches.
@@ -256,11 +260,11 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 1000, # Saalfeld recommends 1000
+  "maxIterations": 10000, # Saalfeld recommends 1000
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
   "nThreadsOptimizer": Runtime.getRuntime().availableProcessors(), # as many as CPU cores
   "chunk_size": 400, # Will align in 50% overlapping chunks for best use of the optimizer
-  "chunk_maxIterations": 10000
+  "chunk_maxIterations": 100000
 }
 
 
@@ -269,21 +273,29 @@ paramsTileConfiguration = {
 #computeShifts(groupNames, csvDirZ, threshold, params, properties, "shifts")
 
 
-alignIt = True
+alignIt = False
 
 if alignIt:
 
-  matricesSIFT = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
-                       loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
-                       fixed_tile_indices=fixed_tile_indices)
+  def clearCacheFn(overlap):
+    try:
+      volumeImgMontaged.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
+      volumeImgMontaged.getCache().invalidateAll(overlap) # it's a CellImg because it's not rotated with showAlignedImg
+    except:
+      printException()
+
+  #matrices = align(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
+  #                 loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
+  #                 fixed_tile_indices=fixed_tile_indices)
+  matrices = alignInChunks(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
+                           groupNames, volumeImgMontaged, fixed_tile_index=fixed_tile_indices[0], clearCacheFn=clearCacheFn)
 
   cropInterval = FinalInterval([section_width, section_height]) # The whole 2D view
-  imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
-                                    matricesSIFT,
-                                    rotate="right", # None, "right", "left", or "180"
-                                    title_addendum=" SIFT+RANSAC")
+  img, imp = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
+                            matrices,
+                            rotate="right", # None, "right", "left", or "180"
+                            title_addendum=" SIFT+RANSAC")
 
-  imp = impSIFT
 
 
   # To be determined:
