@@ -1274,6 +1274,69 @@ def computeShifts(groupNames, csvDir, threshold, paramsPM, properties, edit=Fals
     shifts[groupNames[j]] = (cummulative_dx, cummulative_dy)
   #
   return shifts
+  
+  
+class ComputeShift(Callable):
+  def __init__(self, groupNames, j, csvDir, paramsPM, properties, threshold, edit, tmp_del_dir):
+    self.groupNames = groupNames
+    self.j = j
+    self.csvDir = csvDir
+    self.paramsPM = paramsPM
+    self.properties = properties
+    self.threshold = threshold
+    self.edit = edit
+    self.tmp_del_dir = tmp_del_dir
+  def call(self):
+    # Load pointmatches
+    i, j, pointmatches = loadPointMatchesPlus(self.groupNames, self.j-1, self.j, self.csvDir, self.paramsPM, self.properties)
+    # Compute translation model
+    model = TranslationModel2D()
+    modelFound = model.fit(pointmatches)
+    # Extract translation
+    matrix = zeros(6, 'd')
+    model.toArray(matrix)
+    dx = matrix[4]
+    dy = matrix[5]
+    # Handle files
+    if self.edit:
+      deleteFeatures(self.groupNames[self.j], self.csvDir, moveToDir=self.tmp_del_dir) # will need to be re-extracted, since their location won't match the underlying image
+      deletePointMatches(self.groupNames[i], self.groupNames[j], self.csvDir, moveToDir=self.tmp_del_dir)
+    # If larger than threshold pixel in X or Y, consider this a shift
+    if abs(dx) > self.threshold or abs(dy) > self.threshold:
+      return self.groupNames[self.j], -dx, -dy # subtract: the inverse transform
+    return self.groupNames[self.j], 0, 0
+
+
+def computeShiftsP(groupNames, csvDir, threshold, paramsPM, properties, edit=False):
+  """ Like computeShifts but in parallel, and rezeroing to avoid having sections partially outside the canvas because of negative coordinates. """
+  tmp_del_dir = os.path.join(csvDir, "tmp_del")
+  ensureDirsExist(tmp_del_dir)
+  exe = newFixedThreadPool(n_threads=0) # max threads
+  try:
+    futures = [exe.submit(ComputeShift(groupNames, j, csvDir, paramsPM, properties, threshold, edit)
+               for j in xrange(1, len(groupNames))]
+    shifts = {}
+    shifts[groupNames[0]] = (0, 0)
+    cummulative_dx = 0
+    cummulative_dy = 0
+    min_dx = 0
+    min_dy = 0
+    for fu in futures:
+      groupName, dx, dy = fu.get()
+      min_dx = min(min_dx, dx)
+      min_dy = min(min_dy, dy)
+      cummulative_dx += dx
+      cummulative_dy += dy
+      shifts[groupName] = (cummulative_dx, cummulative_dy)
+    # Correct for negative coordinates that would put images off the canvas (the canvas can always be enlarged)
+    if min_dx < 0 or min_dy < 0:
+      shifts = {groupName: (dx - min_dx, dy - min_dy) for groupName, (dx, dy) in shifts.iteritems()}
+      # First section has moved too
+      if edit:
+        deleteFeatures(groupNames[0], csvDir, moveToDir=tmp_del_dir)
+    return shifts
+  finally:
+    exe.shutdown()
 
 
 def makeFilterFeaturesFn(model_path, model_width, as3D=False):
@@ -1610,7 +1673,7 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
                        properties, loaderImp=makeSliceLoader(groupNames, imgMontaged))
     # Threshold value in pixels, in the coordinate space of the exported scaled down montages
     threshold = int(properties.get("shift_threshold", 10) * params_pixels['interim_scale'] * properties['scale'] + 0.5)
-    shifts = computeShifts(groupNames, SIFTdir, threshold, paramsPMs, properties, edit=True)
+    shifts = computeShiftsP(groupNames, SIFTdir, threshold, paramsPMs, properties, edit=True)
   
     try:
       with open(path_shifts, 'w') as csvfile:
