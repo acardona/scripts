@@ -1074,9 +1074,7 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   tileGroups = tileGroups[first_section:last_section]
 
   # Substitute sections with problems for other, adjacent sections
-  for bad, good in replace_sections.iteritems():
-    groupNames[bad] = groupNames[good]
-    tileGroups[bad] = tileGroups[good]
+  replaceSections(groupNames, tileGroups, replace_sections)
 
   # How many sections to montage in parallel
   nThreadsMontaging = max(1, int(numCPUs() / (paramsTileConf["nThreadsOptimizer"] / 2)))
@@ -1152,6 +1150,24 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   return volumeImgMontagedScaled, groupNames, tileGroups
 
 
+def replaceSections(groupNames, tileGroups, replace_sections):
+  # Substitute sections with problems for other, adjacent sections
+  for bad, good in replace_sections.iteritems():
+    if isinstance(bad, basestring):
+      try:
+        bi = groupNames.index(bad)
+        gi = groupNames.index(good)
+        bad, good = bi, gi
+      except ValueError as ve:
+        # bad or good not in groupNames
+        print "WARNING replace_section failed for:\n%s :: %s" % (bad, good)
+        printException(e=ve)
+        # Must stop here
+        raise ve
+    groupNames[bad] = groupNames[good]
+    tileGroups[bad] = tileGroups[good]
+
+
 def loadMontagedImg(srcDir, montageDir, repairedDir,
                     to_remove, ignore_images, replace_images,
                     first_section, last_section, replace_sections,
@@ -1172,9 +1188,8 @@ def loadMontagedImg(srcDir, montageDir, repairedDir,
   tileGroups = tileGroups[first_section:last_section]
 
   # Substitute sections with problems for other, adjacent sections
-  for bad, good in replace_sections.iteritems():
-    groupNames[bad] = groupNames[good]
-    tileGroups[bad] = tileGroups[good]
+  replaceSections(groupNames, tileGroups, replace_sections)
+
   #
   crop_ROI = None
   if crop_roi:
