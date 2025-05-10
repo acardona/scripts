@@ -475,6 +475,7 @@ class MontageSlice(Callable):
         continue # already painted
       x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
       y = int(sdy + matrix[5] + dy + 0.5)
+      syncPrintQ("sdx, sdy: %f,%f  matrix: %f,%f  dx,dy: %f,%f  x,y: %i,%i" % (sdx, sdy, matrix[2], matrix[5], dx, dy, x, y))
       spMontage.insert(sp, x, y)
       rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     sps = None
@@ -515,6 +516,7 @@ def singleTile(tilePath, width, height, params_pixels, sdx=0, sdy=0, matrix=None
   ip.insert(ipTile,
             int(sdx + dx + 0.5),
             int(sdy + dy + 0.5))
+  syncPrintQ("single tile: sdx, sdy: %f,%f  dx,dy: %f,%f  x,y: %i,%i" % (sdx, sdy, dx, dy, int(sdx + dx + 0.5), int(sdy + dy + 0.5)))
   fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
   aimg = fn(ip.getPixels(), [width, height])
   imp.flush()
@@ -555,6 +557,7 @@ class SectionLoader(CacheLoader):
     tilePaths = self.tileGroups[index]
     matrix = self.matrices[index] if self.matrices else None
     sdx, sdy = self.section_offsets(index) if self.section_offsets else (0, 0)
+    syncPrintQ("sdx, sdy: %f, %f" % (sdx, sdy))
     as8bit = self.params_pixels["as8bit"]
     if self.crop_ROI is not None:
       bounds = self.crop_ROI.getBounds() # a java.awt.Rectangle
@@ -575,7 +578,7 @@ class SectionLoader(CacheLoader):
       else:
         aimg = m.montagedImg(width, height,
                              matrix,
-                             sdx=sdx, sdy=sdy)        
+                             sdx=sdx, sdy=sdy)
     elif 1 == len(tilePaths):
       aimg, imp = singleTile(tilePaths[0], width, height, self.params_pixels, sdx=sdx, sdy=sdy, matrix=matrix)
     else:
@@ -1172,7 +1175,7 @@ def loadMontagedImg(srcDir, montageDir, repairedDir,
                     to_remove, ignore_images, replace_images,
                     first_section, last_section, replace_sections,
                     section_width, section_height, crop_roi, params_pixels,
-                    cache_size=64):
+                    cache_size=64, section_offsets=None):
   """ At full resolution, loaded from the original .DAT files.
       Assumes matrices for each section exist, otherwise will fail.
   """
@@ -1197,7 +1200,7 @@ def loadMontagedImg(srcDir, montageDir, repairedDir,
   #
   img = makeVolume(groupNames, tileGroups, section_width, section_height, None, None, None,
                    None, None, None, montageDir, params_pixels,
-                   show=False, matrices=None, section_offsets=None, title=None, cache_size=cache_size,
+                   show=False, matrices=None, section_offsets=section_offsets, title=None, cache_size=cache_size,
                    showTable=False, crop_ROI=crop_ROI)
                    
   return img, groupNames, tileGroups, filepaths
