@@ -1633,7 +1633,8 @@ def loadAlignedImage(name, srcDir, repairedDir, montageDir,
   
 
 def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
-                      paramsSIFT, paramsPMs, params_pixels, show=False):
+                      paramsSIFT, paramsPMs, params_pixels, show=False,
+                      translation=None):
   """
   Ensure SIFT features and pointmatches for all adjacent pairs of sections exist,
   and then compute the translation between sections.
@@ -1699,6 +1700,13 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
   # Prepare parameters for showAlignedImg
   cropInterval = FinalInterval([imgMontaged.dimension(0), imgMontaged.dimension(1)]) # The whole 2D view
   properties["preload"] = 0 # don't
+  
+  # Correct origin of coordinates with a translation, for when sections fall partially outside the canvas
+  if translation:
+    dx, dy = translation
+    for m in matrices:
+      m[2] += dx
+      m[5] += dy
   
   # View the imgMontaged with shifts
   img, imp = showAlignedImg(imgMontaged, cropInterval, groupNames, properties,
