@@ -1313,7 +1313,7 @@ def computeShiftsP(groupNames, csvDir, threshold, paramsPM, properties, edit=Fal
   ensureDirsExist(tmp_del_dir)
   exe = newFixedThreadPool(n_threads=0) # max threads
   try:
-    futures = [exe.submit(ComputeShift(groupNames, j, csvDir, paramsPM, properties, threshold, edit)
+    futures = [exe.submit(ComputeShift(groupNames, j, csvDir, paramsPM, properties, threshold, edit))
                for j in xrange(1, len(groupNames))]
     shifts = {}
     shifts[groupNames[0]] = (0, 0)
