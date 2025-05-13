@@ -38,7 +38,11 @@ last_section = -1
 # Add entries like: 1718: 1719,  indicating that section 1718 is to be replaced by section at 1719, effectively duplicating the latter
 # This is desirable to keep the true Euclidean distances and dimensions while overriding a faulty section with e.g, truncated images.
 replace_sections = {
-  
+  1132: 1131, # missing lower tile
+  1134: 1133, # missing lower tile
+  2738: 2737, # missing lower tile
+  3245: 3244, # missing lower tile
+  3907: 3906, # upper tile renders at the bottom and is incomplete, repaired
 }
 
 # Image contrast parameters
