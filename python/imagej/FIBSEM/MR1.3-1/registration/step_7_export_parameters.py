@@ -22,7 +22,7 @@ crop_roi = [0, # X
             section_height] # height
 
 # Rotate the view: None, "right", "left", or "180"
-rotate = None
+rotate = "180"
 
 # Parameters on what to export
 paramsN5 = {
