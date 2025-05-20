@@ -24,11 +24,11 @@ overlap = 990 # pixels
 nominal_overlap = 1000 # 8 microns at 8 nm/px = 1000 px
 
 # Working canvas
-section_width  = 14238      # pixels, after section-wise montaging
-section_height = 15000     # So a canvas of 256,000,000 pixels: 256 MB
+section_width  = 14238     # pixels, after section-wise montaging
+section_height = 15000     #
 
 # Skip sections. Define a range to work with.
-first_section = 7977  # 0-based   # prior sections were registerd by Michael Clayton
+first_section = 8355  # 0-based   # prior sections were registerd by Michael Clayton
 last_section = -1
 
 # Replace sections: (0-based, not 1-based !)
