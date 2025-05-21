@@ -60,6 +60,7 @@ imgZ = Views.extendZero(Views.zeroMin(imgR)) # zeroMin to correct for the negati
 imgTL = Views.translate(imgZ, [-847, 758, 0])
 interval = FinalInterval([imgR.dimension(0), imgR.dimension(1), imgR.dimension(2)])
 imgI = Views.zeroMin(Views.interval(imgTL, interval))
+img = imgI
 
 # Make a new ImagePlus to show it
 #imp = wrap8bit(imgI, title="transposed")
