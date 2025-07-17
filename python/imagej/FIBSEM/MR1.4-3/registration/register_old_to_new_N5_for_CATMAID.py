@@ -37,17 +37,6 @@ output_CSV = os.path.join(tgtDir, "bridge.csv")
 
 
 
-
-
-
-# Load N5 volumes as CachedImg 3D volumes a 100% magnification
-oldN5 = readN5(old_n5_path, "s0", show=None)
-newN5 = readN5(new_n5_path, "s0", show=None)
-
-
-
-
-
 # Parameters for SIFT features
 paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.steps = 1
@@ -204,6 +193,30 @@ def computeSliceTranslations(img1, img2):
     printException()
   finally():
     exe.shutdown()
+
+
+# Test: open the images, check dimensions are the same, otherwise fix that
+# Load N5 volumes as CachedImg 3D volumes a 100% magnification
+oldN5 = readN5(old_n5_path, "s0", show="IJ")
+newN5 = readN5(new_n5_path, "s0", show="IJ")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
