@@ -7,7 +7,7 @@ sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from net.imglib2.view import Views
 from lib.io import readN5
 from lib.loop import createBiConsumerTypeSet
-from lib.serial2Dregistration import ensureSIFTFeatures, filterFeatures
+from lib.serial2Dregistration import ensureSIFTFeatures, filterFeatures, makeFilterFeaturesFn
 from lib.util import isThreadDead, syncPrintQ
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.loops import LoopBuilder
@@ -21,6 +21,7 @@ from mpicbg.ij.util import Filter
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from java.util import ArrayList
+from java.lang import Double
 
 
 # ASSUMES volumes have the same dimensions
@@ -117,7 +118,7 @@ def extractSIFTFeatures(paramsSIFT, properties, img, sliceIndex):
     ip = None
     imp.flush()
     imp = None
-    syncPrintQ("Extracted %i SIFT features for slice %i" % (features.size(), sliceIndex)
+    syncPrintQ("Extracted %i SIFT features for slice %i" % (features.size(), sliceIndex))
     return features
   except:
     printException()
@@ -191,7 +192,7 @@ def computeSliceTranslations(img1, img2):
         syncPrintQ(line)
   except:
     printException()
-  finally():
+  finally:
     exe.shutdown()
 
 
