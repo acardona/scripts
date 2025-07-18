@@ -181,7 +181,7 @@ def computeTranslation(paramsSIFT, properties, params, img1, img2, sliceIndex):
     return [float('NaN'), float('NaN')]
 
 
-def computeSliceTranslations(img1, img2):
+def computeSliceTranslations(img1, img2, clearCacheFn=None):
   """
   Assumes images have the same dimensions.
   """
@@ -201,15 +201,17 @@ def computeSliceTranslations(img1, img2):
   try:
     with open(output_CSV, 'a') as csvfile:
       translations = []
-      batch_size = (2 * numCPUs())
+      batch_size = (2 * numCPUs()) # 256 CPUs which is exactly 4 * 64, with 64 being the Z of the block size so works well for the cache release
       futures = []
       for sliceIndex in xrange(min(img1.dimension(2), img2.dimension(2))):
         if isThreadDead():
           return None
         futures.append(exe.submit(Task(computeTranslation, paramsSIFT, properties, params, img1, img2, sliceIndex)))
         if 0 == sliceIndex % batch_size:
-          while len(futures) > (batch_size / 2):
+          while len(futures) > batch_size: # effectively stop and wait for all to finish
             writeOut(futures.pop(0).get(), translations, csvfile)
+          if clearCacheFn:
+            clearCacheFn() # the whole thing 
       for fu in futures: # append any remaining
         writeOut(fu.get(), translations, csvfile)
       return translations
@@ -226,7 +228,7 @@ def computeSliceTranslations(img1, img2):
 
 # X,Y dimensions are the same, but the Z is shifted in the new stack by 1904
 imgOld = readN5(old_n5_path, "s0", show=None)
-imgOld = Views.zeroMin(Views.interval(imgOld,
+imgOld2 = Views.zeroMin(Views.interval(imgOld,
                         [0, 0, 1904],
                         [imgOld.dimension(0) -1,
                          imgOld.dimension(1) -1,
@@ -234,15 +236,27 @@ imgOld = Views.zeroMin(Views.interval(imgOld,
 
 imgNew = readN5(new_n5_path, "s0", show=None)
 
+print type(imgOld) # CachedCellImg
+print type(imgNew) # CachedCellImg
+
+def clearCacheFn():
+  try:
+    for img in [imgOld, imgNew]:
+      img.getCache().invalidateAll(0) # clear the lazy CellImg cache
+  except:
+    printException()
+
+
+
 # Update max_id parameter
 params['max_id'] = imgOld.dimension(0) * properties['scale'] * 0.25  # max one quarter away
 
-assert imgOld.dimension(2) == imgNew.dimension(2)
+assert imgOld2.dimension(2) == imgNew.dimension(2)
 
 print imgOld.dimensionsAsLongArray()
 print imgNew.dimensionsAsLongArray()
 
-translations = computeSliceTranslations(imgOld, imgNew)
+translations = computeSliceTranslations(imgOld2, imgNew, clearCacheFn=clearCacheFn)
 
 from ij.text import TextWindow
 w = TextWindow("translations", "\n".join("%f, %f" % t for t in translations), 300, 700)
@@ -251,10 +265,7 @@ w = TextWindow("translations", "\n".join("%f, %f" % t for t in translations), 30
 # Test:
 #sliceAsImp(imgOld, 20, 0.2)
 
-
-
-
-
+# TODO: spends a lot of time in garbage collection. Figure out a way to clear the cache, or to simply reparse the images everytime, i.e., reload them, in chunks of Z block size.
 
 
 
