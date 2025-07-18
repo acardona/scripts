@@ -198,8 +198,11 @@ def computeSliceTranslations(img1, img2):
 
 # Test: open the images, check dimensions are the same, otherwise fix that
 # Load N5 volumes as CachedImg 3D volumes a 100% magnification
-oldN5 = readN5(old_n5_path, "s0", show="IJ")
-newN5 = readN5(new_n5_path, "s0", show="IJ")
+imgOld, impOld = readN5(old_n5_path, "s0", show="IJ", title="old", showImp=False)
+imgNew, impNew = readN5(new_n5_path, "s0", show="IJ", title="new", showImp=False)
+
+print impOld
+print impNew
 
 
 
