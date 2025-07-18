@@ -102,7 +102,7 @@ def sliceAsImp(img, sliceIndex, scale):
   #ImgMath.compute(ImgMath.img(imgS)).into(aimg)
   
   # Return the 2D plane as an ImagePlus
-  return ImagePlus(str(slideIndex),
+  return ImagePlus(str(sliceIndex),
                    ByteProcessor(aimg.dimension(0),
                                  aimg.dimension(1),
                                  aimg.update(None).getCurrentStorageArray(),
