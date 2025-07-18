@@ -15,6 +15,7 @@ from net.imglib2.realtransform import RealViews, Scale
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2.util import Intervals
 from net.imglib2.type.numeric.integer import GenericByteType
+from net.imglib2.algorithm.math import ImgMath
 from ij import ImagePlus
 from ij.process import ByteProcessor
 from mpicbg.models import ErrorStatistic, TranslationModel2D, NotEnoughDataPointsException, PointMatch
@@ -82,17 +83,24 @@ def sliceAsImp(img, sliceIndex, scale):
   img2d = Views.hyperSlice(img, 2, sliceIndex)
   # Scaled view
   if scale < 1.0:
-    imgS = Views.interval(RealViews.transform(Views.interpolate(Views.extendMirrorSingle(img2d), NLinearInterpolatorFactory()),
-                                              Scale(scale)),
-                          [0, 0],
-                          [int(img.dimension(i) * scale + 0.5) -1 for i in [0, 1]])
+    imgS = Views.interval(
+                           RealViews.transform(
+                             Views.interpolate(Views.extendMirrorSingle(img2d),
+                                              NLinearInterpolatorFactory()),
+                             Scale([scale, scale])),
+                           [0, 0],
+                           [int(img.dimension(i) * scale + 0.5) -1 for i in [0, 1]])
   else:
     imgS = img2d
   # Copy it into a 2D image
   aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(imgS))
+  
   LoopBuilder.setImages(imgS, aimg) \
                  .multiThreaded(False) \
                  .forEachPixel(createBiConsumerTypeSet(GenericByteType)) # GenericByteType has the "set(Type)" method 
+  
+  #ImgMath.compute(ImgMath.img(imgS)).into(aimg)
+  
   # Return the 2D plane as an ImagePlus
   return ImagePlus(str(slideIndex),
                    ByteProcessor(aimg.dimension(0),
@@ -189,6 +197,8 @@ def computeSliceTranslations(img1, img2):
       batch_size = (2 * numCPUs())
       futures = []
       for sliceIndex in xrange(min(img1.dimension(2), img2.dimension(2))):
+        if isThreadDead():
+          return None
         futures.append(exe.submit(Task(computeTranslation, paramsSIFT, properties, params, img1, img2, sliceIndex)))
         if 0 == sliceIndex % batch_size:
           while len(futures) > (batch_size / 2):
@@ -223,6 +233,9 @@ print imgOld.dimensionsAsLongArray()
 print imgNew.dimensionsAsLongArray()
 
 computeSliceTranslations(imgOld, imgNew)
+
+# Test:
+#sliceAsImp(imgOld, 20, 0.2)
 
 
 
