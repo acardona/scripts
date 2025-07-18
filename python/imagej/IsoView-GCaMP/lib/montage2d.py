@@ -2,28 +2,31 @@ from __future__ import with_statement
 import os, re, sys
 from datetime import datetime
 
-from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task
+from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task, ParallelTasks
 from lib.registration import saveMatrices, loadMatrices
-from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, lazyCachedCellImg, imageInfo
-from lib.ui import wrap, addWindowListener, duplicateInParallel, saveInParallel, ExecutorCloser
-from lib.serial2Dregistration import ensureSIFTFeatures, makeImg
+from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, readFIBSEM, imageInfo, ensureDirsExist, SectionCellLoader
+from lib.img import lazyCachedCellImg
+from lib.ui import wrap, wrap8bit
+from lib.loop import createBiConsumerTypeSet
+from lib.montage2d_table import makeMontageTable
 
 from java.util import ArrayList, Vector, HashSet
-from java.lang import Double, Exception, Throwable, Integer, Runnable, String
+from java.lang import Double, Exception, Throwable
 from java.util.concurrent import Callable
 from java.io import File
 from ij.process import ShortProcessor, ByteProcessor
 from ij.gui import ShapeRoi, PointRoi, Roi, GenericDialog
-from ij.io import OpenDialog
+from ij.io import OpenDialog, FileSaver
 from ij import ImagePlus, IJ
 from net.imglib2.img.array import ArrayImgs
 try:
   from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
 except:
   print "MISSING: class PhaseCorrelation2, from the BigStitcher update site."
+from net.imglib2.type import Type
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.type.numeric.complex import ComplexFloatType
-from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType
+from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType, GenericByteType
 from net.imglib2.type import PrimitiveType
 from net.imglib2.img.array import ArrayImgFactory
 from net.imglib2.img.cell import Cell, CellImg
@@ -32,18 +35,12 @@ from net.imglib2.view import Views
 from net.imglib2.util import Intervals
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.algorithm.math import ImgMath
+from net.imglib2.loops import LoopBuilder
 from mpicbg.models import ErrorStatistic, TranslationModel2D, TransformMesh, PointMatch, Point, NotEnoughDataPointsException, Tile, TileConfiguration, TileUtil
 from mpicbg.ij.clahe import FastFlat as CLAHE
 from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from mpicbg.imglib.type.numeric.complex import ComplexFloatType
-
-from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities,\
-                        JLabel, BorderFactory, JPopupMenu, JMenuItem, AbstractAction, KeyStroke, JOptionPane
-from javax.swing.table import AbstractTableModel, DefaultTableCellRenderer
-from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font, Insets, Color
-from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, WindowAdapter
-from javax.swing.event import ListSelectionListener
 
 from functools import partial
 from collections import defaultdict
@@ -140,7 +137,7 @@ def getPointMatches(sp0, roi0, sp1, roi1, offset,
                                                   params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
                                                   params.get("rod", 0.9)) # rod: ratio of best vs second best
   if 0 == pointmatches.size():
-    return pointmatches
+    return pointmatches, 0
 
   # Filter matches by geometric consensus
   inliers = ArrayList()
@@ -153,7 +150,7 @@ def getPointMatches(sp0, roi0, sp1, roi1, offset,
     pointmatches = inliers
   else:
     syncPrintQ("model NOT FOUND")
-    return ArrayList() # empty
+    return ArrayList(), 0 # empty
   
   # Correct pointmatches position: roi0 is on the right or the bottom of the image
   bounds = roi0.getBounds()
@@ -175,29 +172,28 @@ def getPointMatches(sp0, roi0, sp1, roi1, offset,
     #w2 = p2.getW()
     #w2[0] += offset
   #
-  return pointmatches
+  return pointmatches, len(inliers)
 
 # Load images
-def load(filepath):
+def load(filepath, params_pixels):
   """ Return an ImagePlus """
   if filepath.endswith(".dat"):
-    return readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0]
+    asFloatFn = params_pixels.get("loadAsFloatFn", None)
+    if asFloatFn and asFloatFn(filepath):
+      # Slower but can open with floats
+      return readFIBSEM(filepath, openAsFloat=True, channel_index=0)
+    else:
+      return readFIBSEMdat(filepath, channel_index=0, asImagePlus=True)[0]
   return IJ.openImage(filepath)
 
-def loadShortProcessors(tilePaths, asDict=False):
+def loadShortProcessors(tilePaths, params_pixels, asDict=False):
   for filepath in tilePaths:
     syncPrintQ("#%s#" % filepath)
   if asDict:
-    return {filepath: load(filepath).getProcessor()
+    return {filepath: load(filepath, params_pixels).getProcessor()
             for filepath in tilePaths}
-  return [load(filepath).getProcessor()
+  return [load(filepath, params_pixels).getProcessor()
           for filepath in tilePaths]
-  
-def yieldShortProcessors(tilePaths, reverse=False):
-  ls = tilePaths if not reverse else reversed(tilePaths)
-  for filepath in ls:
-    syncPrintQ("#%s#" % filepath)
-    yield filepath, load(filepath).getProcessor()
 
 
 def processTo8bit(sp, params_pixels):
@@ -255,17 +251,19 @@ def processTo8bit(sp, params_pixels):
 
 
 def process(sp, params_pixels):
-  if params_pixels("invert"):
+  if params_pixels["invert"]:
     sp.invert()
-  if params_pixels("CLAHE_params"):
-    blockRadius, n_bins, slope = params_pixels("CLAHE_params")
+  if params_pixels["CLAHE_params"]:
+    blockRadius, n_bins, slope = params_pixels["CLAHE_params"]
     CLAHE.run(ImagePlus("", sp), blockRadius, n_bins, slope, None)
   return sp
 
 
 
 class MontageSlice(Callable):
-  def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed):
+  def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset,
+               paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels,
+               csvDir, failed):
     """
     Generic montager, reads out i,j position from the file name.
     """
@@ -288,6 +286,7 @@ class MontageSlice(Callable):
                    "max_id": Double.MAX_VALUE, # max_id: maximal distance in image space
                    "rod": 0.9} # rod: ratio of best vs second best
     self.paramsTileConfiguration = paramsTileConfiguration
+    self.params_pixels = params_pixels
 
     # Determine rows and columns
     self.rows = defaultdict(partial(defaultdict, str))
@@ -299,17 +298,17 @@ class MontageSlice(Callable):
 
 
   def connectTiles(self, filepath1, filepath2, sps, tiles, roi0, roi1, offset):
-    pointmatches = getPointMatches(sps[filepath1], roi0, sps[filepath2], roi1, offset,
-                                   self.paramsSIFT, self.paramsRANSAC, self.params)
+    pointmatches, n_inliers = getPointMatches(sps[filepath1], roi0, sps[filepath2], roi1, offset,
+                                              self.paramsSIFT, self.paramsRANSAC, self.params)
     if pointmatches.size() > 0:
       tiles[filepath1].connect(tiles[filepath2], pointmatches) # reciprocal connection
-      return True
+      return len(pointmatches), n_inliers
     # Else
     syncPrintQ("No pointmatches found for %s vs %s of section %s" % (filepath1, filepath2, self.groupName))
-    return False
+    return len(pointmatches), n_inliers
 
 
-  def getMatrices(self):
+  def getMatrices(self, sps=None):
     # Extract features from the appropriate ROI along the overlapping edges
     
     # Check if matrices exist already:
@@ -325,7 +324,7 @@ class MontageSlice(Callable):
     # Fix top-left tile at 0,0 position
     tc.fixTile(tiles[self.rows[0][0]])
 
-    sps = loadShortProcessors(self.tilePaths, asDict=True)
+    sps = dict(zip(self.tilePaths, sps)) if sps is not None else loadShortProcessors(self.tilePaths, self.params_pixels, asDict=True)
 
     # Assumes images have the same dimensions
     width = sps[self.tilePaths[0]].getWidth()
@@ -341,6 +340,7 @@ class MontageSlice(Callable):
 
     # Link the tiles by image registration
     booleans = []
+    pairs = []
     for i, row in self.rows.items():
       for j, filepath2 in row.items():
         # Link each tile with the tile on its left and on top, if any
@@ -349,18 +349,33 @@ class MontageSlice(Callable):
           filepath1 = self.rows[i-1][j]
           if not filepath1: # an empty string
             continue # tile is missing from the montage
-          booleans.append(self.connectTiles(filepath1, filepath2, sps, tiles, roiSouth, roiNorth, 0))
+          n_pointmatches, n_inliers = self.connectTiles(filepath1, filepath2, sps, tiles, roiSouth, roiNorth, 0)
+          booleans.append(n_pointmatches > 0)
+          pairs.append([("%i-%i vs %i-%i" % (i-1, j, i, j)), n_pointmatches, n_inliers])
         if j > 0:
           # Link with tile to the left
           filepath1 = self.rows[i][j-1]
           if not filepath1: # an empty string
             continue # tile is missing from the montage
-          booleans.append(self.connectTiles(filepath1, filepath2, sps, tiles, roiEast, roiWest, self.offset))
+          n_pointmatches, n_inliers = self.connectTiles(filepath1, filepath2, sps, tiles, roiEast, roiWest, self.offset)
+          booleans.append(n_pointmatches > 0)
+          pairs.append([("%i-%i vs %i-%i" % (i, j-1, i, j)), n_pointmatches, n_inliers])
+
+    # Record the number of pointmatches and of inliers for each pair of tiles
+    with open(os.path.join(self.csvDir, self.groupName + ".montage_stats.csv"), 'w') as f:
+      f.write("tile_pair, n_pointmatches, n_inliers\n")
+      for pair in pairs:
+        f.write(", ".join(str(v) for v in pair))
+        f.write("\n")
+      # Ensure it's written
+      f.flush()
+      os.fsync(f.fileno())
 
     if not any(booleans):
       syncPrintQ("All tiles failed to connect for section %s " % (self.groupName))
       self.failed.add(self.groupName)
       return self.defaultPositions(width, height)
+      
 
     try:
       # Optimise tile positions
@@ -408,18 +423,20 @@ class MontageSlice(Callable):
   def call(self):
     return self.getMatrices()
 
-  def montagedImg(self, width, height, section_matrix, params_pixels, sdx=0, sdy=0):
+  def montagedImg(self, width, height, section_matrix, sdx=0, sdy=0):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
                         Here, only the translation is applied, ultimately as integers.
     """
-    matrices = self.getMatrices()
+    # Load the ShortProcessors once, if matrices need to be computed
+    sps = loadShortProcessors(self.tilePaths, self.params_pixels)
+    matrices = self.getMatrices(sps=sps)
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
     # Start pasting from the end, to bury the bad left edges
-    for (filepath, sp), matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
-      spMontage.insert(process(sp, params_pixels),  # TODO don't process separately, see above
+    for sp, matrix in reversed(zip(sps, matrices)):
+      spMontage.insert(process(sp, self.params_pixels),  # TODO don't process separately, see above
                        int(sdx + matrix[2] + dx + 0.5),
                        int(sdy + matrix[5] + dy + 0.5)) # indices 2 and 5 are the X, Y translation
     
@@ -427,13 +444,15 @@ class MontageSlice(Callable):
 
 
 
-  def montagedImg8bit(self, width, height, section_matrix, params_pixels, sdx=0, sdy=0):
+  def montagedImg8bit(self, width, height, section_matrix, sdx=0, sdy=0):
     """ Return an ArrayImg representing the montage
         width, height: dimensions of the canvas onto which to insert the tiles.
         section_matrix: if there is a transform to apply section-wide, to the whole montage.
                         Here, only the translation is applied, ultimately as integers.
     """
-    matrices = self.getMatrices()
+    # Load the ShortProcessors once, if matrices need to be computed
+    sps = loadShortProcessors(self.tilePaths, self.params_pixels)
+    matrices = self.getMatrices(sps=sps)
     # TODO if scale and shear values aren't 1.0, 0.0 then apply an affine transform.
     dx, dy = (section_matrix[2], section_matrix[5]) if section_matrix else (0, 0)
     spMontage = ShortProcessor(width, height)
@@ -441,7 +460,7 @@ class MontageSlice(Callable):
     # If a file is in the repaired dir and it ends in TIFF, paint it first:
     # a crude way of signaling that the file was repaired and it's potentially incomplete,
     # particularly near the edges where it overlaps with other tiles.
-    for (filepath, sp), matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
+    for filepath, sp, matrix in reversed(zip(self.tilePaths, sps, matrices)):
       if not (filepath.find("/repaired/") > 0 and filepath.endswith("tif")):
         continue
       # Paint repaired file that was saved as TIFF
@@ -451,17 +470,18 @@ class MontageSlice(Callable):
       rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     
     # Start pasting from the end, to bury the bad left edges
-    for (filepath, sp), matrix in izip(yieldShortProcessors(self.tilePaths, reverse=True), reversed(matrices)):
+    for filepath, sp, matrix in reversed(zip(self.tilePaths, sps, matrices)):
       if filepath.find("/repaired/") > 0 and filepath.endswith("tif"):
         continue # already painted
       x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
       y = int(sdy + matrix[5] + dy + 0.5)
+      syncPrintQ("sdx, sdy: %f,%f  matrix: %f,%f  dx,dy: %f,%f  x,y: %i,%i" % (sdx, sdy, matrix[2], matrix[5], dx, dy, x, y))
       spMontage.insert(sp, x, y)
       rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     sps = None
-    bpMontage = processTo8bit(spMontage, params_pixels)
+    bpMontage = processTo8bit(spMontage, self.params_pixels)
     spMontage = None
-    if params_pixels["invert"]:
+    if self.params_pixels["invert"]:
       # paint white background as black
       # (Can't invert earlier as the min, max wouldn't match, leading to uneven illumination across tiles)
       sp = ShapeRoi(rois[0])
@@ -472,6 +492,35 @@ class MontageSlice(Callable):
     
     return ArrayImgs.unsignedBytes(bpMontage.getPixels(), width, height)
 
+
+def singleTile(tilePath, width, height, params_pixels, sdx=0, sdy=0, matrix=None, center=False):
+  imp = load(tilePath, params_pixels)
+  as8bit = params_pixels.get("as8bit", True)
+  if as8bit:
+    ipTile = processTo8bit(imp.getProcessor(), params_pixels)
+    ip = ByteProcessor(width, height)
+  else:
+    ipTile = process(imp.getProcessor(), params_pixels)
+    ip = ShortProcessor(width, height)
+  if matrix:
+    dx, dy = (matrix[2], matrix[5])
+  elif params_pixels.has_key('single_tile_position'):
+    dx, dy = params_pixels['single_tile_position']
+  elif params_pixels.has_key('single_tile_position_fn'):
+    dx, dy = params_pixels['single_tile_position_fn'](tilePath, imp)
+  elif center:
+    # WARNING this can be a breaking change
+    dx, dy = int((width - imp.getWidth()) / 2), int((height - imp.getHeight()) / 2)
+  else:
+    dx, dy = (0, 0)
+  ip.insert(ipTile,
+            int(sdx + dx + 0.5),
+            int(sdy + dy + 0.5))
+  syncPrintQ("single tile: sdx, sdy: %f,%f  dx,dy: %f,%f  x,y: %i,%i" % (sdx, sdy, dx, dy, int(sdx + dx + 0.5), int(sdy + dy + 0.5)))
+  fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
+  aimg = fn(ip.getPixels(), [width, height])
+  imp.flush()
+  return aimg, ImagePlus("", ip)
 
 
 class SectionLoader(CacheLoader):
@@ -508,6 +557,7 @@ class SectionLoader(CacheLoader):
     tilePaths = self.tileGroups[index]
     matrix = self.matrices[index] if self.matrices else None
     sdx, sdy = self.section_offsets(index) if self.section_offsets else (0, 0)
+    syncPrintQ("sdx, sdy: %f, %f" % (sdx, sdy))
     as8bit = self.params_pixels["as8bit"]
     if self.crop_ROI is not None:
       bounds = self.crop_ROI.getBounds() # a java.awt.Rectangle
@@ -519,33 +569,18 @@ class SectionLoader(CacheLoader):
     #
     if len(tilePaths) > 1:
       m = MontageSlice(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
-                       self.paramsSIFT, self.paramsRANSAC, self.paramsTileConfiguration,
+                       self.paramsSIFT, self.paramsRANSAC, self.paramsTileConfiguration, self.params_pixels,
                        self.csvDir, Vector())
       if as8bit:
         aimg = m.montagedImg8bit(width, height,
-                                 matrix, self.params_pixels,
+                                 matrix,
                                  sdx=sdx, sdy=sdy)
       else:
         aimg = m.montagedImg(width, height,
-                             matrix, self.params_pixels,
-                             sdx=sdx, sdy=sdy)        
+                             matrix,
+                             sdx=sdx, sdy=sdy)
     elif 1 == len(tilePaths):
-      imp = load(tilePaths[0])
-      if as8bit:
-        ipTile = processTo8bit(imp.getProcessor(), self.params_pixels)
-        ip = ByteProcessor(width, height)
-      else:
-        ipTile = process(imp.getProcessor(), self.params_pixels)
-        ip = ShortProcessor(width, height)
-      dx, dy = (matrix[2], matrix[5]) if matrix else (0, 0)
-      ip.insert(ipTile,
-                int(sdx + dx + 0.5),
-                int(sdy + dy + 0.5))
-      fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
-      aimg = fn(ip.getPixels(), [width, height])
-      imp.flush()
-      imp = None
-      ip = None
+      aimg, imp = singleTile(tilePaths[0], width, height, self.params_pixels, sdx=sdx, sdy=sdy, matrix=matrix)
     else:
       # return empty Cell
       syncPrintQ("WARNING: number of tiles isn't 4 or 1")
@@ -557,7 +592,126 @@ class SectionLoader(CacheLoader):
                 aimg.update(None)) # get the underlying DataAccess
 
 
-def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, nThreads):
+
+class MontageAndSave(Callable):
+  """ Generate the matrices for the montage, specifying the translation of each tile,
+      and also save a scaled down version of the image into the scaled-montages folder.
+  """
+  def __init__(self, *args):
+    self.args = args
+  
+  def call(self):
+    try:
+      return self.callImpl()
+    except:
+      printException()
+      
+  def montageAndSnapshot(self, groupName):
+    syncPrintQ("Generating montage for " + groupName)
+    args = self.args[:11]
+    ms = MontageSlice(*args)
+    params_pixels = self.args[8]
+    section_width, section_height = self.args[11:13]
+    ip = None
+    # Generate the matrices and an image of the montage.
+    # The call to montagedImg or montagedImg8bit will generate and store the montage matrices.
+    if params_pixels.get("as8bit", True):
+      img = ms.montagedImg8bit(section_width, section_height, None, sdx=0, sdy=0)
+      ip = ByteProcessor(section_width, section_height, img.update(None).getCurrentStorageArray(), None)
+    else:
+      img = ms.montagedImg(section_width, section_height, None, sdx=0, sdy=0)
+      ip = ShortProcessor(section_width, section_height, img.update(None).getCurrentStorageArray(), None)
+    return ImagePlus(groupName, ip)
+  
+  def callImpl(self):
+    groupName = self.args[0]
+    tilePaths = self.args[1]
+    montageDir = self.args[9]
+    scaled_image_path = montageDir + "scaled-montages/" + groupName + ".tif"
+    # Check if scaled image exists
+    if os.path.exists(scaled_image_path):
+      if len(tilePaths) > 1:
+        # Check if the matrices file exists
+        matrices = loadMatrices(groupName, montageDir)
+        if matrices is not None:
+          #syncPrintQ("Montage OK for " + groupName)
+          return True
+      else: # just one tile
+        return True
+    # Else, generate both, overwriting the image.
+    # If the matrices exists but the scaled image doesn't, the matrices will simply be loaded, not computed.
+    params_pixels = self.args[8]
+    section_width, section_height = self.args[11:13]
+    if len(tilePaths) > 1:
+      imp = self.montageAndSnapshot(groupName)
+    else:
+      aimg, imp = singleTile(tilePaths[0], section_width, section_height, params_pixels, sdx=0, sdy=0, matrix=None)
+    # Save the image, scaled if required
+    k = params_pixels.get("interim_scale", 1.0)
+    if k < 1.0:
+      imp = imp.resize(int(section_width * k + 0.5), int(section_height * k + 0.5), "bilinear")
+    FileSaver(imp).saveAsTiff(scaled_image_path)
+    return True
+
+
+def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overlap, offset,
+                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, montageDir, nThreads,
+                                 section_width, section_height, params_pixels):
+  """
+  Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
+  The overlap between tiles is defined by overlap.
+  The offset is for ignoring that many pixels from the left edge, which are artifactually
+  non-linearly compressed and stretched in FIBSEM images. 
+  
+  groupNames: a list of names, with the common part of the filename of all tiles in a section.
+  tileGroups: a list of lists of tile filenames.
+          In other words, these two lists are correlated, and each entry represents a section with 1 or 4 image tiles in it.
+  overlap: the amount of pixels of overlap between two tiles.
+  offset: the amount of pixels to ignore from the left edge of an image tile.
+  paramsSIFT: for montaging using scale invariant feature transform (SIFT).
+  montageDir: where to save the matrix CSV files, one per montage and section.
+  
+  Will save a possibly scaled-down image of the montage as a TIFF file under csvDir/scaled-montages/
+  """
+  exe = newFixedThreadPool(nThreads)
+  try:
+    futures = []
+    failed = Vector() # synchronized access
+    
+    # Folder for storing scaled-down versions of each montaged version
+    ensureDirsExist(os.path.join(montageDir, "scaled-montages"))
+
+    # Iterate all sections in order and generate the transformation matrices defining a montage for each section
+    for groupName, tilePaths in izip(groupNames, tileGroups):
+      # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
+      futures.append(exe.submit(MontageAndSave(groupName, tilePaths, overlap, nominal_overlap, offset,
+                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels, montageDir, failed,
+                                               section_width, section_height)))
+
+    # Await them all
+    for future in futures:
+      future.get()
+
+    if len(failed) > 0:
+      # Print failed montages
+      syncPrintQ("Montages that failed:\n%s" % "\n".join(map(str, failed)))
+      # Save failed montages to disk
+      with open(os.path.join(montageDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss") + ".csv"), 'w') as f:
+        f.write("\n".join(map(str, failed)))
+        # Ensure it's written
+        f.flush()
+        os.fsync(f.fileno())
+    else:
+      syncPrintQ("No montages known to have failed.")
+
+  finally:
+    exe.shutdown()
+
+
+
+
+def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
+                   paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels, csvDir, nThreads):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
   The overlap between tiles is defined by overlap.
@@ -582,7 +736,8 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
     for groupName, tilePaths in izip(groupNames, tileGroups):
       if len(tilePaths) > 1:
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
-        futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset, paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, failed)))
+        futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset,
+                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels, csvDir, failed)))
 
     # Await them all
     for future in futures:
@@ -592,8 +747,11 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
       # Print failed montages
       syncPrintQ("Montages that failed:\n%s" % "\n".join(map(str, failed)))
       # Save failed montages to disk
-      with open(os.path.join(csvDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss", 'w') + ".csv")) as f:
+      with open(os.path.join(csvDir, "failed_montages_" + datetime.now().strftime("%Y-%m-%d_%Hh-%Mm-%Ss") + ".csv"), 'w') as f:
         f.write("\n".join(map(str, failed)))
+        # Ensure it's written
+        f.flush()
+        os.fsync(f.fileno())
     else:
       syncPrintQ("No montages known to have failed.")
 
@@ -601,6 +759,106 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset, par
     exe.shutdown()
 
 
+class CheckSectionFiles(Callable):
+  def __init__(self, groupName_, tilePaths_, check, alternative_dir,
+               ignore_images, alternative_filenames, replace_images):
+    self.groupName_ = groupName_
+    self.tilePaths_ = tilePaths_
+    self.check = check
+    self.alternative_dir = alternative_dir
+    self.ignore_images = ignore_images
+    self.alternative_filenames = alternative_filenames
+    self.replace_images = replace_images
+    
+  def call(self):
+    """
+    Ensure tilePaths are sorted, in place,
+    and check that tiles are of the same dimensions and file size within each section.
+    Return self.groupName_ if it is to be removed, otherwise return None.
+    """
+    # For tiles with a filename containing their position in a grid, like 0-0-0
+    pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
+    
+    def coordsFn(filepath):
+      # Parse the row and col from the e.g., 0-0-0 string in the file name
+      row, col = re.match(pattern, filepath[filepath.rfind('_')+1:]).groups()
+      return int(row) * 10 + int(col) # Assumes no more than 9 rows or cols
+
+    self.tilePaths_.sort(key=coordsFn) # in place
+
+    # Replace and remove filepaths as needed
+    if self.alternative_dir or len(self.ignore_images) > 0:
+      drop = []
+      for i, tilePath in enumerate(self.tilePaths_):
+        filename = os.path.basename(tilePath)
+        # Check if tilePath is to be ignored and remove it from the group
+        if filename in self.ignore_images:
+          drop.append(i)
+        # Check if tilePath has to be replaced
+        elif filename in self.alternative_filenames:
+          self.tilePaths_[i] = os.path.join(self.alternative_dir, filename)
+          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, self.tilePaths_[i]))
+        elif filename in self.replace_images:
+          self.tilePaths_[i] = os.path.join(self.alternative_dir, self.replace_images[filename])
+          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, self.tilePaths_[i]))
+      # Remove from group any tilePath to ignore
+      for i in drop:
+        syncPrintQ("Will ignore image %s" % self.tilePaths_[i])
+        del self.tilePaths_[i]
+      # If no tiles left, remove section
+      if 0 == len(self.tilePaths_):
+        # Return the name of the section to be removed, and to be added to to_remove
+        return self.groupName_
+
+    if self.check:
+      return self.checkFileProperties()
+    # All good with the section
+    return None
+   
+
+  def checkFileProperties(self):
+    # Check that all tiles have the same dimensions (can't check for same file size due to possible replacements)
+    widths = []
+    heights = []
+    #fileSizes = []  # can't compare file sizes: some my have been replaced by TIFF files etc. and differ while having the same width and height
+    drop = set()
+    for i, tilePath in enumerate(self.tilePaths_):
+      try:
+        if tilePath.endswith(".dat"):
+          header = readFIBSEMHeader(tilePath)
+          if header is None:
+              drop.add(i)
+              syncPrintQ("%s HEADER: %s" % (self.groupName_, str(type(header))))
+          else:
+            widths.append(header.xRes)
+            heights.append(header.yRes)
+            #fileSizes.append(os.stat(tilePath).st_size)
+            #syncPrintQ("tilePath: %s\ndimensions: %i, %i" % (tilePath, header.xRes, header.yRes))
+        else:
+          # Not a .DAT file
+          info = imageInfo(tilePath)
+          widths.append(info["width"])
+          heights.append(info["height"])
+          # ignore file sizes
+      except:
+        syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
+        drop.add(i)
+    # End of for loop
+    
+    if not (1 == len(set(widths)) and 1 == len(set(heights))): # and 1 == len(set(fileSizes)):
+      syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n%s\n%s" %(self.groupName_, "\n".join(map(str, izip(widths, heights)))), copy_to_stdout=True)
+      # Return the groupName_ so that this section can be added to to_remove and then deleted
+      return self.groupName_
+
+    # If all tiles were removed, then:
+    if len(drop) == len(self.tilePaths_):
+      syncPrintQ("All tiles dropped for section: %s" % self.groupName_, copy_to_stdout=True)
+      # Return the groupName_ so that this section can be added to to_remove and then deleted
+      return self.groupName_
+    
+    # Keep the section: there is at least one readable tile file, and when more than one, all have the same dimensions
+    return None
+    
 
 
 def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_images=set(), writeDir=None, replace_images={}):
@@ -634,86 +892,34 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
   for af in alternative_filenames:
       syncPrintQ("Available alternative: %s" % af)
 
-  pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
-  def coordsFn(a):
-    row, col = re.match(pattern, filepath[a.rfind('_')+1:]).groups()
-    return int(row) * 10 + int(col) # Assumes no more than 9 rows or cols
-
-  # Ensure tilePaths are sorted,
-  # and check that tiles are of the same dimensions and file size within each section:
-  for groupName_, tilePaths_ in groups.iteritems():
-    tilePaths_.sort(key=coordsFn) # in place
-    if tilePaths_[0].find("24-03-02_190309") > 0:
-      print tilePaths_
-
-    # Replace and remove filepaths as needed
-    if alternative_dir or len(ignore_images) > 0:
-      drop = []
-      for i, tilePath in enumerate(tilePaths_):
-        filename = os.path.basename(tilePath)
-        # Check if tilePath is to be ignored and remove it from the group
-        if filename in ignore_images:
-          drop.append(i)
-        # Check if tilePath has to be replaced
-        elif filename in alternative_filenames:
-          tilePaths_[i] = os.path.join(alternative_dir, filename)
-          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
-        elif filename in replace_images:
-          tilePaths_[i] = os.path.join(alternative_dir, replace_images[filename])
-          syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, tilePaths_[i]))
-      # Remove from group any tilePath to ignore
-      for i in drop:
-        syncPrintQ("Will ignore image %s" % tilePaths_[i])
-        del tilePaths_[i]
-      # If no tiles left, remove section
-      if 0 == len(tilePaths_):
+  n_threads = max(1, numCPUs() -1)
+  w = ParallelTasks("checkSectionFiles", n_threads=n_threads)
+  try:
+    # Note CheckSectionFiles will modify each tilePaths_ for each section in place.
+    for groupName_ in w.chunkConsume(n_threads * 2,
+                                     (CheckSectionFiles(groupName_, tilePaths_, check, alternative_dir,
+                                                       ignore_images, alternative_filenames, replace_images)
+                                      for groupName_, tilePaths_ in groups.iteritems())):
+      if groupName_:
+        # If not None then remove it
         to_remove.add(groupName_)
-
-    if not check:
-      continue
-
-    # Check that all tiles have the same dimensions and the same file size
-    widths = []
-    heights = []
-    fileSizes = []
-    drop = set()
-    for i, tilePath in enumerate(tilePaths_):
-      try:
-        if tilePath.endswith(".dat"):
-          header = readFIBSEMHeader(tilePath)
-          if header is None:
-              drop.add(i)
-              syncPrintQ("%s HEADER: %s" % (groupName_, str(type(header))))
-          else:
-            widths.append(header.xRes)
-            heights.append(header.yRes)
-            #fileSizes.append(os.stat(tilePath).st_size)
-            #syncPrintQ("tilePath: %s\ndimensions: %i, %i" % (tilePath, header.xRes, header.yRes))
-        else:
-          # Not a .DAT file
-          info = imageInfo(tilePath)
-          widths.append(info["width"])
-          heights.append(info["height"])
-          # ignore file sizes
-      except:
-        syncPrintQ("Failed to read header or file size for:\n" + tilePath, copy_to_stdout=True)
-        drop.add(i)
-      if 1 == len(set(widths)) and 1 == len(set(heights)): # and 1 == len(set(fileSizes)):
-        # all tiles are the same
-        pass
-      else:
-        to_remove.add(groupName_)
-        syncPrintQ("Inconsistent tile dimensions of file sizes in section:\n%s\n%s" %(groupName_, "\n".join(map(str, izip(widths, heights)))), copy_to_stdout=True)
-
-    # If all tiles were removed, then:
-    if len(drop) == len(tilePaths_):
-      to_remove.add(groupName_)
+        del groups[groupName_]
+        syncPrintQ("Will ignore section: " + groupName_, copy_to_stdout=True)
+  finally:
+    w.destroy()    
 
   for groupName_ in to_remove:
-    del groups[groupName_]
+    if groupName_ in groups:
+      del groups[groupName_]
+    else:
+      syncPrintQ("Unexpectedly %s is not in groups." % groupName_)
     syncPrintQ("Will ignore section: " + groupName_, copy_to_stdout=True)
   
-  syncPrintQ("Invalid sections: %i" % len(to_remove))
+  if check:
+    syncPrintQ("Invalid sections: %i" % len(to_remove))
+  else:
+    syncPrintQ("Check was NOT done to detect invalid sections.")
+    
 
   # Sort groups by key
   keys = groups.keys()
@@ -729,6 +935,9 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
     if not os.path.exists(path):
       with open(path, 'w') as fh:
         fh.write("\n".join("%s = [%s]" % (groupName, ", ".join(groups[groupName])) for groupName in groupNames))
+        # Ensure it's written
+        fh.flush()
+        os.fsync(fh.fileno())
 
   return groupNames, tileGroups
 
@@ -777,252 +986,6 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
   
   return volumeImg
 
-class SliceTableModel(AbstractTableModel):
-  def __init__(self, groupNames, tileGroups):
-    self.groupNames = groupNames
-    self.tileGroups = tileGroups
-    self.rows = []
-    self.restore() # populate rows
-    self.header = ["Slice index", "Group name", "Num. tiles"]
-  def restore(self):
-    self.rows = [[i+1, groupName, self.tileGroups[i]]
-                 for i, groupName in enumerate(self.groupNames)]
-  def getColumnName(self, col):
-    return self.header[col]
-  def getColumnClass(self, col):
-    return String if 1 == col else Integer
-  def getRowCount(self):
-    return len(self.groupNames)
-  def getColumnCount(self):
-    return 3
-  def getValueAt(self, row, col):
-    if 2 == col:
-      return len(self.rows[row][2])
-    return self.rows[row][col]
-  def isCellEditable(self, row, col):
-    return False # none editable
-  def setValueAt(self, value, row, col):
-    pass # none editable
-  def filterTable(self, text):
-    text = text.strip()
-    try:
-      if 0 == len(text):
-        self.restore()
-      else:
-        pattern = re.compile(text)
-        # Search in middle column
-        self.rows = [[i+1, groupName, self.tileGroups[i]]
-                     for i, groupName in enumerate(self.groupNames)
-                     if pattern.search(groupName)]
-      return True
-    except:
-      print "Malformed regex pattern: " + text
-
-
-class TypingInSearchField(KeyAdapter):
-  def __init__(self, table, model, search_field):
-    self.table = table
-    self.model = model
-    self.search_field = search_field
-  def keyPressed(self, event):
-    if KeyEvent.VK_ENTER == event.getKeyCode():
-      self.model.filterTable(self.search_field.getText())
-    elif KeyEvent.VK_ESCAPE == event.getKeyCode():
-      self.search_field.setText("")
-      self.model.restore()
-    SwingUtilities.invokeLater(lambda: self.table.updateUI()) # executed by the event dispatch thread 
-
-class OpenDAT(Runnable):
-  def __init__(self, filepath):
-    self.filepath = filepath
-  def run(self):
-    try:
-      syncPrintQ("OpenDAT filepath: %s" % self.filepath)
-      imp = load(self.filepath)
-      if self.filepath.endswith(".dat"):
-        syncPrintQ(readFIBSEMHeader(self.filepath))
-      imp.setTitle(os.path.basename(self.filepath))
-      imp.show()
-    except:
-      print sys.exc_info()
-
-class Action(AbstractAction):
-  def __init__(self, opener):
-    self.opener = opener
-  def actionPerformed(self, event):
-    table = event.getSource()
-    model = table.getSelectionModel()
-    rowIndex = model.getLeadSelectionIndex() # first selected row
-    opener.openImages(rowIndex)
-
-class RowClickListener(MouseAdapter, ListSelectionListener):
-  def __init__(self, model, exe, imp, csvDir, table):
-    self.model = model
-    self.exe = exe
-    self.imp = imp
-    self.csvDir = csvDir
-    self.table = table
-    self.firstIndex = -1
-    self.lastIndex = -1
-  
-  def mousePressed(self, event):
-    if 2 == event.getClickCount():
-      # Open the raw images of the montage at that slice
-      rowIndex = event.getSource().rowAtPoint(event.getPoint()) # TODO could use self.firstIndex or the whole range
-      self.openImages(rowIndex)
-    
-  def openImages(self, rowIndex):
-    for filepath in self.model.rows[rowIndex][2]:
-      # Execute in a separate set of threads
-      if filepath.endswith(".dat"):
-        self.exe.submit(OpenDAT(filepath))
-      else:
-        self.exe.submit(lambda: IJ.openImage(filepath))
-  
-  def openImagesRows(self):
-    if self.firstIndex < 0 or self.lastIndex < 0:
-      return
-    for rowIndex in xrange(self.firstIndex, self.lastIndex + 1):
-      self.openImages(rowIndex)
-  
-  def openStackOfSliceMontages(self):
-    if self.firstIndex > -1 and self.lastIndex > -1:
-      # ij.ImageStack is 1-based, so add +1 to start and end of selection
-      slice_indices = [self.model.rows[rowIndex][0] for rowIndex in xrange(self.firstIndex, self.lastIndex + 1)] # Already 1-based 
-      self.exe.submit(Task(duplicateInParallel, self.imp, slice_indices, n_threads=max(1, numCPUs() -2), shallow=True, show=True, scale=1.0))
-
-  def saveStackOfSliceMontages(self):
-    if self.firstIndex > -1 and self.lastIndex > -1:
-      gd = GenericDialog("Save stack")
-      gd.addMessage("1-based slice indices")
-      gd.addNumericField("First slice: ", self.model.rows[self.firstIndex][0], 0, 6, "")
-      gd.addNumericField("Last slice: ", self.model.rows[self.lastIndex][0], 0, 6, "")
-      gd.addNumericField("Scale (0 to 1): ", 1.0, 3, 7, "")
-      gd.addNumericField("Number of threads: ", max(1, int(numCPUs() / 2)), 0, 4, "")
-      gd.addCheckbox("Incremental (avoid overwriting image files): ", True)
-      OpenDialog.setDefaultDirectory(self.csvDir)
-      gd.addDirectoryField("Target directory: ", self.csvDir, 50)
-      gd.showDialog()
-      if not gd.wasOKed():
-        return
-      firstIndex, lastIndex = int(gd.getNextNumber()), int(gd.getNextNumber())
-      slice_indices = range(firstIndex, lastIndex + 1) # Already 1-based
-      scale = gd.getNextNumber()
-      numThreads = int(gd.getNextNumber())
-      incremental = gd.getNextBoolean()
-      targetDir = gd.getNextString()
-      # Remember the directory for next time
-      if os.path.exists(targetDir):
-        OpenDialog.setDefaultDirectory(targetDir)
-      #print targetDir, firstIndex, lastIndex, scale, numThreads, incremental
-      self.exe.submit(Task(saveInParallel(targetDir, self.imp, slice_indices, n_threads=numThreads, show=True, scale=scale, incremental=incremental)))
-
-  def deleteMontageCSVFiles(self):
-    if self.table.getSelectedRowCount() > 0:
-      rowIndices = list(self.table.getSelectedRows())
-      first = self.model.rows[rowIndices[0]]
-      last = self.model.rows[rowIndices[-1]]
-      sp = max(len(str(first[0])), len(str(last[0])))
-      msg = "Delete CSV files for " + str(last[0] - first[0] + 1) + " montages\n"\
-            + "from slice " + str(first[0]).rjust(sp) + " " + first[1] + "\n"\
-            + "to slice   " + str(last[0]).rjust(sp)  + " " + last[1] + "\n"\
-            + "\nPlease confirm."
-      yn = JOptionPane.showConfirmDialog(self.table, msg, "Delete CSV montage files",
-           JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
-      if JOptionPane.YES_OPTION == yn:
-        for i in xrange(self.firstIndex, self.lastIndex +1):
-          path = os.path.join(self.csvDir, "%s.csv" % self.model.rows[i][1])
-          if os.path.exists(path):
-            syncPrintQ("Deleting CSV file at:\n%s" % path)
-            os.remove(path)
-
-  def mouseReleased(self, event):
-    if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
-      popup = JPopupMenu()
-      popup.add(JMenuItem("Open stack of slice montages",
-                          actionPerformed=lambda event: self.openStackOfSliceMontages()))
-      popup.add(JMenuItem("Save stack of slice montages...",
-                          actionPerformed=lambda event: self.saveStackOfSliceMontages()))
-      popup.add(JMenuItem("Open raw images",
-                          actionPerformed=lambda event: self.openImagesRows()))
-      popup.add(JMenuItem("Delete CSV files for montages...",
-                          actionPerformed=lambda event: self.deleteMontageCSVFiles()))
-      popup.show(event.getComponent(), event.getX(), event.getY())
-      
-  def valueChanged(self, event):
-    if event.getValueIsAdjusting():
-      return
-    self.firstIndex = event.getFirstIndex()
-    self.lastIndex = event.getLastIndex()
-
-
-# Convert from row index in the view (could e.g. be sorted)  
-# to the index in the underlying table model  
-#def getSelectedRowIndex(table):
-#  viewIndex = table.getSelectionModel().getLeadSelectionIndex()
-#  modelIndex = table.convertRowIndexToModel(viewIndex)
-#  return modelIndex
-
-
-def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
-  model = SliceTableModel(groupNames, tileGroups)
-  # GUI:
-  all = JPanel()
-  all.setBackground(Color.white)
-  gb = GridBagLayout()
-  all.setLayout(gb)
-  c = GridBagConstraints()
-  # Top-left element: search box
-  c.gridx = 0
-  c.gridy = 0
-  c.anchor = GridBagConstraints.CENTER
-  c.fill = GridBagConstraints.HORIZONTAL
-  search_field = JTextField("")
-  gb.setConstraints(search_field, c)
-  all.add(search_field)
-  # Bottom left, the table, wrapped in a scrollable component
-  table = JTable(model)
-  table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
-  table.setRowSelectionAllowed(True);
-  table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
-  centerRenderer = DefaultTableCellRenderer();
-  centerRenderer.setHorizontalAlignment(JLabel.CENTER);
-  table.getColumnModel().getColumn(0).setCellRenderer(centerRenderer)
-  table.getColumnModel().getColumn(2).setCellRenderer(centerRenderer)
-  c.gridx = 0
-  c.gridy = 1
-  c.anchor = GridBagConstraints.NORTHWEST
-  c.fill = GridBagConstraints.BOTH # resize with the frame
-  c.weightx = 1.0
-  c.gridheight = 2
-  jsp = JScrollPane(table)
-  jsp.setMinimumSize(Dimension(400, 500))
-  gb.setConstraints(jsp, c)
-  all.add(jsp)
-
-  # To open images and run operations outside the event dispatch thread
-  exe = newFixedThreadPool(min(32, numCPUs() / 2))
-
-  # Enable search by regular expression matching
-  search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
-
-  # Enable opening raw DAT files when double-clicking a row
-  opener = RowClickListener(model, exe, imp, csvDir, table)
-  table.addMouseListener(opener)
-
-  # Enable pushing enter instead of clicking
-  # Instead of a KeyListener, use the input vs action map
-  table.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "enter")
-  table.getActionMap().put("enter", Action(opener))
-  
-  # Enable popup menu on right click over a multi-row selection
-  table.getSelectionModel().addListSelectionListener(opener)
-  
-  frame = JFrame("Slice montages")
-  frame.addWindowListener(ExecutorCloser(exe))
-  frame.getContentPane().add(all)
-  frame.pack()
-  frame.setVisible(True)
 
 
 def makeSliceLoader(groupNames, volumeImg):
@@ -1032,22 +995,26 @@ def makeSliceLoader(groupNames, volumeImg):
   """
   # Will use groupNames as filepaths, and a load function that will return hyperslices of volumeImg
   indices = {groupName: i for i, groupName in enumerate(groupNames)}
+  copier = createBiConsumerTypeSet(GenericByteType) # GenericByteType has the "set(Type)" method 
 
   def sliceLoader(volumeImg, indices, groupName):
-    # Works, but copies it over
-    #img2d = Views.hyperSlice(volumeImg, 2, indices[groupName])
-    #aimg = ArrayImgs.unsignedShorts(Intervals.dimensionsAsLongArray(img2d))
-    #ImgMath.compute(ImgMath.img(img2d)).into(aimg)
-    #imp = ImagePlus(groupName, ShortProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
-    # Process for BlockMatching and SIFT across sections
-    #imp.getProcessor().invert()
-    #CLAHE.run(imp, 200, 256, 3.0, None)
-    # Instead:
     # Each slice is already an ArrayImg: get the DataAccess of the Cell at index, which is a 2D image
-    # ... and it's already processed for invert and CLAHE, and cached.
-    cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, indices[groupName]])
-    pixels = cell.getData().getCurrentStorageArray()
-    return ImagePlus(groupName, ByteProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
+    if isinstance(volumeImg, CellImg):
+      cell = volumeImg.getCells().randomAccess().setPositionAndGet([0, 0, indices[groupName]])
+      pixels = cell.getData().getCurrentStorageArray()
+      return ImagePlus(groupName, ByteProcessor(volumeImg.dimension(0), volumeImg.dimension(1), pixels, None))
+    else:
+      # copy
+      img2d = Views.hyperSlice(volumeImg, 2, indices[groupName])
+      aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img2d))
+      #syncPrintQ(str(img2d) + " " + str(img2d.dimension(0)) + "." + str(img2d.dimension(1))
+      #           + "\n" + str(Intervals.dimensionsAsLongArray(img2d)))
+      #ImgMath.compute(ImgMath.img(img2d)).into(aimg)
+      LoopBuilder.setImages(img2d, aimg) \
+                 .multiThreaded(False) \
+                 .forEachPixel(copier)
+      return ImagePlus(groupName, ByteProcessor(aimg.dimension(0), aimg.dimension(1), aimg.update(None).getCurrentStorageArray(), None))
+    
   
   # Return a 1-argument function that takes the groupName as its sole argument
   return partial(sliceLoader, volumeImg, indices)
@@ -1061,48 +1028,179 @@ def fuseMatrices(matricesSIFT, matricesBM):
     # The SIFT alignment will have been expressed as integers, so correct for that
     matrices.append(array([1, 0, int(m1[2] + 0.5) + m2[2], 0, 1, int(m1[5] + 0.5) + m2[5]], 'd'))
 
-def fuseTranslationMatrices(matrices1, matrices2):
-  return [array([1, 0, m1[2] + m2[2],
-                 0, 1, m1[5] + m2[5]], 'd')
-          for m1, m2 in izip(matrices1, matrices2)]
+
+def fuseTranslationMatrices(matricesList):
+  # matricesList is a list of lists of arrays computed with a TranslationModel2D
+  return [array([1, 0, sum(m[2] for m in ms),
+                 0, 1, sum(m[5] for m in ms)], 'd')
+          for ms in izip(*matricesList)]
 
 
-def showAlignedImg(img, cropInterval, groupNames, properties, matrices, rotate=None, title_addendum=""):
+def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
+                 offset, overlap, nominal_overlap,
+                 section_width, section_height,
+                 first_section, last_section, replace_sections,
+                 params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf,
+                 to_remove, ignore_images, replace_images,
+                 showTable=True, show=True):
   """
-  rotate: "right" or "left" or "180" or None
+  Main entry point.
   """
-  # Show the volume using ImgLib2 interpretation of matrices, with subpixel alignment
-  def loadImg(img, index):
-    if isinstance(img, CellImg):
-      cell = img.getCells().randomAccess().setPositionAndGet([0, 0, index])
-      pixels = cell.getData().getCurrentStorageArray()
-      return ArrayImgs.unsignedBytes(pixels, [img.dimension(0), img.dimension(1)])
-    else:
-      img2d = Views.hyperSlice(img, 2, index)
-      aimg = ArrayImgs.unsignedBytes(Intervals.dimensionsAsLongArray(img2d))
-      ImgMath.compute(ImgMath.img(img2d)).into(aimg)
-      return aimg
-      
   
-  cellImg, cellGet = makeImg(range(len(groupNames)), properties["pixelType"],
-                             partial(loadImg, img), properties["img_dimensions"],
-                             matrices, cropInterval, properties.get('preload', 0))
+  if name is None or 0 == len(name):
+    print "Enter the 'name' of the volume: the folder name containing .dat files."
+    return
+  
+  ensureDirsExist(tgtDir, montageDir, repairedDir)
+  
+  # Find all .dat files, as a sorted list
+  # NOTE will be cached into a text file
+  filepaths, filepaths_cached = loadFilePaths(srcDir, ".dat", montageDir, "imagefilepaths")
+  
+  # Determine whether to run an expensive, comprehensive file check for all image tiles
+  # that also checks for consistency of tile dimensions within each section
+  check = not os.path.exists(os.path.join(montageDir, "check"))
 
+  # Sorted group names, one per section
+  groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, check,
+                                             alternative_dir=repairedDir,
+                                             ignore_images=ignore_images,
+                                             replace_images=replace_images,
+                                             writeDir=montageDir)
 
-  if "right" == rotate or "left" == rotate:
-    # By 90 or -90 degrees
-    a, b = (0, 1) if "right" == rotate else (1, 0) # left
-    img = Views.rotate(cellImg, a, b) # the 0 and 1 are the two axis (dimensions) of reference, e.g., pux X (the 0) into Y (the 1).
-  elif "180" == rotate:
-    # Rotate twice to the right
-    img = Views.rotate(Views.rotate(cellImg, 0, 1), 0, 1)
+  if check:
+    # Mark that a comprehensive file check has successfully completed by writing a marker file
+    File(os.path.join(montageDir, "check")).createNewFile()  # a new empty file to serve as marker  
+
+  # Define the range of sections to montage
+  groupNames = groupNames[first_section:last_section]
+  tileGroups = tileGroups[first_section:last_section]
+
+  # Substitute sections with problems for other, adjacent sections
+  replaceSections(groupNames, tileGroups, replace_sections)
+
+  # How many sections to montage in parallel
+  nThreadsMontaging = max(1, int(numCPUs() / (paramsTileConf["nThreadsOptimizer"] / 2)))
+
+  # Print groups to a CSV file if it's the first time
+  if not filepaths_cached:
+    rows = ["section index (1-based),groupName,number of tiles"]
+    for i, (groupName, tilePaths) in enumerate(izip(groupNames, tileGroups)):
+      rows.append("%i,%s,%i" % (i+1, groupName, len(tilePaths)))
+    with open(os.path.join(montageDir, "sections-list.csv"), 'w') as f:
+      f.write("\n".join(rows))
+      # Ensure it's written
+      f.flush()
+      os.fsync(f.fileno())
+
+  syncPrintQ("Number of sections found valid: %i" % len(groupNames))
+
+  # Old approach:
+
+  # Montage all sections
+  #ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
+  #               paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging,
+  #               params_pixels)
+
+  # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
+  # NOTE: it's 8-bit
+  #volumeImgMontaged = makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
+  #                               paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, params_pixels,
+  #                               show=True, matrices=None, section_offsets=sectionOffsets, title="%s - montages" % name)
+
+  # New approach:
+  
+  # Montage all sections and save an image of each montage under montageDir/scaled-montages/
+  ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overlap, offset,
+                               paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging,
+                               section_width, section_height, params_pixels)
+
+  # Open a virtual image of the whole scaled-montages folder
+  scaled_filepaths = [os.path.join(montageDir, "scaled-montages/" + groupName + ".tif") for groupName in groupNames]
+  
+  if params_pixels.get("as8bit", True):
+    pixelType = UnsignedByteType
+    primitiveType = PrimitiveType.BYTE
+    asArrayImg = lambda index, imp: ArrayImgs.unsignedBytes(imp.getProcessor().getPixels(), imp.getWidth(), imp.getHeight())
   else:
-    img = cellImg
+    pixelType = UnsignedShortType
+    primitiveType = PrimitiveType.SHORT
+    asArrayImg = lambda index, imp: ArrayImgs.unsignedShorts(imp.getProcessor().getPixels(), imp.getWidth(), imp.getHeight())
+  
+  k = params_pixels.get("interim_scale", 1.0)
+  width =  int(section_width  * k + 0.5)
+  height = int(section_height * k + 0.5)
+    
+  volumeImgMontagedScaled = lazyCachedCellImg(SectionCellLoader(scaled_filepaths, asArrayImg),
+                                              [width, height, len(groupNames)],
+                                              [width, height, 1],
+                                              pixelType, primitiveType, maxRefs=0)
+  
+  if show:
+    # Display as an ImageJ stack
+    #imp = wrap(volumeImgMontagedScaled)
+    #imp.setTitle(name + " - montage")
+    #imp.show()
+  
+    # With a virtual stack where slice labels work
+    imp = wrap8bit(volumeImgMontagedScaled, name + " - montage %f" % k, labelsFn=lambda n: groupNames[n-1])
+    imp.show()
+  
+  # Show a JTable for opening raw images and slice ranges
+  if showTable:
+    table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, show=True)
+  
+  return volumeImgMontagedScaled, groupNames, tileGroups
 
-  imp = IL.wrap(img, properties.get("name", "") + " aligned subpixel" + title_addendum)
-  imp.show()
-  # Ensure cleanup of threads upon closing the window
-  addWindowListener(imp.getWindow(), lambda event: cellGet.destroy())
-  
-  return img, imp
-  
+
+def replaceSections(groupNames, tileGroups, replace_sections):
+  # Substitute sections with problems for other, adjacent sections
+  for bad, good in replace_sections.iteritems():
+    if isinstance(bad, basestring):
+      try:
+        bi = groupNames.index(bad)
+        gi = groupNames.index(good)
+        bad, good = bi, gi
+      except ValueError as ve:
+        # bad or good not in groupNames
+        print "WARNING replace_section failed for:\n%s :: %s" % (bad, good)
+        printException(e=ve)
+        # Must stop here
+        raise ve
+    groupNames[bad] = groupNames[good]
+    tileGroups[bad] = tileGroups[good]
+
+
+def loadMontagedImg(srcDir, montageDir, repairedDir,
+                    to_remove, ignore_images, replace_images,
+                    first_section, last_section, replace_sections,
+                    section_width, section_height, crop_roi, params_pixels,
+                    cache_size=64, section_offsets=None):
+  """ At full resolution, loaded from the original .DAT files.
+      Assumes matrices for each section exist, otherwise will fail.
+  """
+  filepaths, filepaths_cached = loadFilePaths(srcDir, ".dat", montageDir, "imagefilepaths")
+  #
+  groupNames, tileGroups = makeMontageGroups(filepaths, to_remove, False,
+                                             alternative_dir=repairedDir,
+                                             ignore_images=ignore_images,
+                                             replace_images=replace_images,
+                                             writeDir=montageDir)
+  # Define the range of sections to montage
+  groupNames = groupNames[first_section:last_section]
+  tileGroups = tileGroups[first_section:last_section]
+
+  # Substitute sections with problems for other, adjacent sections
+  replaceSections(groupNames, tileGroups, replace_sections)
+
+  #
+  crop_ROI = None
+  if crop_roi:
+    crop_ROI = Roi(*crop_roi)
+  #
+  img = makeVolume(groupNames, tileGroups, section_width, section_height, None, None, None,
+                   None, None, None, montageDir, params_pixels,
+                   show=False, matrices=None, section_offsets=section_offsets, title=None, cache_size=cache_size,
+                   showTable=False, crop_ROI=crop_ROI)
+                   
+  return img, groupNames, tileGroups, filepaths

@@ -95,7 +95,10 @@ class Task(Callable):
   def call(self):
     if isThreadDead():
       return None
-    return self.fn(*self.args, **self.kwargs)
+    try:
+      return self.fn(*self.args, **self.kwargs)
+    except:
+      printException()
 
 class RunTask(Runnable):
   """ A wrapper for executing functions in concurrent threads. """
@@ -106,7 +109,10 @@ class RunTask(Runnable):
   def run(self):
     if isThreadDead():
       return
-    self.fn(*self.args, **self.kwargs)
+    try:
+      self.fn(*self.args, **self.kwargs)
+    except:
+      printException()
 
 class TimeItTask(Callable):
   """ A wrapper for executing functions in concurrent threads,
@@ -185,9 +191,16 @@ def newFixedThreadPool(n_threads=0, name="jython-worker"):
 def numCPUs():
   return Runtime.getRuntime().availableProcessors()
 
+def newThread(fn, *args, **kwargs):
+  t = Thread(RunTask(fn, *args, **kwargs), "script-thread::" + getattr(fn, "__name__", str(fn)))
+  t.setPriority(Thread.NORM_PRIORITY)
+  t.start()
+  return t
+
 class ParallelTasks:
-  def __init__(self, name, exe=None):
-    self.exe = exe if exe else newFixedThreadPool(name=name)
+  def __init__(self, name, exe=None, n_threads=0):
+    self.exe_arg = exe # if not None, won't be shut down when done
+    self.exe = exe if exe else newFixedThreadPool(n_threads=n_threads, name=name)
     self.futures = []
   def add(self, fn, *args, **kwargs):
     future = self.exe.submit(Task(fn, *args, **kwargs))
@@ -214,7 +227,10 @@ class ParallelTasks:
     while len(self.futures) > 0:
       yield self.futures.pop(0).get()
   def destroy(self):
-    self.exe.shutdownNow()
+    if not self.exe_arg:
+      # exe was created new here, hence shut it down
+      self.exe.shutdownNow()
+    self.exe_arg = None
     self.exe = None
     self.futures = None
 
@@ -299,3 +315,24 @@ class SoftMemoize:
       return o
     finally:
       lock.unlock()
+
+
+def batched(iterable, n):
+  """
+  Given a sequence, return it chunked in blocks of length n.
+  The last chunk may be shorter.
+  So [0, 1, 2, 3, 4, 5, 6] chunked by 3 becomes [[0, 1, 2], [3, 4, 5], [6]]
+  """
+  group = []
+  iterator = iter(iterable)
+  sentinel = object()
+  item = next(iterator, sentinel)
+  while item is not sentinel:
+    group.append(item)
+    item = next(iterator, sentinel)
+    if n == len(group):
+      g = group
+      group = [] # reset
+      yield g
+  if len(group) < n:
+    yield group

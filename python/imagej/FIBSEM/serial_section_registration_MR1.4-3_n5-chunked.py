@@ -144,7 +144,6 @@ if srcDir.startswith("/data/raw"):
 groupNames = groupNames[964+1904:20000+964]
 tileGroups = tileGroups[964+1904:20000+964]
 
-
 # Sections with problems:
 # 1. Merlin-WEMS_24-02-27_170732_ : missing 0-0-0 tile (the top one)
 # Solution: replace with next (previous is truncated at the bottom)
@@ -331,7 +330,7 @@ paramsTileConfiguration = {
 #tileGroups = tileGroups[0:4]
 
 matrices = alignInChunks(groupNames, csvDirZ, params, paramsSIFT, paramsTileConfiguration, properties,
-                        loaderImp=makeSliceLoader(groupNames, volumeImgMontaged),
+                        groupNames, volumeImgMontaged,
                         fixed_tile_index=fixed_tile_indices[0])
 
 

@@ -1,4 +1,4 @@
-import os
+import os, sys
 from time import time
 from lib.util import syncPrintQ, printException, newFixedThreadPool
 from lib.converter import createConverter, convert
@@ -8,19 +8,23 @@ from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.img.display.imagej import ImageJVirtualStack
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.util import ImgUtil
-from net.imglib2.view import Views
+from net.imglib2.view import Views, TransformedRandomAccessible, MixedTransformView
 from bdv.util import BdvFunctions, Bdv
 from ij import ImagePlus, CompositeImage, VirtualStack
 from ij.process import FloatProcessor
 from java.awt import Dimension
-from java.awt.event import KeyAdapter, KeyEvent, WindowAdapter
+from java.awt.event import KeyAdapter, KeyEvent, WindowAdapter, MouseAdapter
 from java.lang import Number, Runtime, Thread
 from java.util import Comparator
 from java.util.concurrent import Callable, Future, Executors
-from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, SwingUtilities
-from javax.swing.table import AbstractTableModel, TableRowSorter
+from javax.swing import ListSelectionModel, JScrollPane, JFrame, JTable, JLabel, SwingUtilities, JPopupMenu, JMenuItem
+from javax.swing.table import AbstractTableModel, TableRowSorter, DefaultTableCellRenderer
+from javax.swing.event import ListSelectionListener
 from ij import IJ, ImagePlus, ImageStack, VirtualStack
 from ij.io import FileSaver
+from net.imglib2.img.display.imagej import ImageJVirtualStackUnsignedByte
+from net.imglib2.converter import TypeIdentity
+from java.awt.event import ActionListener
 
 
 
@@ -51,7 +55,13 @@ def grabImg(imp):
     f = ImageJVirtualStack.getDeclaredField("source")
     f.setAccessible(True)
     img = f.get(stack)
-    return img
+  else:
+    img = stack
+    
+  while isinstance(img, TransformedRandomAccessible) or isinstance(img, MixedTransformView):
+    img = img.getSource()
+  
+  return img
 
 
 def showAsStack(images, title=None, show=True):
@@ -245,8 +255,58 @@ class ExecutorCloser(WindowAdapter):
   def __init__(self, exe):
     self.exe = exe
   def windowClosing(self, event):
-    self.exe.shutdownNow()
-    
+    try:
+      self.exe.shutdownNow()
+    except:
+      printException()
+
+
+class MenuItemListener(ActionListener):
+  def __init__(self, fn, *args, **kwargs):
+    self.fn = fn
+    self.args = args
+    self.kwargs = kwargs
+  def actionPerformed(self, event):
+    self.fn(*self.args, **self.kwargs)
+
+
+class RowClickListener(MouseAdapter, ListSelectionListener):
+  def __init__(self, table,
+               right_click_fns={},
+               double_click_fn=None):
+    self.table = table
+    self.right_click_fns = right_click_fns
+    self.double_click_fn = double_click_fn
+    self.firstIndex = -1
+    self.lastIndex = -1
+  
+  def mousePressed(self, event):
+    if 2 == event.getClickCount():
+      # Open the raw images of the montage at that slice
+      rowIndex = event.getSource().rowAtPoint(event.getPoint()) # TODO could use self.firstIndex or the whole range
+      if self.double_click_fn:
+        try:
+          self.double_click_fn(self.table.getModel(), rowIndex)
+        except:
+          syncPrintQ(sys.exc_info())
+  
+  def mouseReleased(self, event):
+    if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
+      popup = JPopupMenu()
+      rowIndex = event.getSource().rowAtPoint(event.getPoint())
+      
+      for title, fn in self.right_click_fns:
+        item = JMenuItem(title)
+        item.addActionListener(MenuItemListener(fn, self.table.getModel(), rowIndex))
+        popup.add(item)
+      popup.show(event.getComponent(), event.getX(), event.getY())
+  
+  def valueChanged(self, event):
+    if event.getValueIsAdjusting():
+      return
+    self.firstIndex = event.getFirstIndex()
+    self.lastIndex = event.getLastIndex()
+  
 
 class DataTable(AbstractTableModel):
   """ Assumes all rows contain numbers. """
@@ -291,7 +351,9 @@ class DataTable(AbstractTableModel):
 
 
 def showTable(rows, title="Table", column_names=None, dataType=Number, width=400, height=500, showTable=True,
-              windowClosing=None, onCellClickFn=None, onRowClickFn=None):
+              windowClosing=None, onCellClickFn=None, onRowClickFn=None,
+              singleBlockSelection=True,
+              renderCenteredColumns=[], renderRightColumns=[]):
   """
      rows: list of lists of numbers.
      title: for the JFrame
@@ -310,14 +372,29 @@ def showTable(rows, title="Table", column_names=None, dataType=Number, width=400
   table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
   #table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
   sorter = TableRowSorter(table_data)
-  sorter.setComparator(0, Comparator.naturalOrder())
-  sorter.setComparator(1, Comparator.naturalOrder())
-  sorter.setComparator(2, Comparator.naturalOrder())
+  for i in xrange(len(column_names)):
+    sorter.setComparator(i, Comparator.naturalOrder())
   table.setRowSorter(sorter)
+  
+  table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
+  
+  if singleBlockSelection:
+    table.setRowSelectionAllowed(True)
+    table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION)
+  
+  centerRenderer = DefaultTableCellRenderer();
+  for i in renderCenteredColumns:
+    centerRenderer.setHorizontalAlignment(JLabel.CENTER)
+    table.getColumnModel().getColumn(i).setCellRenderer(centerRenderer)
+  for i in renderRightColumns:
+    centerRenderer.setHorizontalAlignment(JLabel.RIGHT)
+    table.getColumnModel().getColumn(i).setCellRenderer(centerRenderer)
+  
   
   frame = JFrame(title) if windowClosing is None else JFrame(title, windowClosing=windowClosing)
   jsp = JScrollPane(table)
-  jsp.setMinimumSize(Dimension(width, height))
+  jsp.setMinimumSize(Dimension(400, 500))
+  jsp.setPreferredSize(Dimension(width, height))
   frame.getContentPane().add(jsp)
   
   def show():
@@ -349,24 +426,28 @@ def addWindowListener(window, fn, methods=["windowClosed"]):
 
 
 class CopyStackSlice(Callable):
-  def __init__(self, stack, slice_index, shallow=False, scale=1.0):
+  def __init__(self, stack, slice_index, shallow=False, scale=1.0, roi=None):
     self.stack = stack
     self.slice_index = slice_index # 1-based
     self.shallow = shallow
     self.scale = scale
+    self.roi = roi
   def call(self):
     t = Thread.currentThread()
     if t.isInterrupted() or not t.isAlive():
       return None
     ip = self.stack.getProcessor(self.slice_index)
+    if self.roi:
+      ip.setRoi(self.roi)
+      ip = ip.crop()
     if self.scale < 1.0:
       return ip.resize(int(ip.getWidth() * self.scale + 0.5),
                        int(ip.getHeight() * self.scale + 0.5),
                        True) # averaging
-    return ip if self.shallow else ip.duplicate()
+    return ip if self.shallow or self.roi else ip.duplicate()
 
 # Duplicate a stack in parallel
-def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=True, scale=1.0):
+def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=True, scale=1.0, roi=None):
   """ imp: defaults to None, meaning get the current image.
       slices: defaults to None, meaning all. Otherwise a list of 1-based indices.
       n_threads: defaults to 0, meaning as many as possible.
@@ -377,15 +458,22 @@ def duplicateInParallel(imp=None, slices=None, n_threads=0, shallow=False, show=
   stack = imp.getStack()
   exe = newFixedThreadPool(n_threads=n_threads if n_threads > 0 else min(Runtime.getRuntime().availableProcessors(), stack.getSize()), name="duplicate-stack")
   try:
-    stack2 = ImageStack(imp.getWidth(), imp.getHeight())
-    futures = [(i, exe.submit(CopyStackSlice(stack, i, shallow=shallow, scale=scale))) for i in slices]
+    stack2 = ImageStack() # dimensions will be set by the first slice added
+    futures = [(i, exe.submit(CopyStackSlice(stack, i, shallow=shallow, scale=scale, roi=roi))) for i in slices]
     for i, fu in futures:
       t = Thread.currentThread()
       if t.isInterrupted() or not t.isAlive():
         syncPrintQ("Interrupted duplicateInParallel.")
         return
-      label = stack.getSliceLabel(i)
-      stack2.addSlice(label if label else str(i), fu.get())
+      label = None
+      try:
+        label = stack.getSliceLabel(i)
+      except:
+        syncPrintQ("Failed to retrieve slice labet at section %i" % i)
+      try:
+        stack2.addSlice(label if label else str(i), fu.get())
+      except:
+        syncPrintQ("Failed to add slice for section %i" % i)
     imp = ImagePlus("%s - [%i, %i]" % (imp.getTitle(), slices[0], slices[-1]), stack2)
     if show:
       imp.show()
@@ -456,5 +544,22 @@ def saveInParallel(targetDir, imp=None, slices=None, n_threads=0, show=True, sca
   finally:
     exe.shutdown()
 
+# A VirtualStack view of an ImgLib2 8-bit img that supports stack labels
+class VirtualStack8bit(ImageJVirtualStackUnsignedByte):
+  def __init__(self, img3D, labelsFn=None):
+    super(VirtualStack8bit, self).__init__(img3D, TypeIdentity())
+    self.labels = {}
+    self.labelsFn = labelsFn
+  def setSliceLabel(self, label, n):
+    self.labels[n] = label
+  def getSliceLabel(self, n):
+    if n in self.labels:
+      return self.labels[n]
+    if self.labelsFn:
+      return self.labelsFn(n)
+    return str(n)
 
+def wrap8bit(img3D, title="", labelsFn=None):
+  """ Return a 3D ImagePlus with a VirtualStack that reads from the 3-dimensional img3D. """
+  return ImagePlus(title, VirtualStack8bit(img3D, labelsFn=labelsFn))
 

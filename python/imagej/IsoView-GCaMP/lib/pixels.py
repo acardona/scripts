@@ -1,4 +1,8 @@
 from ij.process import ImageStatistics
+from lib.pixels_asm import ImgCompare
+from lib.util import printException, newFixedThreadPool, numCPUs, isThreadDead, syncPrintQ, Task
+from java.util.concurrent import Callable
+from net.imglib2.view import Views
 
 def autoAdjust(ip):
   """
@@ -48,3 +52,59 @@ def autoAdjust(ip):
     maximum = sp.getMax()
 
   return minimum, maximum
+
+
+class ComputeCosyneSimilarity(Callable):
+  def __init__(self, img, sqrtSumSq, i, j):
+    self.img = img
+    self.sqrtSumSq = sqrtSumSq
+    self.i = i
+    self.j = j
+  def call(self):
+    if isThreadDead():
+      return None
+    v = ImgCompare.cosyneSimilarityNorm(Views.hyperSlice(self.img, 2, self.i),
+                                        self.sqrtSumSq[self.i],
+                                        Views.hyperSlice(self.img, 2, self.j),
+                                        self.sqrtSumSq[self.j])
+    syncPrintQ("Cosine similarity for %i-%i: %f" % (self.i, self.j, v))
+    return v
+
+
+def pairwiseCosyneSimilarity(imgVolume, nThreads=0, roi=None):
+  """
+  roi: [x, y, width, height]
+  Returns an array of length imgVolume.dimension(2) -1,
+  where each item is the cosyne similarity between slice i and i+1.
+  """
+  exe = newFixedThreadPool(min(numCPUs(), imgVolume.dimension(2)) if 0 == nThreads else 0) # 0 means max
+  try:
+    # Crop view to interval if roi is not None
+    if roi:
+      imgVolume = Views.interval(imgVolume, [roi[0], roi[0] + roi[2] -1, 0],
+                                            [roi[1], roi[1] + roi[3] -1, imgVolume.dimension(2) -1])    
+    # Compute all sqrtSumSquares values, one for each 2D section
+    futures = []
+    for i in xrange(imgVolume.dimension(2)):
+      futures.append(exe.submit(Task(ImgCompare.sqrtSumSquares, Views.hyperSlice(imgVolume, 2, i))))
+    sqrtSumSq = [fu.get() for fu in futures]
+    # Compute all pairwise cosyne similarities
+    futures = []
+    for i in xrange(imgVolume.dimension(2) -1):
+      futures.append(exe.submit(ComputeCosyneSimilarity(imgVolume, sqrtSumSq, i, i+1)))
+    return [fu.get() for fu in futures]
+  except:
+    printException()
+  finally:
+    exe.shutdown()
+
+
+
+
+
+
+
+
+
+
+

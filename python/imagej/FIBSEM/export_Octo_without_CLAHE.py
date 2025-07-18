@@ -135,7 +135,6 @@ name = srcDir.split('/')[-2]
 
 exportN5(filepaths,
          loader,
-         dimensions,
          loadMatrices("matrices", csvDir),
          name,
          exportDir,

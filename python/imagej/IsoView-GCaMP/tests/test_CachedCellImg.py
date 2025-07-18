@@ -1,7 +1,8 @@
 import os, sys
 sys.path.append("/home/albert/lab/scripts/python/imagej/IsoView-GCaMP/")
 from lib.ui import showStack
-from lib.io import SectionCellLoader, lazyCachedCellImg
+from lib.io import SectionCellLoader
+from lib.img import lazyCachedCellImg
 from net.imglib2.type.numeric.integer import UnsignedShortType
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.type.PrimitiveType import BYTE

@@ -16,7 +16,7 @@
 # 3. Jointly optimize the pose of every section.
 
 from __future__ import with_statement
-import os, sys, traceback, csv
+import os, sys, traceback, csv, re
 from os.path import basename
 from operator import itemgetter
 from mpicbg.ij.blockmatching import BlockMatching
@@ -53,17 +53,22 @@ from java.util.concurrent import Executors, TimeUnit
 from jarray import zeros, array
 from functools import partial
 from itertools import izip, islice
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 # From lib
-from io import lazyCachedCellImg, SectionCellLoader, writeN5, serialize, deserialize
+from io import SectionCellLoader, writeN5, serialize, deserialize, ensureDirsExist
+from img import lazyCachedCellImg
 from util import SoftMemoize, newFixedThreadPool, Task, RunTask, TimeItTask, ParallelTasks, numCPUs, nativeArray, syncPrint, syncPrintQ, printException, isThreadDead
-from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures, PointMatches
+from features import savePointMatches, loadPointMatches, saveFeatures, loadFeatures, PointMatches, deletePointMatches
 from registration import loadMatrices, saveMatrices
-from ui import showStack, wrap, showTable, ExecutorCloser
+from ui import showStack, wrap, ExecutorCloser
+from tables import showTable
 from converter import convert2
 from pixels import autoAdjust
 from loop import createBiConsumerTypeSet
 from segmentation_em import classifyImageLabKitSegCached, segThreadCache
+from img import showAlignedImg, makeImg
+from tables import makeTableChunks
+from montage2d import makeSliceLoader, fuseTranslationMatrices, loadMontagedImg
 from java.nio.file import Paths, Files, StandardCopyOption
 
 
@@ -299,8 +304,8 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
   if validateByFileExists and not ignoreCacheFn(index):
     if os.path.exists(path):
       return True
-    else:
-      os.remove(path)
+    #else:
+    #  os.remove(path)  # makes no sense, the path doesn't exist. TODO Track this down
   # An ArrayList whose last element is a mpicbg.imagefeatures.FloatArray2DSIFT.Param
   # and all other elements are mpicbg.imagefeatures.Feature
   features = deserialize(path) if os.path.exists(path) and not ignoreCacheFn(index) else None
@@ -340,6 +345,18 @@ def ensureSIFTFeatures(filepath, index, paramsSIFT, properties, csvDir, validate
   except:
     printException()
   return features
+
+
+def deleteFeatures(img_filename, directory, moveToDir=None):
+  path = os.path.join(directory, basename(img_filename)) + ".SIFT-features.obj"
+  try:
+    if os.path.exists(path):
+      if moveToDir is not None:
+        os.rename(path, os.path.join(moveToDir, basename(path)))
+      else:
+        os.remove(path)
+  except:
+    syncPrint("Failed to delete features file at %s" % path)
 
 
 def extractSIFTMatches(filepaths, index1, index2, params, paramsSIFT, properties, csvDir, loaderImp=None):
@@ -552,13 +569,15 @@ def optimize(tiles, paramsTileConfiguration, fixed_tile_indices=None, verbose=Fa
   maxIterations = paramsTileConfiguration["maxIterations"] if maxIterations is None else maxIterations
   damp = paramsTileConfiguration["damp"]
   nThreads = paramsTileConfiguration.get("nThreadsOptimizer", Runtime.getRuntime().availableProcessors())
-  TileUtil.optimizeConcurrently(ErrorStatistic(maxPlateauwidth + 1), maxAllowedError,
+  es = ErrorStatistic(maxPlateauwidth + 1)
+  TileUtil.optimizeConcurrently(es, maxAllowedError,
                                 maxIterations, maxPlateauwidth, damp, tc, HashSet(tiles),
                                 tc.getFixedTiles(), nThreads, verbose)
+  return maxIterations, es.min, es.max
   
 
 def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-          loaderImp=None, fixed_tile_indices=None, io=True, verboseOptimize=True):
+          loaderImp=None, fixed_tile_indices=None, io=True, verboseOptimize=True, logDict=None):
   if not os.path.exists(csvDir):
     os.makedirs(csvDir) # recursively
   name = "matrices"
@@ -570,7 +589,7 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
   
   # Optimize
   tiles = makeLinkedTiles(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration["n_adjacent"], properties, loaderImp=loaderImp)
-  optimize(tiles, paramsTileConfiguration, fixed_tile_indices, verbose=verboseOptimize)
+  maxIterations, stats_min, stats_max = optimize(tiles, paramsTileConfiguration, fixed_tile_indices, verbose=verboseOptimize)
 
   # Return model matrices as double[] arrays with 6 values
   matrices = []
@@ -586,23 +605,34 @@ def align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, proper
 
   if io:
     saveMatrices(name, matrices, csvDir)
-  
+ 
+  if logDict is not None:
+    logDict["maxIterations"] = maxIterations
+    logDict["stats_min"] = stats_min
+    logDict["stats_max"] = stats_max
+ 
   return matrices
-  
-  
+
+
 def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-                  groupNames, volumeImg, fixed_tile_index=None):
+                  groupNames, volumeImg, fixed_tile_index=None, clearCacheFn=None):
   """
   Align overlapping chunks of serial sections independently, and then interpolate the alignments.
   This approach helps the optimizer do a good job and fast.
   The size of the chunks should be small, like 400, and the overlap between consecutive chunks should be 50%.
   Needs only one fixed section (tile) for the overall; when aligning each chunk, the middle tile is kept fixed.
   """
+  
+  # Avoid circular dependencies: pass self function as argument to makeTableChunks
+  reRunFn = partial(alignInChunks, filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
+                    groupNames, volumeImg, fixed_tile_index=fixed_tile_index, clearCacheFn=clearCacheFn)
+  
   if not os.path.exists(csvDir):
     os.makedirs(csvDir) # recursively
   name = "matrices"
   matrices = loadMatrices(name, csvDir)
   if matrices:
+    makeTableChunks(groupNames, volumeImg, csvDir, properties, reRunFn)
     return matrices
   
   # Determine fixed tile for the whole series
@@ -637,17 +667,30 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
       print "Loaded", name_i
     else:
       print "Computing", name_i
+      logDict = {}
       matrices = align(filepaths[start:end], csvDir, params, paramsSIFT, paramsTileConfiguration, properties,
-                       loaderImp=makeSliceLoader(groupNames, volumeImg), fixed_tile_indices=[fixed], io=False, verboseOptimize=True)
+                       loaderImp=makeSliceLoader(groupNames, volumeImg), fixed_tile_indices=[fixed], io=False,
+                       verboseOptimize=True, logDict=logDict)
       saveMatrices(name_i, matrices, csvDir)
-      volumeImg.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
+      with open(os.path.join(csvDir, name_i + "_optimizer_stats.csv"), 'w') as f: # overwrite any existing
+        keys = logDict.keys()
+        f.write(", ".join(keys))
+        f.write("\n")
+        f.write(", ".join(str(logDict[key]) for key in keys)) # all are numeric
+        f.flush()
+        os.fsync(f.fileno())
+      # clear cache
+      if clearCacheFn:
+        clearCacheFn(overlap)
+      elif isinstance(volumeImg, CellImg):
+        volumeImg.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
     chunks.append(matrices)
   
   # Now register the overlapping chunks, considering each chunk as a tile.
   # Given that the subset of sections is the same, use for pointmatches across tiles one point per section,
   # transformed by the transform of that section in that chunk,
   # towards computing a TranslationModel2D for each tile (each chunk is tile).
-  dims = properties["img_dimensions"]
+  dims = [volumeImg.dimension(0), volumeImg.dimension(1)]
   px, py = dims[0] / 2, dims[1] / 2 # center of each section
   chunk_tiles = [(chunk, Tile(TranslationModel2D())) for chunk in chunks]
   for (cmatrices1, tile1), (cmatrices2, tile2) in izip(chunk_tiles, islice(chunk_tiles, 1, None)):
@@ -746,6 +789,8 @@ def alignInChunks(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration
   """
   
   saveMatrices(name, matrices, csvDir)
+  
+  makeTableChunks(groupNames, volumeImg, csvDir, properties, reRunFn)
   
   return matrices
 
@@ -850,119 +895,6 @@ class SourcePanning(KeyAdapter):
       syncPrintQ(str(sys.exc_info()))
 
 
-
-# For preloading
-class GetSectionTask(Callable):
-  def __init__(self, cachedCellImg, index):
-    self.cachedCellImg = cachedCellImg
-    self.index = index
-    
-  def call(self):
-    t = Thread.currentThread()
-    if t.isInterrupted() or not t.isAlive():
-      return None
-    ra = self.cachedCellImg.getCells().randomAccess()
-    ra.setPosition(self.index, 2) # one 2D cell per section, so one dimension only
-    return ra.get()
-
-
-class CellLoader(CacheLoader):
-  def __init__(self, filepaths, loadImg, matrices, img_dimensions, cell_dimensions, interval):
-    self.filepaths = filepaths
-    self.loadImg = loadImg # function to load images
-    self.matrices = matrices
-    self.img_dimensions = img_dimensions
-    self.cell_dimensions = cell_dimensions # x,y must match dims of interval
-    self.interval = interval # when smaller than the image, will crop
-    self.exe = None
-    self.preload = None
-    
-  def setCache(self, cachedCellImg, preload):
-    if preload:
-      self.cachedCellImg = cachedCellImg
-      self.exe = newFixedThreadPool(preload) # BEWARE native memory leak if not closed
-      self.preload = preload
-      syncPrintQ("CellLoader.setCache: preload is %i" % preload)
-
-  def preloadCells(self, index):
-    # Submit jobs to concurrently preload cells ahead into the cache, if not there already
-    if self.preload is not None and self.preload > 0 and 0 == index % self.preload:
-      syncPrintQ("CellLoader.preloadCells triggered with preload %i" % self.preload)
-      # e.g. if index=0 and preload=5, will load [1,2,3,4]
-      syncPrintQ("Preloading sections: %s" % str(range(index + 1, min(index + self.preload, len(self.filepaths)))))
-      for i in xrange(index + 1, min(index + self.preload, len(self.filepaths))):
-        self.exe.submit(GetSectionTask(self.cachedCellImg, i))
-
-  def destroy(self):
-    if self.exe is not None:
-      self.exe.shutdownNow()
-
-  def get(self, index):
-    """ Return a new Cell for section at index. """
-    self.preloadCells(index) # preload others in the background
-    img = self.loadImg(self.filepaths[index])
-    affine = AffineTransform2D()
-    affine.set(self.matrices[index])
-    imgI = Views.interpolate(Views.extendZero(img), NLinearInterpolatorFactory())
-    imgA = RealViews.transform(imgI, affine)
-    imgT = Views.zeroMin(Views.interval(imgA, self.interval))
-    aimg = img.factory().create(self.interval)
-    #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()),   # How many threads? Should use 1 only.
-    #             aimg)
-    # Copy single-threaded
-    
-    # Doesn't exist?
-    #m = ImgUtil.getDeclaredMethod("copy", [Class.forName("net.imglib2.img.Img"), Class.forName("[S"), Integer, Class.forName("[I")])
-
-    #ImgUtil.copy(ImgView.wrap(imgT, aimg.factory()), # source: an Img
-    #m.invoke(None, 
-    #         [ImgView.wrap(imgT, aimg.factory()), # source: an Img
-    #          aimg.update(None).getCurrentStorageArray(), # target
-    #          0, # offset
-    #          [1, aimg.dimension(0)]]) # stride: [1, width] to convert x,y coordinates to array indices
-    
-    # Copy single-threaded
-    ImgMath.compute(imgT).into(aimg)
-    
-    return Cell(self.cell_dimensions,
-               [0, 0, index],
-               aimg.update(None))
-  
-
-def makeImg(filepaths, pixelType, loadImg, img_dimensions, matrices, cropInterval, preload):
-  """ Note that when preload > 0, the returned CellLoader will have created an ExecutorService
-      that can be shutdown by invoking destroy() on it.
-  """
-  dims = Intervals.dimensionsAsLongArray(cropInterval)
-  voldims = [dims[0],
-             dims[1],
-             len(filepaths)]
-  cell_dimensions = [dims[0],
-                     dims[1],
-                     1]
-  grid = CellGrid(voldims, cell_dimensions)
-  
-  # Old approach:
-  #cellGet = TranslatedSectionGet(filepaths, loadImg, matrices, img_dimensions, cell_dimensions,
-  #                               cropInterval, preload=preload)
-  #return LazyCellImg(grid, pixelType(), cellGet), cellGet
-
-  # New approach: delegate the cache entirely to ImgLib2
-  cell_loader = CellLoader(filepaths, loadImg, matrices,
-                           img_dimensions, cell_dimensions,
-                           cropInterval)
-  # Create the cache, which can load any Cell when needed using CellLoader
-  loading_cache = SoftRefLoaderCache().withLoader(cell_loader).unchecked()
-  # Create a CachedCellImg: a LazyCellImg that caches Cell instances with a SoftReference, for best performance
-  # and also self-regulating regarding the amount of memory to allocate to the cache.
-  cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
-                    voldims, pixelType(), loading_cache,
-                    ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
-  cell_loader.setCache(cachedCellImg, preload)
-  return cachedCellImg, cell_loader
-
-
-
 class OnClosing(ImageListener):
   def __init__(self, imp, cellGet):
     self.imp = imp
@@ -979,7 +911,7 @@ def viewAlignedPlain(filepaths, csvDir, params, paramsSIFT, paramsTileConfigurat
   matrices = align(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=loaderImp)
   def loadImg(filepath):
     return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"], loaderImp=loaderImp)
-  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
+  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, matrices, cropInterval, properties.get('preload', 0))
   print "cropInterval", cropInterval
   print "viewAlignedPlain, cellImg:", cellImg
   print "viewAlignedPlain:", cellImg.getCellGrid()
@@ -998,7 +930,7 @@ def viewAligned(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, 
   matrices = alignFn(filepaths, csvDir, params, paramsSIFT, paramsTileConfiguration, properties, loaderImp=loaderImp)  
   def loadImg(filepath):
     return loadUnsignedShort(filepath, invert=properties["invert"], CLAHE_params=properties["CLAHE_params"], loaderImp=loaderImp)
-  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, properties["img_dimensions"], matrices, cropInterval, properties.get('preload', 0))
+  cellImg, cellGet = makeImg(filepaths, properties["pixelType"], loadImg, matrices, cropInterval, properties.get('preload', 0))
   print cellImg
   comp = showStack(cellImg, title=properties["srcDir"].split('/')[-2], proper=True)
   # Add the SourcePanning KeyListener as the first one
@@ -1049,7 +981,6 @@ def export8bitN5(*args, **kwargs):
 
 def exportN5(filepaths,
             loadFn,
-            img_dimensions,
             matrices,
             name,
             exportDir,
@@ -1298,51 +1229,131 @@ def samplePointMatches(pointmatches, maximum=1000):
 
 
 
-def computeShifts(groupNames, csvDir, threshold, params, properties, shifts_filename):
+def computeShifts(groupNames, csvDir, threshold, paramsPM, properties, edit=False):
   """
   For each groupName,
   reads the pointmatches file in csvDir with its subsequent section only (ignoring the rest),
-  takes the median subset via samplePointMatches,
   then computes the translation via fitting a TransformModel2D,
   determines whether the translation is bigger than threshold,
-  and prints a list of translations for each section to be used as section shifts.
+  and returns, for each section, the cummulative shifts in X and Y, as a dictionary.
+  
+  When remove is True, the csv file for the pointmatches will be removed when there is a shift.
   
   These shifts are useful for re-rendering images prior to re-extracting features,
-  to avoid large shifts that the optimizer would need a lot of iterations to resolve.
+  to avoid large shifts that the optimizer would need a lot of iterations to resolve,
+  and which the alignInChunks can't resolve, only smooth out, by design.
+  
+  Returns a list of cumulative (dx, dy) values, indexed like groupNames.
   """
-  with open(os.path.join(csvDir, shifts_filename), 'w') as f:
-    for j in xrange(len(groupNames)):
-      if 0 == j:
-        continue
-      # Load pointmatches
-      i, j, pointmatches = loadPointMatchesPlus(groupNames, j-1, j, csvDir, params, properties)
-      # Compute translation model
-      model = TranslationModel2D()
-      modelFound = model.fit(pointmatches)
-      # Extract translation
-      matrix = zeros(6, 'd')
-      model.toArray(matrix)
-      dx = matrix[4]
-      dy = matrix[5]
-      # If larger than 1 pixel in X or Y, consider this a shift
-      if abs(dx) > threshold or abs(dy) > threshold:
-        s = "[%i, %i, %.1f, %.1f, '%s.%s']," % (i, j, dx, dy, groupNames[i], groupNames[j])
-        syncPrintQ(s)
-        f.write(s)
-        f.write('\n')
+  shifts = {}
+  shifts[groupNames[0]] = (0, 0)
+  cummulative_dx, cummulative_dy = 0, 0
+  tmp_del_dir = os.path.join(csvDir, "tmp_del")
+  ensureDirsExist(tmp_del_dir)
+  for j in xrange(1, len(groupNames)):
+    # Load pointmatches
+    i, j, pointmatches = loadPointMatchesPlus(groupNames, j-1, j, csvDir, paramsPM, properties)
+    # Compute translation model
+    model = TranslationModel2D()
+    modelFound = model.fit(pointmatches)
+    # Extract translation
+    matrix = zeros(6, 'd')
+    model.toArray(matrix)
+    dx = matrix[4]
+    dy = matrix[5]
+    # If larger than threshold pixel in X or Y, consider this a shift
+    if abs(dx) > threshold or abs(dy) > threshold:
+      cummulative_dx -= dx # subtract: the inverse transform
+      cummulative_dy -= dy
+    # Delete all extracted SIFT features and associated pointmatches after the first shift:
+    # they'd be out of sync with the shifted images
+    if edit and (0 != cummulative_dx or 0 != cummulative_dy):
+      deleteFeatures(groupNames[j], csvDir, moveToDir=tmp_del_dir) # will need to be re-extracted, since their location won't match the underlying image
+      deletePointMatches(groupNames[i], groupNames[j], csvDir, moveToDir=tmp_del_dir)
+    # 
+    shifts[groupNames[j]] = (cummulative_dx, cummulative_dy)
+  #
+  return shifts
+  
+  
+class ComputeShift(Callable):
+  def __init__(self, groupNames, j, csvDir, paramsPM, properties, threshold, edit, tmp_del_dir):
+    self.groupNames = groupNames
+    self.j = j
+    self.csvDir = csvDir
+    self.paramsPM = paramsPM
+    self.properties = properties
+    self.threshold = threshold
+    self.edit = edit
+    self.tmp_del_dir = tmp_del_dir
+  def call(self):
+    # Load pointmatches
+    i, j, pointmatches = loadPointMatchesPlus(self.groupNames, self.j-1, self.j, self.csvDir, self.paramsPM, self.properties)
+    # Compute translation model
+    model = TranslationModel2D()
+    modelFound = model.fit(pointmatches)
+    # Extract translation
+    matrix = zeros(6, 'd')
+    model.toArray(matrix)
+    dx = matrix[4]
+    dy = matrix[5]
+    # Handle files
+    if self.edit:
+      deleteFeatures(self.groupNames[self.j], self.csvDir, moveToDir=self.tmp_del_dir) # will need to be re-extracted, since their location won't match the underlying image
+      deletePointMatches(self.groupNames[i], self.groupNames[j], self.csvDir, moveToDir=self.tmp_del_dir)
+    # If larger than threshold pixel in X or Y, consider this a shift
+    if abs(dx) > self.threshold or abs(dy) > self.threshold:
+      return self.groupNames[self.j], -dx, -dy # subtract: the inverse transform
+    return self.groupNames[self.j], 0, 0
 
 
-def makeFilterFeaturesFn(model_path, model_width):
+def computeShiftsP(groupNames, csvDir, threshold, paramsPM, properties, edit=False):
+  """ Like computeShifts but in parallel, and rezeroing to avoid having sections partially outside the canvas because of negative coordinates. """
+  tmp_del_dir = os.path.join(csvDir, "tmp_del")
+  ensureDirsExist(tmp_del_dir)
+  exe = newFixedThreadPool(n_threads=0) # max threads
+  try:
+    futures = [exe.submit(ComputeShift(groupNames, j, csvDir, paramsPM, properties, threshold, edit, tmp_del_dir))
+               for j in xrange(1, len(groupNames))]
+    shifts = {}
+    shifts[groupNames[0]] = (0, 0)
+    cummulative_dx = 0
+    cummulative_dy = 0
+    min_dx = 0
+    min_dy = 0
+    for fu in futures:
+      groupName, dx, dy = fu.get()
+      min_dx = min(min_dx, dx)
+      min_dy = min(min_dy, dy)
+      cummulative_dx += dx
+      cummulative_dy += dy
+      shifts[groupName] = (cummulative_dx, cummulative_dy)
+    # Correct for negative coordinates that would put images off the canvas (the canvas can always be enlarged)
+    if min_dx < 0 or min_dy < 0:
+      shifts = {groupName: (dx - min_dx, dy - min_dy) for groupName, (dx, dy) in shifts.iteritems()}
+      # First section has moved too
+      if edit:
+        deleteFeatures(groupNames[0], csvDir, moveToDir=tmp_del_dir)
+    return shifts
+  finally:
+    exe.shutdown()
+
+
+def makeFilterFeaturesFn(model_path, model_width, as3D=False):
   return partial(filterFeatures,
                  model_width,
-                 segThreadCache(model_path, 1, cache_size=numCPUs())) # 1 thread for running the inference on the image
+                 segThreadCache(model_path, 1, cache_size=numCPUs()), # 1 thread for running the inference on the image
+                 as3D=as3D)
 
-def filterFeatures(model_width, seg_cache, section_ip, positions, points=False, ip_scale=1.0, process_mask=True):
+def filterFeatures(model_width, seg_cache, section_ip, positions, points=False, ip_scale=1.0, process_mask=True, as3D=False):
   """ Compute a mask for the section_ip (a ByteProcessor) using a LabKit Segmenter, obtained from the seg_cache.
   If points=False, assume features contain Feature instances, otherwise Point instances. """
   section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
   resized_ip = section_ip.resize(model_width)
   resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [model_width, resized_ip.getHeight()])
+  if as3D:
+    resized_img = Views.addDimension(resized_img, 0, 0) # A bogus third dimension of size 1.
+                                                        # Necessary when the model was trained on a 3D stack, since here it's applied to a 2D image.
   
   """
   # Trainable Weka Segmentation fails for mysterious reasons, works on isolated scripts
@@ -1453,16 +1464,269 @@ def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtC
         print sys.exc_info()
       
       savePointMatches(g1, g2, pms, tgtCsvDir, params)
-      
-      
+
+
+def cropImageView(img, roi, interim_scale=1.0):
+  # roi is in full size coordinates
+  x, y, width, height = map(lambda v: int(v * interim_scale + 0.5), roi)
+  img = Views.zeroMin(Views.interval(img,
+                                     [x, y, 0],
+                                     [x + width -1, y + height -1, img.dimension(2) - 1]))
+  return img
+
+
+def runSIFTAlignment(volumeImgMontaged, groupNames, SIFTdir,
+                     properties, paramsSIFT, paramsPMs, paramsTileConfiguration,
+                     params_pixels, show=True):
+  # Ensure use_SIFT is true
+  properties = dict(properties) # duplicate then edit
+  properties["use_SIFT"] = True
+  properties["SIFT_validateByFileExists"] = True # Avoid loading and parsing SIFT features just to make sure they are fine.
+  
+  ensureDirsExist(SIFTdir)
+  
+  # Crop image if required
+  if properties.get("roi", None) is not None:
+    img = cropImageView(volumeImgMontaged, properties["roi"], interim_scale=params_pixels["interim_scale"])
+  else:
+    img = volumeImgMontaged
+  
+  def clearCacheFn(overlap):
+    try:
+      volumeImgMontaged.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
+    except:
+      printException()
+  
+  # Compute and save to disk all transforms for all sections
+  matrices = alignInChunks(groupNames, SIFTdir, paramsPMs, paramsSIFT, paramsTileConfiguration, properties,
+                           groupNames, img, fixed_tile_index=paramsTileConfiguration["fixed_tile_index"],
+                           clearCacheFn=clearCacheFn)
+
+  # Show the full image (not the cropped one used for aligning)
+  cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
+  properties["pixelType"] = type(volumeImgMontaged.randomAccess().get())
+  #properties["img_dimensions"] = Intervals.dimensionsAsLongArray(volumeImgMontaged)
+  imgSIFT, impSIFT = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, properties,
+                                    matrices,
+                                    rotate=None, # None, "right", "left", or "180"
+                                    title_addendum=" SIFT+RANSAC", show=show)
+  
+  return imgSIFT, impSIFT, matrices
 
 
 
+def runBlockMatchingAlignment(imgSIFT, matricesSIFT, volumeImgMontaged, groupNames, BMdir,
+                              propertiesBM, paramsSIFT, paramsBlockMatching, paramsTileConfigurationBM,
+                              params_pixels, show=True):
+  # Ensure use_SIFT is false
+  propertiesBM = dict(propertiesBM) # duplicate then edit
+  propertiesBM["use_SIFT"] = False
+  
+  ensureDirsExist(BMdir)
+  
+  # Crop image if required
+  if propertiesBM.get("roi", None) is not None:
+    img = cropImageView(imgSIFT, propertiesBM["roi"], interim_scale=params_pixels["interim_scale"])
+  else:
+    img = imgSIFT
+
+  def clearCacheFn(overlap):
+    try:
+      volumeImgMontaged.getCache().invalidateAll(overlap) # clear the lazy CellImg cache
+      imgSIFT.getCache().invalidateAll(overlap) # it's a CellImg because it's not rotated with showAlignedImg above
+    except:
+      printException()
+
+  # Compute and save to disk all transforms for all sections
+  # From paramsSIFT reads its field initialSigma
+  propertiesBM["img_dimensions"] = Intervals.dimensionsAsLongArray(img) # NEEDED for making the TransformMesh for blockmatching
+  matricesBM = alignInChunks(groupNames, BMdir, paramsBlockMatching, paramsSIFT, paramsTileConfigurationBM, propertiesBM,
+                             groupNames, img, fixed_tile_index=paramsTileConfigurationBM["fixed_tile_index"],
+                             clearCacheFn=clearCacheFn)
+  
+  # Combine matricesSIFT with matricesBM
+  matricesFused = fuseTranslationMatrices([matricesSIFT, matricesBM])
+  
+  # Show the full image (not the cropped one used for aligning)
+  # with the combined SIFT and blockmatching translations in one single fused matrix
+  # so that the original pixels are interpolated only once.
+  cropInterval = FinalInterval([volumeImgMontaged.dimension(0), volumeImgMontaged.dimension(1)]) # The whole 2D view
+  propertiesBM["pixelType"] = type(volumeImgMontaged.randomAccess().get())
+  #propertiesBM["img_dimensions"] = Intervals.dimensionsAsLongArray(volumeImgMontaged) # NOT NEEDED for showAlignedImg
+  imgBM, impBM = showAlignedImg(volumeImgMontaged, cropInterval, groupNames, propertiesBM,
+                                matricesFused,
+                                rotate=None, # None, "right", "left", or "180"
+                                title_addendum=" blockmatching", show=show)
+  
+  # Show the cropped image
+  IL.wrap(img, "shifted cropped").show()
+  
+  # Show the shifted, cropped image as aligned with BM matrices
+  cropInterval2 = FinalInterval([img.dimension(0), img.dimension(1)])
+  img2, imp2 = showAlignedImg(img, cropInterval2, groupNames, propertiesBM,
+                              matricesBM,
+                              rotate=None,
+                              title_addendum=" shift + BM", show=show)
+  
+  return imgBM, impBM, matricesFused
 
 
+def loadAlignedImage(name, srcDir, repairedDir, montageDir,
+        SIFTdir, BMdir,
+        to_remove, ignore_images, replace_images,
+        first_section, last_section, replace_sections,
+        section_width, section_height, crop_roi, params_pixels,
+        rotate=None, preload=0, section_offsets=None, translation=None):
+  """
+  Load the volume in full resolution in 8-bit after both SIFT and blockmatching alignment.
+  Will fail unless both sets of matrices exist.
+  And assumes matrices are merely translations.
+  """
+  
+  # Load the montages in full resolution, unaligned, and cropped as per crop_roi
+  imgMontaged, groupNames, tileGroups, filepaths = loadMontagedImg(
+        srcDir, montageDir, repairedDir,
+        to_remove, ignore_images, replace_images,
+        first_section, last_section, replace_sections,
+        section_width, section_height, None, params_pixels,
+        cache_size=0, # no cache, each slice will be loaded only once
+        section_offsets=section_offsets)
 
+  # Load matrices and fuse them, since they depend on each other
+  matricesList = []
+  
+  matricesShifts = loadMatrices("matrices-shifts", SIFTdir)
+  if matricesShifts:
+    matricesList.append(matricesShifts)
+  
+  matricesSIFT = loadMatrices("matrices", SIFTdir)
+  if matricesSIFT:
+    matricesList.append(matricesSIFT)
+  
+  matricesBM = loadMatrices("matrices", BMdir)
+  if matricesBM:
+    matricesList.append(matricesBM)
+  
+  matricesFused = fuseTranslationMatrices(matricesList)
+  
+  # Correct scaling of the translation transforms, since they were measured on scaled snapshots
+  k = params_pixels["interim_scale"]
+  if k < 1:
+    for matrix in matricesFused:
+      matrix[2] /= k
+      matrix[5] /= k
 
+  if translation:
+    dx, dy = translation
+    for m in matricesFused:
+      m[2] += dx
+      m[5] += dy
 
+  # Prepare parameters for showAlignedImg
+  
+  # Crop
+  if crop_roi is None:
+    cropInterval = FinalInterval(imgMontaged.dimension(0), imgMontaged.dimension(1))
+  else:
+    cropInterval = FinalInterval([crop_roi[0], crop_roi[1]],
+                                 [crop_roi[2] -1, crop_roi[3] -1])
 
+  properties = {
+    "name": name,
+    "pixelType": type(imgMontaged.randomAccess().get()),
+    "preload": preload, # Should match the number of sections in Z of block_size for exporting to N5
+  }
+
+  # View the imgMontaged as aligned by SIFT and blockmatching
+  img, imp = showAlignedImg(imgMontaged, cropInterval, groupNames, properties,
+                            matricesFused,
+                            rotate=rotate, # None, "right", "left", or "180"
+                            title_addendum=" aligned", show=False)
+  return img, imp
+  
+
+def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
+                      paramsSIFT, paramsPMs, params_pixels, show=False,
+                      translation=None):
+  """
+  Ensure SIFT features and pointmatches for all adjacent pairs of sections exist,
+  and then compute the translation between sections.
+  When the translation is larger than properties['shift_threshold'], it gets accumulated.
+  The dictionary of shifts with groupName keys and (x, y) translation values for each section is returned.
+  It is also cached to disk under SIFTdir.
+  And from the point onwards that a shift is found, the SIFT features files are deleted.
+  """
+  
+  ensureDirsExist(SIFTdir)
+  
+  properties = dict(properties) # duplicate then edit
+  properties["use_SIFT"] = True
+  properties["SIFT_validateByFileExists"] = True # Avoid loading and parsing SIFT features just to make sure they are fine.
+  properties["pixelType"] = type(imgMontaged.randomAccess().get())
+  #properties["img_dimensions"] = Intervals.dimensionsAsLongArray(imgMontaged)
+  
+  path_shifts = os.path.join(SIFTdir, "shifts.csv")
+  if os.path.exists(path_shifts):
+    try:
+      with open(path_shifts, 'r') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+        # Parse and validate
+        shifts = {}
+        for i, (groupName, dx, dy) in enumerate(reader):
+          if groupName != groupNames[i]:
+            syncPrintQ("shifts.csv is invalid: will recompute shifts.")
+            break
+          shifts[groupName] = (dx, dy)
+    except:
+      syncPrintQ("Could not load shifts from path %s" % path)
+      syncPrintQ(str(sys.exc_info()))
+  else:
+    n_adjacent = 1
+    # Ensure all SIFT features and all pairwise pointmatches have been extracted.
+    ensurePointMatches(groupNames, SIFTdir, paramsPMs, paramsSIFT, n_adjacent,
+                       properties, loaderImp=makeSliceLoader(groupNames, imgMontaged))
+    # Threshold value in pixels, in the coordinate space of the exported scaled down montages
+    threshold = int(properties.get("shift_threshold", 10) * params_pixels['interim_scale'] * properties['scale'] + 0.5)
+    shifts = computeShiftsP(groupNames, SIFTdir, threshold, paramsPMs, properties, edit=True)
+  
+    try:
+      with open(path_shifts, 'w') as csvfile:
+        w = csv.writer(csvfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONNUMERIC)
+        for groupName in sorted(shifts.keys()):
+          dx, dy = shifts[groupName]
+          w.writerow((groupName, dx, dy))
+        # Ensure file is written to disk
+        csvfile.flush()
+        os.fsync(csvfile.fileno())
+    except:
+      syncPrint("Failed to save shifts at path %s" % path)
+      syncPrint(str(sys.exc_info()))
+  
+  matrices = loadMatrices("matrices-shifts", SIFTdir)
+  if not matrices:
+    # Express shifts as translation matrices
+    matrices = [array([1, 0, dx, 0, 1, dy], 'd')
+                for dx, dy in (shifts[groupName] for groupName in groupNames)]
+    # Write shift matrices to disk
+    saveMatrices("matrices-shifts", matrices, SIFTdir)
+
+  # Prepare parameters for showAlignedImg
+  cropInterval = FinalInterval([imgMontaged.dimension(0), imgMontaged.dimension(1)]) # The whole 2D view
+  properties["preload"] = 0 # don't
+  
+  # Correct origin of coordinates with a translation, for when sections fall partially outside the canvas
+  if translation:
+    dx, dy = translation
+    for m in matrices:
+      m[2] += dx
+      m[5] += dy
+  
+  # View the imgMontaged with shifts
+  img, imp = showAlignedImg(imgMontaged, cropInterval, groupNames, properties,
+                            matrices,
+                            rotate=None, # None, "right", "left", or "180"
+                            title_addendum=" shifted", show=show)
+  
+  return img, imp, matrices, shifts
 
 

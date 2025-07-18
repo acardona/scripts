@@ -2,7 +2,8 @@ from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from net.imglib2.view import Views
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(sys.argv[0])), "IsoView-GCaMP"))
-from lib.io import parse_TIFF_IFDs, read_TIFF_plane, lazyCachedCellImg, TIFFSlices
+from lib.io import parse_TIFF_IFDs, read_TIFF_plane, TIFFSlices
+from lib.img import lazyCachedCellImg
 
 
 filepath =  "/home/albert/Desktop/t2/bat-cochlea-volume.compressed-packbits.tif"

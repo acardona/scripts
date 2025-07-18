@@ -1,3 +1,4 @@
+from __future__ import with_statement
 import operator, sys, os
 from java.io import RandomAccessFile, File, FileInputStream
 from java.io import Serializable, FileOutputStream, ObjectOutputStream, FileInputStream, ObjectInputStream
@@ -27,12 +28,13 @@ from net.imglib2.cache.ref import SoftRefLoaderCache, BoundedSoftRefLoaderCache
 from net.imglib2.cache.img import CachedCellImg
 from loci.formats import ChannelSeparator
 from ij.io import FileSaver, ImageReader, FileInfo
-from ij import ImagePlus, IJ
+from ij import ImagePlus, IJ, ImageStack
 from ij.process import ShortProcessor, ByteProcessor
 from synchronize import make_synchronized
 from util import syncPrint, syncPrintQ, newFixedThreadPool, printException
 from ui import showStack, showBDV
 from io_asm import DAT_handler
+from img import lazyCachedCellImg
 try:
   # Needs 'SiMView' Fiji update site enabled
   from org.janelia.simview.klb import KLB
@@ -60,7 +62,12 @@ def findFilePaths(srcDir, extension):
         paths.append(os.path.join(root, filename))
   paths.sort()
   return paths
-  
+
+
+def findFilenames(srcDir, pattern):
+  """ Find filenames in srcDir that match the regex pattern. """
+  return filter(lambda filename: pattern.search(filename), os.listdir(srcDir))
+
 
 def loadFilePaths(srcDir, extension, csvDir, cache_name, ignore_cache=False):
   """ Find file paths that match the filename extension,
@@ -69,19 +76,26 @@ def loadFilePaths(srcDir, extension, csvDir, cache_name, ignore_cache=False):
       If ignore_cache is true, files will be searched for always.
       If ignore_cache is false (default), then if the csvDir/cache_name
       file exists, filepaths will be read at one per line of that file.
-      Returns a list of filepaths.
+      Returns a list of filepaths and a boolean (True when it was cached)
   """ 
   cachepath = os.path.join(csvDir, cache_name)
   if not ignore_cache and os.path.exists(cachepath):
       with open(cachepath, 'r') as f:
-        return f.read().splitlines() # Removes newline character
+        return f.read().splitlines(), True # Removes newline character
   # Else, find them and cache them
   filepaths = findFilePaths(srcDir, extension)
   if not os.path.exists(csvDir):
     os.mkdir(csvDir)
   with open(cachepath, 'w') as f:
     f.write("\n".join(sorted(filepaths)))
-  return filepaths
+  return filepaths, False
+
+
+def ensureDirsExist(*dirs):
+  for folder in dirs:
+    if not os.path.exists(folder):
+      os.makedirs(folder) # recursive directory creation
+
 
 
 def readFloats(path, dimensions, header=0, byte_order=ByteOrder.LITTLE_ENDIAN):
@@ -263,7 +277,71 @@ def _readFIBSEMdatBuffered(ra, width, height, numChannels, channel_index=-1, buf
   shorts = None
   return channels
   
+
+def readFIBSEM(path, openAsFloat=False, channel_index=0, scale=False):
+  """
+  Parse DAT file using the sc.fiji.io.FIBSEM_Reader plugin.
+  Optionally open as float.
+  Optionally return a single-slice ImagePlus containing the specified channel.
+  Returns an ImagePlus.
+  Note this method is far more memory intensive than readFIBSEMdat,
+  but has the advantage of using the standard reader and is able to open as float.
+  """
+  reader = FIBSEM_Reader()
+  f = File(path)
+  fi = None
+  header = None
+  imp = None
+  try:
+    fi = FileInputStream(f)
+    header = reader.parseHeader(fi)
+  finally:
+    if fi:
+      fi.close()
+    fi = None
+  try:
+    fi = FileInputStream(f)
+    imp = reader.readFIBSEM(header, fi, openAsFloat)
+    cal = imp.getCalibration()
+    cal.setXUnit("nm")
+    cal.setYUnit("mn")
+    cal.pixelWidth = header.pixelSize
+    cal.pixelHeight = header.pixelSize
+  finally:
+    if fi:
+      fi.close()
   
+  def convertToShort(imp):
+    if not openAsFloat:
+      return imp # It's already 16-bit
+    # Convert every slice to 16-bit:
+    stack16bit = ImageStack()
+    for i in xrange(imp.getNSlices()):
+      fp = imp.getStack().getProcessor(i+1) # A FloatProcessor
+      fp.findMinAndMax()
+      minimum = fp.getMin()
+      if minimum < 0:
+        fp.add(abs(minimum))
+      elif minimum > 0:
+        fp.add(-minimum)
+      sp = fp.convertToShort(scale)
+      stack16bit.addSlice(sp)
+    # Return as ImagePlus
+    imp2 = ImagePlus(imp.getTitle(), stack16bit)
+    imp2.setCalibration(imp.getCalibration())
+    return imp2
+  
+  # If there's only one slice, return now
+  if 1 == imp.getNSlices():
+    return convertToShort(imp)
+  # Remove all slices except the desired one if requested
+  if channel_index is not None:
+    for i in xrange(imp.getNSlices(), 0, -1): # iterate from the end so slice indices don't change
+      if i -1 == channel_index: # channel_index is 0-based but i is 1-based
+        continue
+      imp.getStack().deleteSlice(i)
+  #
+  return convertToShort(imp)
 
 
 def readFIBSEMHeader(filepath):
@@ -540,6 +618,7 @@ class SectionCellLoader(CacheLoader):
                 img.update(None)) # get the underlying DataAccess
 
 
+<<<<<<< HEAD
 def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType, maxRefs=0):
   """ Create a lazy CachedCellImg, backed by a SoftRefLoaderCache,
       which can be used to e.g. create the equivalent of ij.VirtualStack but with ImgLib2,
@@ -1081,4 +1160,55 @@ def imageInfo(filepath):
   finally:  
     fr.close() # close the file handle safely and always
 
+
+def writeDictToCSV(filepath, dictionary):
+  """
+  Assumes the parent folder exists, and that the values all have a sensible representation as a string, without commas.
+  """
+  with open(os.path.join(filepath, 'w')) as f:
+    keys = dictionary.keys()
+    f.write(", ".join(keys))
+    f.write("\n")
+    f.write(", ".join(str(logDict[key]) for key in keys))
+
+
+def makeNonOverwritingName(parentDir, filename):
+  # Find a suitable filename to avoid overwriting
+  if not os.path.exists(os.path.join(parentDir, filename)):
+    return filename
+  # Detect extension
+  iext = filename.rfind('.')
+  extension = "" if -1 == iext else filename[iext:]
+  name = filename if -1 == iext else filename[0:iext]
+  # Find a non-existing filename under parentDir
+  i = 1
+  makeName = lambda i: "%s-%i%s" % (name, i, extension)
+  while os.path.exists(os.path.join(parentDir, makeName(i))):
+    i += 1
+  return makeName(i)
+
+
+def moveToTmpDir(parentDir, filename):
+  """
+  Move filename to a "tmp" directory under parentDir
+  ensuring not to overwrite any file in that tmp directory.
+  The moved file will always take a name that ends in .1, or .2, etc.
+  """
+  # Check that filename exists under parentDir
+  oldPath = os.path.join(parentDir, filename)
+  if not os.path.exists(oldPath):
+    syncPrintQ("File does not exist:\n" + oldPath)
+    return
+  # Ensure the tmp directory exists under parentDir
+  tmpDir = os.path.join(parentDir, "tmp")
+  ensureDirsExist(tmpDir)
+  # Find a suitable filename to avoid overwriting
+  i = 1
+  newPath = os.path.join(tmpDir, "%s.%i" % (filename, i))
+  while os.path.exists(newPath):
+    i += 1
+    newPath = os.path.join(tmpDir, "%s.%i" % (filename, i))
+  # Move the file
+  os.rename(oldPath, newPath)
+  return newPath
 
