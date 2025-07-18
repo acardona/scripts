@@ -44,8 +44,8 @@ output_CSV = os.path.join(tgtDir, "bridge.csv")
 # Parameters for SIFT features
 paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.steps = 3
-paramsSIFT.minOctaveSize = 2000 # will be updated in a clone
-paramsSIFT.maxOctaveSize = 512 # will be updated in a clone
+paramsSIFT.minOctaveSize = 512 # will be updated in a clone
+paramsSIFT.maxOctaveSize = 2000 # will be updated in a clone
 paramsSIFT.initialSigma = 1.6 # default 1.6
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
@@ -102,11 +102,13 @@ def sliceAsImp(img, sliceIndex, scale):
   #ImgMath.compute(ImgMath.img(imgS)).into(aimg)
   
   # Return the 2D plane as an ImagePlus
-  return ImagePlus(str(sliceIndex),
+  imp = ImagePlus(str(sliceIndex),
                    ByteProcessor(aimg.dimension(0),
                                  aimg.dimension(1),
                                  aimg.update(None).getCurrentStorageArray(),
                                  None))
+  #imp.show() # looks good as expected
+  return imp
     
 
 def extractSIFTFeatures(paramsSIFT, properties, img, sliceIndex):
@@ -120,6 +122,7 @@ def extractSIFTFeatures(paramsSIFT, properties, img, sliceIndex):
     ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
     features = ArrayList() # of Feature instances
     ijSIFT.extractFeatures(ip, features)
+    syncPrintQ("Extracted %i SIFT features for slice %i" % (features.size(), sliceIndex))
     # Filter out features outside the tissue
     filterFeaturesFn = properties.get("filterFeaturesFn", None)
     if filterFeaturesFn:
@@ -128,7 +131,6 @@ def extractSIFTFeatures(paramsSIFT, properties, img, sliceIndex):
     ip = None
     imp.flush()
     imp = None
-    syncPrintQ("Extracted %i SIFT features for slice %i" % (features.size(), sliceIndex))
     return features
   except:
     printException()
@@ -165,7 +167,6 @@ def computeTranslation(paramsSIFT, properties, params, img1, img2, sliceIndex):
                                                                                sliceIndex))
       return model.getTranslation() # an array of two values
     else:
-      sourceMatches.clear() # None
       syncPrintQ("SIFT: model NOT FOUND for slice %i\n" % sliceIndex)
       return [float('NaN'), float('NaN')]
   except:
