@@ -8,11 +8,12 @@ from net.imglib2.view import Views
 from lib.io import readN5
 from lib.loop import createBiConsumerTypeSet
 from lib.serial2Dregistration import ensureSIFTFeatures, filterFeatures, makeFilterFeaturesFn
-from lib.util import isThreadDead, syncPrintQ
+from lib.util import isThreadDead, syncPrintQ, newFixedThreadPool, numCPUs, printException, Task
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.loops import LoopBuilder
 from net.imglib2.realtransform import RealViews, Scale
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
+from net.imglib2.util import Intervals
 from ij import ImagePlus
 from ij.process import ByteProcessor
 from mpicbg.models import ErrorStatistic, TranslationModel2D, NotEnoughDataPointsException, PointMatch
@@ -40,16 +41,16 @@ output_CSV = os.path.join(tgtDir, "bridge.csv")
 
 # Parameters for SIFT features
 paramsSIFT = FloatArray2DSIFT.Param()
-paramsSIFT.steps = 1
-paramsSIFT.minOctaveSize = 0 # will be updated in a clone
-paramsSIFT.maxOctaveSize = 0 # will be updated in a clone
+paramsSIFT.steps = 3
+paramsSIFT.minOctaveSize = 2000 # will be updated in a clone
+paramsSIFT.maxOctaveSize = 512 # will be updated in a clone
 paramsSIFT.initialSigma = 1.6 # default 1.6
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
 
 paramsRANSAC = {
   "iterations": 1000,
-  "maxEpsilon": 10, # pixels, maximum error allowed, usual number is 25. Started out as 5 for the first ~6000 sections or so.
+  "maxEpsilon": 10, # pixels, maximum error allowed, usual number is 25.
   "minInlierRatio": 0.01 # 1%
 }
 
@@ -68,7 +69,7 @@ model_width = 400 # target width for resizing so as to match the dimensions of t
 
 properties = {
  'scale': 0.2, # 20%
-  'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
+ 'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
 }
 
 
@@ -77,10 +78,10 @@ def sliceAsImp(img, sliceIndex, scale):
   # ASSUMES img is 8-bit
   #
   # Obtain a 2D plane at sliceIndex
-  img2d = Views.hyperSlice(img, sliceIndex, 2)
+  img2d = Views.hyperSlice(img, 2, sliceIndex)
   # Scaled view
   if scale < 1.0:
-    imgS = Views.interval(RealViews.transform(Views.interpolate(Views.extendMirror(img2d), NLinearInterpolatorFactory()),
+    imgS = Views.interval(RealViews.transform(Views.interpolate(Views.extendMirrorSingle(img2d), NLinearInterpolatorFactory()),
                                               Scale(scale)),
                           [0, 0],
                           [int(img.dimension(i) * scale + 0.5) -1 for i in [0, 1]])
@@ -140,7 +141,6 @@ def computeTranslation(paramsSIFT, properties, params, img1, img2, sliceIndex):
       return None
     
     model = TranslationModel2D()
-    msg = ""
     # Filter matches by geometric consensus
     n_pm = sourceMatches.size()
     inliers = ArrayList()
@@ -165,31 +165,36 @@ def computeTranslation(paramsSIFT, properties, params, img1, img2, sliceIndex):
     return [float('NaN'), float('NaN')]
 
 
-
 def computeSliceTranslations(img1, img2):
   """
   Assumes images have the same dimensions.
   """
-  exe = newFixedTheadPool(-1)
-  translations = []
-  batch_size = (2 * numCPUs())
+  exe = newFixedThreadPool(-1)
+  scale = properties['scale']
+  
+  def scaleBack(dx, dy):
+    return dx / scale, dy / scale
+  
+  def writeOut(t, translations, csvfile):
+    t = scaleBack(*t)
+    translations.append(t)
+    line = "%f, %f\n" % t
+    csvfile.write(line)
+    syncPrintQ(line)
+  
   try:
     with open(output_CSV, 'a') as csvfile:
+      translations = []
+      batch_size = (2 * numCPUs())
       futures = []
       for sliceIndex in xrange(min(img1.dimension(2), img2.dimension(2))):
         futures.append(exe.submit(Task(computeTranslation, paramsSIFT, properties, params, img1, img2, sliceIndex)))
         if 0 == sliceIndex % batch_size:
-          for i in xrange(batch_size / 2):
-            t = futures.pop(0).get()
-            translations.append(t)
-            line = "%f, %f\n" % t
-            csvfile.write(line)
-            syncPrintQ(line)
+          while len(futures) > (batch_size / 2):
+            writeOut(futures.pop(0).get(), translations, csvfile)
       for fu in futures: # append any remaining
-        t = fu.get()
-        line = "%f, %f\n" % t
-        csvfile.write(line)
-        syncPrintQ(line)
+        writeOut(fu.get(), translations, csvfile)
+      return translations
   except:
     printException()
   finally:
@@ -198,18 +203,25 @@ def computeSliceTranslations(img1, img2):
 
 # Test: open the images, check dimensions are the same, otherwise fix that
 # Load N5 volumes as CachedImg 3D volumes a 100% magnification
-imgOld, impOld = readN5(old_n5_path, "s0", show="IJ", title="old", showImp=False)
-imgNew, impNew = readN5(new_n5_path, "s0", show="IJ", title="new", showImp=False)
+#imgOld, impOld = readN5(old_n5_path, "s0", show="IJ", title="old", showImp=False)
+#imgNew, impNew = readN5(new_n5_path, "s0", show="IJ", title="new", showImp=False)
 
-print impOld
-print impNew
+# X,Y dimensions are the same, but the Z is shifted in the new stack by 1904
+imgOld = readN5(old_n5_path, "s0", show=None)
+imgOld = Views.zeroMin(Views.interval(imgOld,
+                        [0, 0, 1904],
+                        [imgOld.dimension(0) -1,
+                         imgOld.dimension(1) -1,
+                         imgOld.dimension(2) -1]))
 
+imgNew = readN5(new_n5_path, "s0", show=None)
 
+assert imgOld.dimension(2) == imgNew.dimension(2)
 
+print imgOld.dimensionsAsLongArray()
+print imgNew.dimensionsAsLongArray()
 
-
-
-
+computeSliceTranslations(imgOld, imgNew)
 
 
 
