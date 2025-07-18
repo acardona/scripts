@@ -618,7 +618,7 @@ class SectionCellLoader(CacheLoader):
                 img.update(None)) # get the underlying DataAccess
 
 
-<<<<<<< HEAD
+
 def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType, maxRefs=0):
   """ Create a lazy CachedCellImg, backed by a SoftRefLoaderCache,
       which can be used to e.g. create the equivalent of ij.VirtualStack but with ImgLib2,
