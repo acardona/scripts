@@ -14,6 +14,7 @@ from net.imglib2.loops import LoopBuilder
 from net.imglib2.realtransform import RealViews, Scale
 from net.imglib2.interpolation.randomaccess import NLinearInterpolatorFactory
 from net.imglib2.util import Intervals
+from net.imglib2.type.numeric.integer import GenericByteType
 from ij import ImagePlus
 from ij.process import ByteProcessor
 from mpicbg.models import ErrorStatistic, TranslationModel2D, NotEnoughDataPointsException, PointMatch
