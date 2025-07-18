@@ -75,16 +75,18 @@ def showInBDV(images, names=None, bdv=None):
   return bdv
 
 
-def showStack(img, title="", proper=True, n_channels=1):
+def showStack(img, title="", proper=True, n_channels=1, show=True):
   # IL.wrap fails: shows slices as channels, and channels as frames
   if not proper:
     imp = IL.wrap(img, title)
-    imp.show()
+    if show:
+      imp.show()
     return imp
   # Proper sorting of slices, channels and frames
   imp = wrap(img, title=title, n_channels=n_channels)
   comp = CompositeImage(imp, CompositeImage.GRAYSCALE if 1 == n_channels else CompositeImage.COLOR)
-  comp.show()
+  if show:
+    comp.show()
   return comp
 
 
