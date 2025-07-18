@@ -20,11 +20,9 @@ from ij import ImagePlus
 from ij.process import ByteProcessor
 from mpicbg.models import ErrorStatistic, TranslationModel2D, NotEnoughDataPointsException, PointMatch
 from mpicbg.imagefeatures import FloatArray2DSIFT
-from mpicbg.ij.util import Filter
-from mpicbg.ij import SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
-from mpicbg.ij.clahe import FastFlat as CLAHE
+from mpicbg.ij import FeatureTransform, SIFT # see https://github.com/axtimwalde/mpicbg/blob/master/mpicbg/src/main/java/mpicbg/ij/SIFT.java
 from java.util import ArrayList
-from java.lang import Double
+from java.lang import Double, System
 
 
 # ASSUMES volumes have the same dimensions
@@ -56,15 +54,6 @@ paramsRANSAC = {
   "minInlierRatio": 0.01 # 1%
 }
 
-# Parameters for pointmatches
-params = {
- 'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
- 'rod': 0.9, # max second best r / best r
- 'max_sd': 1.5, # max_sd: maximal difference in size (ratio max/min)
- 'max_id': Double.MAX_VALUE, # max_id: maximal distance in image space
- 'rod': 0.9 # rod: ratio of best vs second best
-}
-
 # Function to filter out features outside the tissue
 model_path = os.path.join(tgtDir, "MR1.4-3_section1+6000_0.025.labkit.classifier") # from LabKit
 model_width = 400 # target width for resizing so as to match the dimensions of the image used when training the model.
@@ -74,6 +63,15 @@ properties = {
  'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
 }
 
+# Parameters for pointmatches
+params = {
+ 'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
+ 'rod': 0.9, # max second best r / best r
+ 'max_sd': 1.5, # max_sd: maximal difference in size (ratio max/min)
+ 'max_id': Double.MAX_VALUE, # max_id: maximal distance in image space
+ 'rod': 0.9, # rod: ratio of best vs second best
+ 'radius': 1000 * properties['scale'] # in pixel space. This effectively CONSTRAINTS the maximum translation
+}
 
 
 def sliceAsImp(img, sliceIndex, scale):
@@ -142,29 +140,37 @@ def computeTranslation(paramsSIFT, properties, params, img1, img2, sliceIndex):
     features1 = extractSIFTFeatures(paramsSIFT, properties, img1, sliceIndex)
     features2 = extractSIFTFeatures(paramsSIFT, properties, img2, sliceIndex)
     # Vector of PointMatch instances
-    sourceMatches = FloatArray2DSIFT.createMatches(features1,
-                                                   features2,
-                                                   params.get("max_sd", 1.5), # max_sd: maximal difference in size (ratio max/min)
-                                                   TranslationModel2D(),
-                                                   params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
-                                                   params.get("rod", 0.9)) # rod: ratio of best vs second best
+    #sourceMatches = FloatArray2DSIFT.createMatches(features1,
+    #                                               features2,
+    #                                               params.get("max_sd", 1.5), # max_sd: maximal difference in size (ratio max/min)
+    #                                               TranslationModel2D(),
+    #                                               params.get("max_id", Double.MAX_VALUE), # max_id: maximal distance in image space
+    #                                               params.get("rod", 0.9)) # rod: ratio of best vs second best
+    
+    # New approach: local search, so not all to all anymore
+    t0 = System.nanoTime()
+    sourceMatches = FeatureTransform.matchFeaturesLocally(features1,
+                                                          features2,
+                                                          params['radius'],
+                                                          params['rod'])
+    t1 = System.nanoTime()
+    
     if isThreadDead():
       return None
     
     model = TranslationModel2D()
     # Filter matches by geometric consensus
-    n_pm = sourceMatches.size()
     inliers = ArrayList()
     iterations = properties.get("RANSAC_iterations", 1000)
     maxEpsilon = properties.get("RANSAC_maxEpsilon", 25) # pixels
     minInlierRatio = properties.get("RANSAC_minInlierRatio", 0.01) # 1%
     modelFound = model.filterRansac(sourceMatches, inliers, iterations, maxEpsilon, minInlierRatio)
     if modelFound:
-      sourceMatches = inliers
       PointMatch.apply(inliers, model)
-      syncPrintQ("Found %i inlier SIFT pointmatches (from %i) for slice $i" % (sourceMatches.size(),
-                                                                               n_pm,
-                                                                               sliceIndex))
+      syncPrintQ("Found %i inlier SIFT pointmatches (from %i) for slice %i with %.2f ms for matching" % (inliers.size(),
+                                                                               sourceMatches.size(),
+                                                                               sliceIndex,
+                                                                               (t1 - t0) / 1000000.0))
       return model.getTranslation() # an array of two values
     else:
       syncPrintQ("SIFT: model NOT FOUND for slice %i\n" % sliceIndex)
@@ -228,12 +234,19 @@ imgOld = Views.zeroMin(Views.interval(imgOld,
 
 imgNew = readN5(new_n5_path, "s0", show=None)
 
+# Update max_id parameter
+params['max_id'] = imgOld.dimension(0) * properties['scale'] * 0.25  # max one quarter away
+
 assert imgOld.dimension(2) == imgNew.dimension(2)
 
 print imgOld.dimensionsAsLongArray()
 print imgNew.dimensionsAsLongArray()
 
-computeSliceTranslations(imgOld, imgNew)
+translations = computeSliceTranslations(imgOld, imgNew)
+
+from ij.text import TextWindow
+w = TextWindow("translations", "\n".join("%f, %f" % t for t in translations), 300, 700)
+
 
 # Test:
 #sliceAsImp(imgOld, 20, 0.2)
