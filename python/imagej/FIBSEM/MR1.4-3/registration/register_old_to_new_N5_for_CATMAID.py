@@ -2,7 +2,7 @@
 # and emit a translation transform for each section
 # so that later it can be applied to CATMAID skeleton data.
 
-import sys, os
+import sys, os, csv, math
 sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from net.imglib2.view import Views
 from lib.io import readN5
@@ -33,6 +33,8 @@ tgtDir = "/net/zstore1/FIBSEM/" + name + "/registration/"
 # Volumes:
 old_n5_path = "/net/fibserver1/raw/MR1.4-3/old_n5/n5-2/"
 new_n5_path = "/net/zstore1/FIBSEM/MR1.4-3/registration/MR1.4-3.n5"
+
+block_depth = 64
 
 
 output_CSV = os.path.join(tgtDir, "bridge.csv")
@@ -197,24 +199,74 @@ def computeSliceTranslations(img1, img2, clearCacheFn=None):
     line = "%f, %f\n" % t
     csvfile.write(line)
     syncPrintQ(line)
-  
+
+
   try:
-    with open(output_CSV, 'a') as csvfile:
+    if os.path.exists(output_CSV):
+      # CSV file exists. Parse it and find any 'nan' entries, and retry computing the translation for them.
+      # Then write the result in a second CSV file
       translations = []
-      batch_size = (2 * numCPUs()) # 256 CPUs which is exactly 4 * 64, with 64 being the Z of the block size so works well for the cache release
+      nanIndices = []
+      with open(output_CSV, 'r') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar="\"")
+        for line in reader:
+          t = map(float, line)
+          translations.append(t)
+          if math.isnan(t[0]) or math.isnan(t[1]):
+            nanIndices.append(len(translations) -1)
+      # Retry computing for slices with NaN translations
       futures = []
-      for sliceIndex in xrange(min(img1.dimension(2), img2.dimension(2))):
-        if isThreadDead():
-          return None
-        futures.append(exe.submit(Task(computeTranslation, paramsSIFT, properties, params, img1, img2, sliceIndex)))
-        if 0 == sliceIndex % batch_size:
-          while len(futures) > batch_size: # effectively stop and wait for all to finish
-            writeOut(futures.pop(0).get(), translations, csvfile)
-          if clearCacheFn:
-            clearCacheFn() # the whole thing 
-      for fu in futures: # append any remaining
-        writeOut(fu.get(), translations, csvfile)
-      return translations
+      blockZ = 0
+      for sliceIndex in nanIndices:
+         if isThreadDead():
+           return None
+         # Wait if the current sliceIndex is beyond the block
+         # So effectively allow only parallel processing for slices within the same block Z.
+         if len(futures) > 0 and sliceIndex % block_depth != blockZ:
+           for fu in futures:
+             i, t = fu[0], fu[1].get()
+             translations[i] = scaleBack(*t)
+           futures = [] # reset
+         #
+         blockZ = sliceIndex % block_depth
+         futures.append((sliceIndex, exe.submit(Task(computeTranslation, paramsSIFT, properties, params, img1, img2, sliceIndex))))
+      # Process any remaining ones
+      for fu in futures:
+        i, t = fu[0], fu[1].get()
+        translations[i] = scaleBack(*t)
+      # Re-save into a different file
+      newCSVname = makeNonOverwritingName(*os.path.split(output_CSV))
+      print "Saving translations to", newCSVname
+      syncPrintQ("Saving updated translations to %s" % newCSVname)
+      with open(newCSVname, 'a') as csvfile:
+        for t in translations:
+          csvfile.write("%f, %f\n" % t)
+      # Print which are still nan 
+      for sliceIndex in nanIndices:
+        tx, ty = translations[sliceIndex]
+        if math.isnan(tx) or math.isnan(ty):
+          syncPrintQ("Slice %i is still NaN." % sliceIndex)
+        else:
+          syncPrintQ("Slice %i is now FIXED." % sliceIndex)
+
+    else:
+      # CSV file doesn't exist yet
+      with open(output_CSV, 'a') as csvfile:
+        translations = []
+        batch_size = (2 * numCPUs()) # 256 CPUs which is exactly 4 * 64, with 64 being the Z of the block size so works well for the cache release
+        futures = []
+        for sliceIndex in xrange(min(img1.dimension(2), img2.dimension(2))):
+          if isThreadDead():
+            return None
+          futures.append(exe.submit(Task(computeTranslation, paramsSIFT, properties, params, img1, img2, sliceIndex)))
+          if 0 == sliceIndex % batch_size:
+            while len(futures) > batch_size: # effectively stop and wait for all to finish
+              writeOut(futures.pop(0).get(), translations, csvfile)
+            if clearCacheFn:
+              clearCacheFn() # the whole thing 
+        for fu in futures: # append any remaining
+          writeOut(fu.get(), translations, csvfile)
+        return translations
   except:
     printException()
   finally:
