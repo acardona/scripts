@@ -5,7 +5,7 @@
 import sys, os, csv, math
 sys.path.append("/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/")
 from net.imglib2.view import Views
-from lib.io import readN5
+from lib.io import readN5, makeNonOverwritingName
 from lib.loop import createBiConsumerTypeSet
 from lib.serial2Dregistration import ensureSIFTFeatures, filterFeatures, makeFilterFeaturesFn
 from lib.util import isThreadDead, syncPrintQ, newFixedThreadPool, numCPUs, printException, Task
@@ -225,7 +225,9 @@ def computeSliceTranslations(img1, img2, clearCacheFn=None):
          if len(futures) > 0 and sliceIndex % block_depth != blockZ:
            for fu in futures:
              i, t = fu[0], fu[1].get()
-             translations[i] = scaleBack(*t)
+             t = scaleBack(*t)
+             translations[i] = t
+             syncPrintQ("%i: %f, %f" % (i, t[0], t[1]))
            futures = [] # reset
          #
          blockZ = sliceIndex % block_depth
@@ -233,14 +235,16 @@ def computeSliceTranslations(img1, img2, clearCacheFn=None):
       # Process any remaining ones
       for fu in futures:
         i, t = fu[0], fu[1].get()
-        translations[i] = scaleBack(*t)
+        t = scaleBack(*t)
+        translations[i] = t
+        syncPrintQ("%i: %f, %f" % (i, t[0], t[1]))
       # Re-save into a different file
       newCSVname = makeNonOverwritingName(*os.path.split(output_CSV))
       print "Saving translations to", newCSVname
       syncPrintQ("Saving updated translations to %s" % newCSVname)
       with open(newCSVname, 'a') as csvfile:
         for t in translations:
-          csvfile.write("%f, %f\n" % t)
+          csvfile.write("%f, %f\n" % (t[0], t[1]))
       # Print which are still nan 
       for sliceIndex in nanIndices:
         tx, ty = translations[sliceIndex]
