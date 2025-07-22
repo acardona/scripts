@@ -9,6 +9,7 @@ from lib.io import readN5, makeNonOverwritingName
 from lib.loop import createBiConsumerTypeSet
 from lib.serial2Dregistration import ensureSIFTFeatures, filterFeatures, makeFilterFeaturesFn
 from lib.util import isThreadDead, syncPrintQ, newFixedThreadPool, numCPUs, printException, Task
+from lib.ui import wrap
 from net.imglib2.img.array import ArrayImgs
 from net.imglib2.loops import LoopBuilder
 from net.imglib2.realtransform import RealViews, Scale
@@ -312,10 +313,18 @@ assert imgOld2.dimension(2) == imgNew.dimension(2)
 print imgOld.dimensionsAsLongArray()
 print imgNew.dimensionsAsLongArray()
 
-translations = computeSliceTranslations(imgOld2, imgNew, clearCacheFn=clearCacheFn)
 
-from ij.text import TextWindow
-w = TextWindow("translations", "\n".join("%f, %f" % t for t in translations), 300, 700)
+# MAIN call
+# Register imgOld2 onto imgNew
+translations = computeSliceTranslations(imgNew, imgOld2, clearCacheFn=clearCacheFn)
+
+# Debug: show the images
+#wrap(imgOld2, title="old").show()
+#wrap(imgNew, title="new").show()
+
+
+#from ij.text import TextWindow
+#w = TextWindow("translations", "\n".join("%f, %f" % t for t in translations), 300, 700)
 
 
 # Test:
