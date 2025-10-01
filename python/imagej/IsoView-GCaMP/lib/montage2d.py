@@ -9,7 +9,7 @@ from lib.img import lazyCachedCellImg
 from lib.ui import wrap, wrap8bit
 from lib.loop import createBiConsumerTypeSet
 from lib.montage2d_table import makeMontageTable
-from lib.serial2Dregistration import makeFilterFeaturesFn
+from lib.segmentation_em import makeFilterFeaturesFn
 
 from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable

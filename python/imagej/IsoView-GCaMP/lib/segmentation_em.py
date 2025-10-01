@@ -14,7 +14,7 @@ from itertools import product, repeat
 from functools import partial
 from jarray import array, zeros
 from java.util import ArrayList
-from java.lang import Thread
+from java.lang import Thread, System
 from math import radians, floor, ceil
 from weka.core import SerializationHelper, DenseInstance, Instances, Attribute
 from weka.classifiers import AbstractClassifier
@@ -24,6 +24,8 @@ from hr.irb.fastRandomForest import FastRandomForest
 from util import numCPUs, SoftMemoize
 import sys
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
+from ij.process import ImageProcessor, ByteProcessor
+from functools import partial
 try:
   from sc.fiji.labkit.pixel_classification.classification import Segmenter
   from sc.fiji.labkit.pixel_classification.gson import GsonUtils
@@ -616,7 +618,87 @@ def classifyImageLabKitSegCached(img, segCache):
   return labels
 
 
+def makeFilterFeaturesFn(model_path, model_width, points=False, as3D=False, ip_scale=1.0, scale_adjust=1.0):
+  return partial(filterFeatures,
+                 model_width,
+                 segThreadCache(model_path, 1, cache_size=numCPUs()), # 1 thread for running the inference on the image
+                 points=points,
+                 ip_scale=ip_scale,
+                 as3D=as3D,
+                 scale_adjust=scale_adjust)
 
+def filterFeatures(model_width, seg_cache, ip, positions, points=False, ip_scale=1.0, process_mask=True, as3D=False, scale_adjust=1.0):
+  """ Compute a mask for the ip (a ByteProcessor) using a LabKit Segmenter, obtained from the seg_cache.
+  If points=False, assume features contain Feature instances, otherwise Point instances.
+  ip_scale: the scale at which montages were created relative to whole montage section_width, as specified in paramsPMs['scale']
+  
+  When used for filtering features on the scaled down ("interim_scale") version of the montaged section (the "ip" argument),
+  the features to filter are instead in a 100% scale, hence the ip_scale is needed to correct for that when doing the filtering.
+  In addition, the ratio of the model_width / ip.width further multiplies that ip_scale to establish the mapping
+  from the resized_ip where the model is run to the 100% scale where the features are.
+  
+  The assumption is that ip is already scaled at ip_scale, and that all that's needed is to resize ip down to the model_width.
+  If this assumption doesn't hold, then use scale_adjust to correct that, because ip.resize will use it to determine resize_ip's width
+  by multiplying model_width * scale_adjust.
+  
+  Bear in mind also that the scale:
+      scale = ip_scale * float(model_width * scale_adjust) / ip.getWidth()
+  ... will be used to map from the computed mask back to the coordinate space of the positions to filter.
+
+  """
+  ip.setInterpolationMethod(ImageProcessor.BILINEAR)
+  resized_ip = ip.resize(int(model_width * scale_adjust + 0.5))
+  resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [resized_ip.getWidth(), resized_ip.getHeight()])
+  if as3D:
+    resized_img = Views.addDimension(resized_img, 0, 0) # A bogus third dimension of size 1.
+                                                        # Necessary when the model was trained on a 3D stack, since here it's applied to a 2D image.
+  
+  """
+  # Trainable Weka Segmentation fails for mysterious reasons, works on isolated scripts
+  labels_imp = classifyImageTWS2(resized_imp, classifier=classifier, clone=True)
+  mask = labels_imp.getProcessor() # with 0 for background (resin) and 1 for tissue
+  """
+  # Use LabKit instead
+  labels = classifyImageLabKitSegCached(resized_img, seg_cache) # Returns a RandomAccessibleInterval<UnsignedByteType>
+  mask = ByteProcessor(resized_ip.getWidth(), resized_ip.getHeight(), labels.update(None).getCurrentStorageArray())
+  
+  if process_mask:
+    # First multiply by 255
+    mask.multiply(255)
+    # Close small holes by dilating and then eroding, which, since it's not inverted, do backwards
+    mask.erode()
+    mask.dilate()
+    # Erase floating debris by eroding twice, which means dilate when not inverted
+    mask.dilate()
+    mask.dilate()
+  
+  # DEBUG
+  tag = str(System.nanoTime())
+  #ImagePlus("original " + tag, ip).show()
+  #ImagePlus("resized " + tag, resized_ip).show()
+  #IL.wrap(labels, "labels " + tag).show()
+  #ImagePlus("mask " + tag, mask).show()
+  
+  # Filter points or features by their location: if the value is larger than 0 at the location then accept, otherwise reject
+  ps = ArrayList()
+  scale = ip_scale * float(model_width * scale_adjust) / ip.getWidth()
+  
+  if points:
+    #ls = []
+    for p in positions: # p is a Point, for BlockMatching
+      #ls.append("[%f, %f]" % (p.getL()[0], p.getL()[1]))
+      if mask.getPixel(int(p.getL()[0] * scale + 0.5), int(p.getL()[1] * scale + 0.5)) > 0:
+        ps.add(p)
+      #syncPrintQ(tag + ", ".join(ls))
+  else:
+    for f in positions: # f is a Feature, for SIFT
+      if mask.getPixel(int(f.location[0] * scale + 0.5), int(f.location[1] * scale + 0.5)) > 0:
+        ps.add(f)
+  
+  # DEBUG
+  syncPrintQ("filterFeatures # start: %s, end: %i - %s" % (len(positions), len(ps), tag))
+  
+  return ps
 
 
 
