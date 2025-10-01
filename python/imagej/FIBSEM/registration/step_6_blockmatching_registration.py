@@ -11,6 +11,7 @@ from step_1_montage_parameters import libDir, \
              section_width, section_height, \
              first_section, last_section, replace_sections, \
              params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf, \
+             paramsFilterFeatures, \
              to_remove, ignore_images, replace_images
 
 from step_3_SIFT_registration_parameters import SIFTdir, properties, \
@@ -33,6 +34,7 @@ volumeImgMontaged, groupNames, tileGroups = runMontaging(
              first_section, last_section, replace_sections,
              params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf,
              to_remove, ignore_images, replace_images,
+             paramsFilterFeatures=paramsFilterFeatures,
              showTable=False, show=False)
 
 # Open the stack pre-aligned with SIFT features using chunks
