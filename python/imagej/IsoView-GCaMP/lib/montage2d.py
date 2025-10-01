@@ -9,6 +9,7 @@ from lib.img import lazyCachedCellImg
 from lib.ui import wrap, wrap8bit
 from lib.loop import createBiConsumerTypeSet
 from lib.montage2d_table import makeMontageTable
+from lib.serial2Dregistration import makeFilterFeaturesFn
 
 from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable
@@ -49,7 +50,7 @@ from jarray import zeros, array
 
 
 
-def getFeatures(sp, roi, paramsSIFT, debug=False):
+def getFeatures(sp, roi, paramsSIFT, filterFeaturesFn=None, debug=False):
   sp.setRoi(roi)
   sp = sp.crop()
   paramsSIFT = paramsSIFT.clone()
@@ -58,6 +59,9 @@ def getFeatures(sp, roi, paramsSIFT, debug=False):
   ijSIFT = SIFT(FloatArray2DSIFT(paramsSIFT))
   features = ArrayList() # of Feature instances
   ijSIFT.extractFeatures(sp, features)
+  
+  if filterFeaturesFn:
+    features = filterFeaturesFn(sp.convertToByte(True), features)
   
   if debug:
     ip = sp.duplicate()
@@ -73,7 +77,7 @@ def getFeatures(sp, roi, paramsSIFT, debug=False):
 
     
 def getPointMatches(sp0, roi0, sp1, roi1, offset,
-                    paramsSIFT, paramsRANSAC, params, mode="SIFT"):
+                    paramsSIFT, paramsRANSAC, params, mode="SIFT", filterFeaturesFn=None):
   """
   Start off with PhaseCorrelation, fall back to SIFT if needed.
   Or start right away with SIFT when mode="SIFT"
@@ -128,8 +132,8 @@ def getPointMatches(sp0, roi0, sp1, roi1, offset,
   
   if "SIFT" == mode:
     syncPrintQ("PointMatches by SIFT")
-    features0 = getFeatures(sp0, roi0, paramsSIFT)
-    features1 = getFeatures(sp1, roi1, paramsSIFT)
+    features0 = getFeatures(sp0, roi0, paramsSIFT, filterFeaturesFn=filterFeaturesFn)
+    features1 = getFeatures(sp1, roi1, paramsSIFT, filterFeaturesFn=filterFeaturesFn)
     pointmatches = FloatArray2DSIFT.createMatches(features0,
                                                   features1,
                                                   params.get("max_sd", 1.5), # max_sd: maximal difference in size (ratio max/min)
@@ -262,8 +266,8 @@ def process(sp, params_pixels):
 
 class MontageSlice(Callable):
   def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset,
-               paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels,
-               csvDir, failed):
+               paramsSIFT, paramsRANSAC, paramsTileConfiguration, paramsFilterFeatures
+               params_pixels, csvDir, failed):
     """
     Generic montager, reads out i,j position from the file name.
     """
@@ -287,6 +291,7 @@ class MontageSlice(Callable):
                    "rod": 0.9} # rod: ratio of best vs second best
     self.paramsTileConfiguration = paramsTileConfiguration
     self.params_pixels = params_pixels
+    self.paramsFilterFeatures = paramsFilterFeatures
 
     # Determine rows and columns
     self.rows = defaultdict(partial(defaultdict, str))
@@ -297,9 +302,9 @@ class MontageSlice(Callable):
       self.rows[i_row][i_col] = filepath
 
 
-  def connectTiles(self, filepath1, filepath2, sps, tiles, roi0, roi1, offset):
+  def connectTiles(self, filepath1, filepath2, sps, tiles, roi0, roi1, offset, filterFeaturesFn=None):
     pointmatches, n_inliers = getPointMatches(sps[filepath1], roi0, sps[filepath2], roi1, offset,
-                                              self.paramsSIFT, self.paramsRANSAC, self.params)
+                                              self.paramsSIFT, self.paramsRANSAC, self.params, filterFeaturesFn=filterFeaturesFn)
     if pointmatches.size() > 0:
       tiles[filepath1].connect(tiles[filepath2], pointmatches) # reciprocal connection
       return len(pointmatches), n_inliers
@@ -338,6 +343,16 @@ class MontageSlice(Callable):
     roiSouth = Roi(0, height - self.overlap, width, self.overlap) # bottom edge, for tile 0-0-0  (and 0-0-1)
     roiNorth = Roi(0, 0, width, self.overlap)                     # top edge,    for tile 0-1-0  (and 0-1-1)
 
+    # Assumes all tiles have the same dimensions
+    if self.paramsFilterFeatures:
+      filterFeaturesFn = makeFilterFeaturesFn(self.paramsFilterFeatures['model_path'],
+                                              self.paramsFilterFeatures['model_width'],
+                                              as3D=self.paramsFilterFeatures.get('as3D', False),
+                                              ip_scale=1.0,
+                                              scale_adjust=float(sps[0].getWidth()) / self.paramsFilterFeatures['section_width'])
+    else:
+      filterFeaturesFn = None
+
     # Link the tiles by image registration
     booleans = []
     pairs = []
@@ -349,7 +364,7 @@ class MontageSlice(Callable):
           filepath1 = self.rows[i-1][j]
           if not filepath1: # an empty string
             continue # tile is missing from the montage
-          n_pointmatches, n_inliers = self.connectTiles(filepath1, filepath2, sps, tiles, roiSouth, roiNorth, 0)
+          n_pointmatches, n_inliers = self.connectTiles(filepath1, filepath2, sps, tiles, roiSouth, roiNorth, 0, filterFeaturesFn=filterFeaturesFn)
           booleans.append(n_pointmatches > 0)
           pairs.append([("%i-%i vs %i-%i" % (i-1, j, i, j)), n_pointmatches, n_inliers])
         if j > 0:
@@ -357,7 +372,7 @@ class MontageSlice(Callable):
           filepath1 = self.rows[i][j-1]
           if not filepath1: # an empty string
             continue # tile is missing from the montage
-          n_pointmatches, n_inliers = self.connectTiles(filepath1, filepath2, sps, tiles, roiEast, roiWest, self.offset)
+          n_pointmatches, n_inliers = self.connectTiles(filepath1, filepath2, sps, tiles, roiEast, roiWest, self.offset, filterFeaturesFn=filterFeaturesFn)
           booleans.append(n_pointmatches > 0)
           pairs.append([("%i-%i vs %i-%i" % (i, j-1, i, j)), n_pointmatches, n_inliers])
 
@@ -596,6 +611,11 @@ class SectionLoader(CacheLoader):
 class MontageAndSave(Callable):
   """ Generate the matrices for the montage, specifying the translation of each tile,
       and also save a scaled down version of the image into the scaled-montages folder.
+      
+      args: MontageAndSave(groupName, tilePaths, overlap, nominal_overlap, offset,
+                           paramsSIFT, paramsRANSAC, paramsTileConfiguration, paramsFilterFeatures,
+                           params_pixels, montageDir, failed,
+                           section_width, section_height)
   """
   def __init__(self, *args):
     self.args = args
@@ -608,10 +628,10 @@ class MontageAndSave(Callable):
       
   def montageAndSnapshot(self, groupName):
     syncPrintQ("Generating montage for " + groupName)
-    args = self.args[:11]
+    args = self.args[:12]
     ms = MontageSlice(*args)
-    params_pixels = self.args[8]
-    section_width, section_height = self.args[11:13]
+    params_pixels = self.args[9]
+    section_width, section_height = self.args[12:14]
     ip = None
     # Generate the matrices and an image of the montage.
     # The call to montagedImg or montagedImg8bit will generate and store the montage matrices.
@@ -655,7 +675,8 @@ class MontageAndSave(Callable):
 
 
 def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overlap, offset,
-                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, montageDir, nThreads,
+                                 paramsSIFT, paramsRANSAC, paramsTileConfiguration, paramsFilterFeatures,
+                                 montageDir, nThreads,
                                  section_width, section_height, params_pixels):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
@@ -685,7 +706,8 @@ def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overla
     for groupName, tilePaths in izip(groupNames, tileGroups):
       # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
       futures.append(exe.submit(MontageAndSave(groupName, tilePaths, overlap, nominal_overlap, offset,
-                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels, montageDir, failed,
+                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, paramsFilterFeatures,
+                                               params_pixels, montageDir, failed,
                                                section_width, section_height)))
 
     # Await them all
@@ -711,7 +733,8 @@ def ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overla
 
 
 def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
-                   paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels, csvDir, nThreads):
+                   paramsSIFT, paramsRANSAC, paramsTileConfiguration, paramsFilterFeatures,
+                   params_pixels, csvDir, nThreads):
   """
   Extract features and a matrix describing a TranslationModel2D for all tiles that need montaging.
   The overlap between tiles is defined by overlap.
@@ -737,7 +760,8 @@ def ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
       if len(tilePaths) > 1:
         # Montage the tiles: compute a matrix detailing a TranslationModel2D for each tile
         futures.append(exe.submit(MontageSlice(groupName, tilePaths, overlap, nominal_overlap, offset,
-                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, params_pixels, csvDir, failed)))
+                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, paramsFilterFeatures,
+                                               params_pixels, csvDir, failed)))
 
     # Await them all
     for future in futures:
@@ -1042,6 +1066,7 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
                  first_section, last_section, replace_sections,
                  params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf,
                  to_remove, ignore_images, replace_images,
+                 paramsFilterFeatures=None, # optional
                  showTable=True, show=True):
   """
   Main entry point.
@@ -1099,8 +1124,8 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
 
   # Montage all sections
   #ensureMontages(groupNames, tileGroups, overlap, nominal_overlap, offset,
-  #               paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging,
-  #               params_pixels)
+  #               paramsSIFT, paramsRANSAC, paramsTileConf, paramsFilterFeatures,
+  #               montageDir, nThreadsMontaging, params_pixels)
 
   # Prepare an image volume where each section is a Cell with an ArrayImg showing a montage or a single image, and preprocessed (invert + CLAHE)
   # NOTE: it's 8-bit
@@ -1112,7 +1137,8 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   
   # Montage all sections and save an image of each montage under montageDir/scaled-montages/
   ensureMontagesAndScaledImage(groupNames, tileGroups, overlap, nominal_overlap, offset,
-                               paramsSIFT, paramsRANSAC, paramsTileConf, montageDir, nThreadsMontaging,
+                               paramsSIFT, paramsRANSAC, paramsTileConf, paramsFilterFeatures,
+                               montageDir, nThreadsMontaging,
                                section_width, section_height, params_pixels)
 
   # Open a virtual image of the whole scaled-montages folder
