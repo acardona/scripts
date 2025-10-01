@@ -1512,7 +1512,8 @@ def loadAlignedImage(name, srcDir, repairedDir, montageDir,
         to_remove, ignore_images, replace_images,
         first_section, last_section, replace_sections,
         section_width, section_height, crop_roi, params_pixels,
-        rotate=None, preload=0, section_offsets=None, translation=None):
+        rotate=None, preload=0, section_offsets=None, translation=None,
+        paramsFilterFeatures=None):
   """
   Load the volume in full resolution in 8-bit after both SIFT and blockmatching alignment.
   Will fail unless both sets of matrices exist.
@@ -1526,7 +1527,8 @@ def loadAlignedImage(name, srcDir, repairedDir, montageDir,
         first_section, last_section, replace_sections,
         section_width, section_height, None, params_pixels,
         cache_size=0, # no cache, each slice will be loaded only once
-        section_offsets=section_offsets)
+        section_offsets=section_offsets,
+        paramsFilterFeatures=paramsFilterFeatures)
 
   # Load matrices and fuse them, since they depend on each other
   matricesList = []

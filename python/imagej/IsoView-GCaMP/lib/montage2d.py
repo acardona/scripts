@@ -546,7 +546,8 @@ class SectionLoader(CacheLoader):
                paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, params_pixels,
                section_offsets=None, # A function that given an index returns a tuple of two integers
                matrices=None,
-               crop_ROI=None):
+               crop_ROI=None,
+               paramsFilterFeatures=None):
     """
     csvDir: the directory specifying the montages, one matrices file per section.
     """
@@ -559,6 +560,7 @@ class SectionLoader(CacheLoader):
     self.paramsSIFT = paramsSIFT
     self.paramsRANSAC = paramsRANSAC
     self.paramsTileConfiguration = paramsTileConfiguration
+    self.paramsFilterFeatures
     self.csvDir = csvDir
     self.params_pixels = params_pixels
     self.section_offsets = section_offsets
@@ -584,7 +586,7 @@ class SectionLoader(CacheLoader):
     #
     if len(tilePaths) > 1:
       m = MontageSlice(groupName, tilePaths, self.overlap, self.nominal_overlap, self.offset,
-                       self.paramsSIFT, self.paramsRANSAC, self.paramsTileConfiguration, self.params_pixels,
+                       self.paramsSIFT, self.paramsRANSAC, self.paramsTileConfiguration, self.paramsFilterFeatures, self.params_pixels,
                        self.csvDir, Vector())
       if as8bit:
         aimg = m.montagedImg8bit(width, height,
@@ -971,7 +973,7 @@ def makeMontageGroups(filepaths, to_remove, check, alternative_dir=None, ignore_
 def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, nominal_overlap, offset,
                paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, params_pixels,
                show=True, matrices=None, section_offsets=None, title=None, cache_size=64,
-               showTable=True, crop_ROI=None):
+               showTable=True, crop_ROI=None, paramsFilterFeatures=None):
   if crop_ROI:
     bounds = crop_ROI.getBounds() # a java.awt.Rectangle
     dimensions = [bounds.width, bounds.height]
@@ -986,7 +988,8 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
                                               paramsSIFT, paramsRANSAC, paramsTileConfiguration, csvDir, params_pixels,
                                               matrices=matrices,
                                               section_offsets=section_offsets,
-                                              crop_ROI=crop_ROI),
+                                              crop_ROI=crop_ROI,
+                                              paramsFilterFeatures=paramsFilterFeatures),
                                 volume_dimensions,
                                 cell_dimensions,
                                 pixelType,
@@ -1201,7 +1204,7 @@ def loadMontagedImg(srcDir, montageDir, repairedDir,
                     to_remove, ignore_images, replace_images,
                     first_section, last_section, replace_sections,
                     section_width, section_height, crop_roi, params_pixels,
-                    cache_size=64, section_offsets=None):
+                    cache_size=64, section_offsets=None, paramsFilterFeatures=None):
   """ At full resolution, loaded from the original .DAT files.
       Assumes matrices for each section exist, otherwise will fail.
   """
@@ -1227,6 +1230,6 @@ def loadMontagedImg(srcDir, montageDir, repairedDir,
   img = makeVolume(groupNames, tileGroups, section_width, section_height, None, None, None,
                    None, None, None, montageDir, params_pixels,
                    show=False, matrices=None, section_offsets=section_offsets, title=None, cache_size=cache_size,
-                   showTable=False, crop_ROI=crop_ROI)
+                   showTable=False, crop_ROI=crop_ROI, paramsFilterFeatures=paramsFilterFeatures)
                    
   return img, groupNames, tileGroups, filepaths
