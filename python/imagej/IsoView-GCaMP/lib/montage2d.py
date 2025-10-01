@@ -266,7 +266,7 @@ def process(sp, params_pixels):
 
 class MontageSlice(Callable):
   def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset,
-               paramsSIFT, paramsRANSAC, paramsTileConfiguration, paramsFilterFeatures
+               paramsSIFT, paramsRANSAC, paramsTileConfiguration, paramsFilterFeatures,
                params_pixels, csvDir, failed):
     """
     Generic montager, reads out i,j position from the file name.
