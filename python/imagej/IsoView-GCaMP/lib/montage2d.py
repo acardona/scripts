@@ -646,7 +646,7 @@ class MontageAndSave(Callable):
   def callImpl(self):
     groupName = self.args[0]
     tilePaths = self.args[1]
-    montageDir = self.args[9]
+    montageDir = self.args[10]
     scaled_image_path = montageDir + "scaled-montages/" + groupName + ".tif"
     # Check if scaled image exists
     if os.path.exists(scaled_image_path):
@@ -660,8 +660,8 @@ class MontageAndSave(Callable):
         return True
     # Else, generate both, overwriting the image.
     # If the matrices exists but the scaled image doesn't, the matrices will simply be loaded, not computed.
-    params_pixels = self.args[8]
-    section_width, section_height = self.args[11:13]
+    params_pixels = self.args[9]
+    section_width, section_height = self.args[12:14]
     if len(tilePaths) > 1:
       imp = self.montageAndSnapshot(groupName)
     else:
