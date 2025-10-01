@@ -21,10 +21,10 @@ SIFTdir = tgtDir + "SIFT-csv/"
 # EDIT below until the end if needed
 
 # Parameters to filter out features outside the tissue using a LabKit model
-# Can be None
 model_path = os.path.join(tgtDir, "MR1.4-3_section1+6000_0.025.labkit.classifier") # from LabKit
 model_width = 400 # target width for resizing so as to match the dimensions of the image used when training the model.
 as3D = False # False if the LabKit model was explicitly trained to be a 2D model.
+
 
 properties = {
  'name': name,
@@ -36,7 +36,7 @@ properties = {
  'RANSAC_maxEpsilon': 25, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
  'RANSAC_minInlierRatio': 0.01,
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
- 'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width, as3D=as3D), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
+ 'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width, as3D=as3D), # Can be None for no filtering. Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
 }
 
 
