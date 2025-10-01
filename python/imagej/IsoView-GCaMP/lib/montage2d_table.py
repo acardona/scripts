@@ -215,21 +215,20 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     if 0 == self.table.getSelectedRowCount():
       return
     # Rows selected:
-    rowIndices = list(self.table.getSelectedRows())
-    newThread(self.manualMontage, rowIndices)
+    modelRowIndices = [self.table.convertRowIndexToModel(i) for i in self.table.getSelectedRows()]
+    newThread(self.manualMontage, modelRowIndices)
   
-  def manualMontage(self, rowIndices):
+  def manualMontage(self, modelRowIndices):
     """
-    Open a TrakEM2 project for the set of sections selected, or almost:
-    for the set of sections between the section with the lowest index and the section with the highest.
-    May not coincide with what is selected on the table if sorted by any column other than the first or second.
+    Open a TrakEM2 project for the set of sections selected.
     """
     # Make a tmp directory under self.csvDir
     tmpDir = os.path.join(self.csvDir, "tmp")
     ensureDirsExist(tmpDir)
     # Check if a project for this set of sections already exists
-    first = self.getRow(min(rowIndices))[0] # 1-based
-    last  = self.getRow(max(rowIndices))[0]
+    modelRowIndices = list(sorted(modelRowIndices))
+    first = modelRowIndices[0] # 0-based
+    last  = modelRowIndices[-1] # 0-based
     xml_path = os.path.join(tmpDir, "montages-%i-%i.xml" % (first, last))
     if os.path.exists(xml_path):
       syncPrintQ("TrakEM2 project for sections %i-% exists already." % (first, last))
@@ -249,7 +248,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     project = Project.newFSProject("blank", None, tmpDir)
     layerset = project.getRootLayerSet()
     # Open image tiles and copy them there (repeats from montage2d "load" function, but can't have circular dependencies
-    for rowIndex in xrange(first-1, last): # xrange in 0-based, first and last in 1-based
+    for rowIndex in modelRowIndices:
       row = self.model.rows[rowIndex]
       groupName = row[1]
       tilePaths = self.model.tileGroups[row[0]]
