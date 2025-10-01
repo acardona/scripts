@@ -490,10 +490,10 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
   # Bottom left, the table, wrapped in a scrollable component
   table = JTable(model)
   table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
-  table.setRowSelectionAllowed(True);
-  table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
-  centerRenderer = DefaultTableCellRenderer();
-  centerRenderer.setHorizontalAlignment(JLabel.CENTER);
+  table.setRowSelectionAllowed(True)
+  table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION)
+  centerRenderer = DefaultTableCellRenderer()
+  centerRenderer.setHorizontalAlignment(JLabel.CENTER)
   table.getColumnModel().getColumn(0).setCellRenderer(centerRenderer)
   table.getColumnModel().getColumn(2).setCellRenderer(centerRenderer)
   table.getColumnModel().getColumn(3).setCellRenderer(ColorCellRenderer(lambda v: (Color.red if "failed" == v else None)))
