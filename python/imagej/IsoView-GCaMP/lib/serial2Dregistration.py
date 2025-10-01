@@ -1339,18 +1339,37 @@ def computeShiftsP(groupNames, csvDir, threshold, paramsPM, properties, edit=Fal
     exe.shutdown()
 
 
-def makeFilterFeaturesFn(model_path, model_width, as3D=False):
+def makeFilterFeaturesFn(model_path, model_width, points=False, as3D=False, ip_scale=1.0, scale_adjust=1.0):
   return partial(filterFeatures,
                  model_width,
                  segThreadCache(model_path, 1, cache_size=numCPUs()), # 1 thread for running the inference on the image
-                 as3D=as3D)
+                 points=points,
+                 ip_scale=ip_scale,
+                 as3D=as3D,
+                 scale_adjust=scale_adjust)
 
-def filterFeatures(model_width, seg_cache, section_ip, positions, points=False, ip_scale=1.0, process_mask=True, as3D=False):
-  """ Compute a mask for the section_ip (a ByteProcessor) using a LabKit Segmenter, obtained from the seg_cache.
-  If points=False, assume features contain Feature instances, otherwise Point instances. """
-  section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
-  resized_ip = section_ip.resize(model_width)
-  resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [model_width, resized_ip.getHeight()])
+def filterFeatures(model_width, seg_cache, ip, positions, points=False, ip_scale=1.0, process_mask=True, as3D=False, scale_adjust=1.0):
+  """ Compute a mask for the ip (a ByteProcessor) using a LabKit Segmenter, obtained from the seg_cache.
+  If points=False, assume features contain Feature instances, otherwise Point instances.
+  ip_scale: the scale at which montages were created relative to whole montage section_width, as specified in paramsPMs['scale']
+  
+  When used for filtering features on the scaled down ("interim_scale") version of the montaged section (the "ip" argument),
+  the features to filter are instead in a 100% scale, hence the ip_scale is needed to correct for that when doing the filtering.
+  In addition, the ratio of the model_width / ip.width further multiplies that ip_scale to establish the mapping
+  from the resized_ip where the model is run to the 100% scale where the features are.
+  
+  The assumption is that ip is already scaled at ip_scale, and that all that's needed is to resize ip down to the model_width.
+  If this assumption doesn't hold, then use scale_adjust to correct that, because ip.resize will use it to determine resize_ip's width
+  by multiplying model_width * scale_adjust.
+  
+  Bear in mind also that the scale:
+      scale = ip_scale * float(model_width * scale_adjust) / ip.getWidth()
+  ... will be used to map from the computed mask back to the coordinate space of the positions to filter.
+
+  """
+  ip.setInterpolationMethod(ImageProcessor.BILINEAR)
+  resized_ip = ip.resize(int(model_width * scale_adjust + 0.5))
+  resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [resized_ip.getWidth(), resized_ip.getHeight()])
   if as3D:
     resized_img = Views.addDimension(resized_img, 0, 0) # A bogus third dimension of size 1.
                                                         # Necessary when the model was trained on a 3D stack, since here it's applied to a 2D image.
@@ -1376,14 +1395,14 @@ def filterFeatures(model_width, seg_cache, section_ip, positions, points=False, 
   
   # DEBUG
   tag = str(System.nanoTime())
-  #ImagePlus("original " + tag, section_ip).show()
+  #ImagePlus("original " + tag, ip).show()
   #ImagePlus("resized " + tag, resized_ip).show()
   #IL.wrap(labels, "labels " + tag).show()
   #ImagePlus("mask " + tag, mask).show()
   
   # Filter points or features by their location: if the value is larger than 0 at the location then accept, otherwise reject
   ps = ArrayList()
-  scale = ip_scale * float(model_width) / section_ip.getWidth()
+  scale = ip_scale * float(model_width * scale_adjust) / ip.getWidth()
   
   if points:
     #ls = []
