@@ -1,5 +1,6 @@
 # Step 1: montage parameters
 
+import os
 from mpicbg.imagefeatures import FloatArray2DSIFT
 from ij.gui import Roi
 
