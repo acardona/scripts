@@ -443,6 +443,8 @@ class ColorCellRenderer(DefaultTableCellRenderer):
     color = self.colorFn(value)
     if color:
       label.setBackground(color)
+    else:
+      label.setBackground(Color.white)
     return label
 
 def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
