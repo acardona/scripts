@@ -343,7 +343,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
    # Check if the tab is already there
    for i in xrange(tabs.getTabCount()):
      if tabs.getTitleAt(i) == title:
-       syncPrintQ("'Manual Montage' tab already exists.")
+       syncPrintQ("'FIBSEM section montage' tab already exists.")
        return
    # Add it new
    pane = JPanel()
