@@ -6,6 +6,10 @@ from ij.gui import Roi
 # REGISTRATION LIBRARY
 libDir = "/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/"
 
+# Import registration library functions
+sys.path.append(libDir)
+from lib.serial2Dregistration import makeFilterFeaturesFn
+
 # VOLUME
 name = "" # Name of the folder containing the .dat files, e.g., "MR1.4-3"
 sourceServer = "/net/fibserver1/raw/"
@@ -27,9 +31,19 @@ nominal_overlap = 1000 # 8 microns at 8 nm/px = 1000 px
 section_width  = 16000      # pixels, after section-wise montaging
 section_height = 16000     # So a canvas of 256,000,000 pixels: 256 MB
 
+# Parameters to filter out features outside the tissue using a LabKit model
+# Can be None if you don't want any filtering, but paramsFilterFeatures has to exist as a variable
+paramsFilterFeatures = {
+  "model_path": os.path.join(tgtDir, "MR1.4-3_section1+6000_0.025.labkit.classifier"), # Cannot be None. from LabKit.
+  "model_width": 400, # Cannot be None. Target width for resizing so as to match the dimensions of the image used when training the model.
+  "as3D": False, # False if the LabKit model was explicitly trained to be a 2D model.
+  "section_width": section_width, # ASSUMES the model was trained on the whole montage
+}
+
 # Skip sections. Define a range to work with.
 first_section = 0  # 0-based
 last_section = -1
+
 
 # Replace sections: (0-based, not 1-based !)
 # NOTE indices are relative to the first_section as specified above

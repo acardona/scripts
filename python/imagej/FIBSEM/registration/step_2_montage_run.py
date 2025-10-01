@@ -10,6 +10,7 @@ from step_1_montage_parameters import libDir, \
              section_width, section_height, \
              first_section, last_section, replace_sections, \
              params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf, \
+             paramsFilterFeatures, \
              to_remove, ignore_images, replace_images
 # Import registration library functions
 sys.path.append(libDir)
@@ -23,4 +24,5 @@ volumeImgMontaged, groupNames, tileGroups = runMontaging(
              section_width, section_height,
              first_section, last_section, replace_sections,
              params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf,
-             to_remove, ignore_images, replace_images)
+             to_remove, ignore_images, replace_images,
+             paramsFilterFeatures=paramsFilterFeatures)
