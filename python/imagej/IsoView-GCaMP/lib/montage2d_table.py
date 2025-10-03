@@ -254,45 +254,70 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       tilePaths = self.model.tileGroups[row[0]]
       print "Will setup for montage:", groupName
       print "With tile filepaths: \n  %s" % "\n  ".join(tilePaths)
+      # Load the montage CSV file if it exists
+      montage_csv = os.path.join(self.csvDir, groupName + ".csv")
+      coords = []
+      if os.path.exists(montage_csv):
+        with open(montage_csv, 'r') as csvfile:
+          reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+          reader.next() # skip header
+          for row in reader:
+            coords.append(float([row[2]), float(row[5]))
       # Create a TrakEM2 Layer for this section
       layer = layerset.getLayer(row[0], 0, True)
       # Save all tile images in the tmpDir folder and add them as Patch instances to the Layer
       pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
-      for tilePath in tilePaths:
-        path = os.path.join(tmpDir, os.path.basename(tilePath) + ".tif")
-        # Save TIFF versions of the original DAT image tiles
-        if os.path.exists(path):
-          syncPrintQ("Tile already as TIFF under tmpDir:\n%s" % path)
-          info = imageInfo(path)
+      for i, tilePath in enumerate(tilePaths):
+        # Create a Patch preprocessor script in BeanShell to laod the data directly from the DAT file,
+        # avoiding having to save intermediate TIFF files.
+        # A recipe for opening channel at index 0 of the DAT file:
+        if tilePath.lower().endswith(".dat"):
+          script = """
+import sc.fiji.io.FIBSEM_Reader;
+import java.io.FileInputStream;
+var path = "%s";
+var reader = new FIBSEM_Reader();
+var header = reader.getHeader(new FileInputStream(path));
+imp2 = reader.readFIBSEM(header, new FileInputStream(path), FIBSEM_Reader.openAsFloat);
+// imp and patch exist as injected variables
+imp.setProcessor(imp2.getStack().getProcessor(1)); // channel index zero, 1-based
+          """ % tilePath
         else:
-          if tilePath.endswith(".dat"):
-            imp = readFIBSEMdat(tilePath, channel_index=0, asImagePlus=True)[0]
-          else:
-            imp = IJ.openImage(tilePath)
-          FileSaver(imp).saveAsTiff(path)
-          info = {"width": imp.getWidth(),
-                  "height": imp.getHeight()}
+          script = """
+import ij.IJ;
+imp.setProcessor(IJ.openImage(%s).getProcessor();
+          """ % tilePath
+        # Write the script to disk with a unique name for each image
+        script_path = os.path.join(tmpDir, os.path.basename(tilePath) + ".bsh")
+        with open(script_path, 'w') as sf:
+          sf.write(script)
+          # Ensure file is written to disk now
+          sf.flush()
+          os.fsync(sf.fileno())
         # Add Patches to Layer
         # Can't use, loads the image from the path before setting the filters, would have to flush TrakEM2's image cache and reload
         #patch = Patch.createPatch(project, path)
         # Create the Patch manually, which avoids loading the image
         patch = Patch(project, os.path.basename(path),
-             info["width"], info["height"],
-             info["width"], info["height"],
+             0, 0, 0, 0, # dimensions will be populated upon setting the script path
              ImagePlus.GRAY16, 1.0,
              Color.yellow, False,
              0, pow(2, 16) -1,
              AffineTransform(),
-             path)
+             None) # no file path: script will generate the image
         patch.setFilters([Invert(), ResetMinAndMax(), EnhanceContrast()])
-        project.getLoader().addedPatchFrom(path, patch);
+        patch.setPreprocessorScriptPath(script_path)
         patch.setProperty("groupName", groupName)
         layer.add(patch)
-        # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
-        i_row, i_col = map(int, re.match(pattern, tilePath[tilePath.rfind('_')+1:]).groups())
-        # Position tiles so as to overlap tiles by 10%
-        x = i_col * 0.9 * info["width"]
-        y = i_row * 0.9 * info["height"]
+        # Position the Patch like in te CSV file if possible, since some tiles may be correctly positioned
+        if len(coords) > 0:
+          x, y = coords[i]
+        else:
+          # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
+          i_row, i_col = map(int, re.match(pattern, tilePath[tilePath.rfind('_')+1:]).groups())
+          # Position tiles so as to overlap tiles by 10%
+          x = i_col * 0.9 * info["width"]
+          y = i_row * 0.9 * info["height"]
         patch.setLocation(x, y)
       # Update internal quadtree of the layer so it can find the Patch instances
       layer.recreateBuckets()
@@ -322,7 +347,9 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     display = Display.getOrCreateFront(project)
     tiles = {}
     for patch in display.getLayer().getPatches(False): # visible or invisible: all
-      path = patch.getImageFilePath()
+      # Path doesn't exist, was generated from a script
+      #path = patch.getImageFilePath()
+      path = patch.getPreprocessorScriptPath() # same as tilePath but with a .bsh extension
       tiles[os.path.basename(path)] = patch # the folder can be different if the file was repaired. The basename suffices and will sort well.
     matrices = []
     groupName = None
