@@ -300,6 +300,10 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       project.getLoader().generateMipMaps(layer.getPatches(True), True)
       # Resize the display canvas
       layerset.setMinimumDimensions()
+    # Delete the layer at Z=0 if empty
+    layer0 = layerset.getLayers().get(0)
+    if layer0.isEmpty():
+      project.findLayerThing(layer0).remove(False)
     # Update TrakEM2 UI
     project.getLayerTree().updateList(layerset)
     # ... and the display slider
