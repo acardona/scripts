@@ -261,8 +261,8 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
         with open(montage_csv, 'r') as csvfile:
           reader = csv.reader(csvfile, delimiter=',', quotechar='"')
           reader.next() # skip header
-          for row in reader:
-            coords.append(float([row[2]), float(row[5]))
+          for v in reader:
+            coords.append([float(v[2]), float(v[5])])
       # Create a TrakEM2 Layer for this section
       layer = layerset.getLayer(row[0], 0, True)
       # Save all tile images in the tmpDir folder and add them as Patch instances to the Layer
@@ -275,17 +275,19 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
           script = """
 import sc.fiji.io.FIBSEM_Reader;
 import java.io.FileInputStream;
+import ij.ImagePlus;
 var path = "%s";
 var reader = new FIBSEM_Reader();
-var header = reader.getHeader(new FileInputStream(path));
+var header = reader.parseHeader(new FileInputStream(path));
 imp2 = reader.readFIBSEM(header, new FileInputStream(path), FIBSEM_Reader.openAsFloat);
 // imp and patch exist as injected variables
-imp.setProcessor(imp2.getStack().getProcessor(1)); // channel index zero, 1-based
+imp.setProcessor(path, imp2.getStack().getProcessor(1)); // channel index zero, 1-based
           """ % tilePath
         else:
           script = """
 import ij.IJ;
-imp.setProcessor(IJ.openImage(%s).getProcessor();
+path = "%s";
+imp.setProcessor(path, IJ.openImage(path).getProcessor());
           """ % tilePath
         # Write the script to disk with a unique name for each image
         script_path = os.path.join(tmpDir, os.path.basename(tilePath) + ".bsh")
@@ -298,13 +300,13 @@ imp.setProcessor(IJ.openImage(%s).getProcessor();
         # Can't use, loads the image from the path before setting the filters, would have to flush TrakEM2's image cache and reload
         #patch = Patch.createPatch(project, path)
         # Create the Patch manually, which avoids loading the image
-        patch = Patch(project, os.path.basename(path),
+        patch = Patch(project, os.path.basename(tilePath),
              0, 0, 0, 0, # dimensions will be populated upon setting the script path
              ImagePlus.GRAY16, 1.0,
              Color.yellow, False,
              0, pow(2, 16) -1,
              AffineTransform(),
-             None) # no file path: script will generate the image
+             tilePath + ".nope") # bogus file path: script will generate the image
         patch.setFilters([Invert(), ResetMinAndMax(), EnhanceContrast()])
         patch.setPreprocessorScriptPath(script_path)
         patch.setProperty("groupName", groupName)
