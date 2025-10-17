@@ -48,6 +48,7 @@ last_section = -1
 # Alternatively, add entries as <groupName>: <groupName>, i.e., like:
 #     "Merlin-WEMS_24-05-30_104352_": "Merlin-WEMS_24-05-30_112457_"
 replace_sections = {
+   "Merlin-FIBdeSEMAna_25-07-24_002444_": "Merlin-FIBdeSEMAna_25-07-24_002444_", # 4686
    "Merlin-FIBdeSEMAna_25-07-24_151704_": "Merlin-FIBdeSEMAna_25-07-24_151046_", # 5112
    "Merlin-FIBdeSEMAna_25-07-24_152713_": "Merlin-FIBdeSEMAna_25-07-24_151046_",  # 5113
    "Merlin-FIBdeSEMAna_25-07-24_155413_": "Merlin-FIBdeSEMAna_25-07-24_162420_" # 5114
