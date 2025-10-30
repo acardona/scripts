@@ -22,7 +22,7 @@ SIFTdir = tgtDir + "SIFT-csv/"
 
 # Parameters to filter out features outside the tissue using a LabKit model
 # Can be None
-model_path = os.path.join(tgtDir, "ngc10-240925.classifier") # from LabKit
+model_path = os.path.join(tgtDir, "ngc10-291025.classifier") # from LabKit
 model_width = 400 # target width for resizing so as to match the dimensions of the image used when training the model.
 
 
