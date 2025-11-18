@@ -1344,6 +1344,70 @@ def computeShiftsP(groupNames, csvDir, threshold, paramsPM, properties, edit=Fal
     exe.shutdown()
 
 
+def makeFilterFeaturesFn(model_path, model_width, as3D=False):
+  return partial(filterFeatures,
+                 model_width,
+                 segThreadCache(model_path, 1, cache_size=numCPUs()), # 1 thread for running the inference on the image
+                 as3D=as3D)
+
+def filterFeatures(model_width, seg_cache, section_ip, positions, points=False, ip_scale=1.0, process_mask=True, as3D=False):
+  """ Compute a mask for the section_ip (a ByteProcessor) using a LabKit Segmenter, obtained from the seg_cache.
+  If points=False, assume positions contain Feature instances, otherwise Point instances. """
+  section_ip.setInterpolationMethod(ImageProcessor.BILINEAR)
+  resized_ip = section_ip.resize(model_width)
+  resized_img = ArrayImgs.unsignedBytes(resized_ip.getPixels(), [model_width, resized_ip.getHeight()])
+  if as3D:
+    resized_img = Views.addDimension(resized_img, 0, 0) # A bogus third dimension of size 1.
+                                                        # Necessary when the model was trained on a 3D stack, since here it's applied to a 2D image.
+  
+  """
+  # Trainable Weka Segmentation fails for mysterious reasons, works on isolated scripts
+  labels_imp = classifyImageTWS2(resized_imp, classifier=classifier, clone=True)
+  mask = labels_imp.getProcessor() # with 0 for background (resin) and 1 for tissue
+  """
+  # Use LabKit instead
+  labels = classifyImageLabKitSegCached(resized_img, seg_cache) # Returns a RandomAccessibleInterval<UnsignedByteType>
+  mask = ByteProcessor(resized_ip.getWidth(), resized_ip.getHeight(), labels.update(None).getCurrentStorageArray())
+  
+  if process_mask:
+    # First multiply by 255
+    mask.multiply(255)
+    # Close small holes by dilating and then eroding, which, since it's not inverted, do backwards
+    mask.erode()
+    mask.dilate()
+    # Erase floating debris by eroding twice, which means dilate when not inverted
+    mask.dilate()
+    mask.dilate()
+  
+  # DEBUG
+  tag = str(System.nanoTime())
+  #ImagePlus("original " + tag, section_ip).show()
+  #ImagePlus("resized " + tag, resized_ip).show()
+  #IL.wrap(labels, "labels " + tag).show()
+  #ImagePlus("mask " + tag, mask).show()
+  
+  # Filter points or features by their location: if the value is larger than 0 at the location then accept, otherwise reject
+  ps = ArrayList()
+  scale = ip_scale * float(model_width) / section_ip.getWidth()
+  
+  if points:
+    #ls = []
+    for p in positions: # p is a Point, for BlockMatching
+      #ls.append("[%f, %f]" % (p.getL()[0], p.getL()[1]))
+      if mask.getPixel(int(p.getL()[0] * scale + 0.5), int(p.getL()[1] * scale + 0.5)) > 0:
+        ps.add(p)
+      #syncPrintQ(tag + ", ".join(ls))
+  else:
+    for f in positions: # f is a Feature, for SIFT
+      if mask.getPixel(int(f.location[0] * scale + 0.5), int(f.location[1] * scale + 0.5)) > 0:
+        ps.add(f)
+  
+  # DEBUG
+  syncPrintQ("filterFeatures # start: %s, end: %i - %s" % (len(positions), len(ps), tag))
+  
+  return ps
+
+
 
 def translatePointMatches(groupNames, translationFn, n_adjacent, srcCsvDir, tgtCsvDir, start=0):
   """
