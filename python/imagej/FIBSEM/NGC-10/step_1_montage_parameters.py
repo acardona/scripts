@@ -25,8 +25,8 @@ overlap = 990 # pixels
 nominal_overlap = 1000 # 8 microns at 8 nm/px = 1000 px
 
 # Working canvas
-section_width  = 16000      # pixels, after section-wise montaging
-section_height = 16000     # So a canvas of 256,000,000 pixels: 256 MB
+section_width  = 28000      # pixels, after section-wise montaging
+section_height = 28000     # So a canvas of 256,000,000 pixels: 256 MB
 
 # Parameters to filter out features outside the tissue using a LabKit model
 # Can be None if you don't want any filtering, but paramsFilterFeatures has to exist as a variable
