@@ -20,14 +20,15 @@ BMdir = tgtDir + "BM-csv/"
 
 propertiesBM = {
  'name': name,
- 'scale': 1.0, # Compounds with montaging interim_scale
+ 'scale': 1, # Compounds with montaging interim_scale
  'n_threads': numCPUs(),
- 'roi': None,# [section_width / 4,  # To extract SIFT features from e.g., center part only, reducing ops by 4x
+ 'roi': [2000, 7080, 18360, 16720],#[421, 990, 4697, 4974],
+        # [section_width / 4,  # To extract SIFT features from e.g., center part only, reducing ops by 4x
          #section_height / 4, # [x, y, width, height] or None.
          #section_width / 2,
          #section_height / 2],
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
- 'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width, as3D=True), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
+ 'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width, as3D=False), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
 }
 
 # Parameters for blockmatching
@@ -56,7 +57,7 @@ paramsTileConfigurationBM = {
   "maxIterations": 5000, # Optimizer iterations for each chunk of chunk_size sections
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
   "nThreadsOptimizer": numCPUs(), # as many as CPU cores
-  "chunk_size": 400, # Will align in 50% overlapping chunks for best use of the optimizer
+  "chunk_size": 200, #400, # Will align in 50% overlapping chunks for best use of the optimizer
   "chunk_maxIterations": 40000, # Iterations for the cross-chunk alignment
   "fixed_tile_index": None, # None implies use the middle tile. Otherwise provide an index (0-based)
 }
