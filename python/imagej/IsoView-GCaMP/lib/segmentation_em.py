@@ -21,7 +21,7 @@ from weka.classifiers import AbstractClassifier
 from weka.classifiers.functions import SMO, MultilayerPerceptron
 from trainableSegmentation import WekaSegmentation
 from hr.irb.fastRandomForest import FastRandomForest
-from util import numCPUs, SoftMemoize
+from util import numCPUs, SoftMemoize, syncPrintQ
 import sys
 from net.imglib2.img.display.imagej import ImageJFunctions as IL
 from ij.process import ImageProcessor, ByteProcessor
