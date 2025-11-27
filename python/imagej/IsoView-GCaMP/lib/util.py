@@ -50,8 +50,12 @@ def syncPrint(msg):
   
 
 def printException(e=None, printFn=syncPrintQ, msg=""):
-  e = sys.exc_info() if e is None else e # CAUTION: e may be unsubscriptable, i.e., not an array like provided by sys.exc_info()
-  printFn(msg + "".join(traceback.format_exception(e[0], e[1], e[2])))
+  # CAUTION: e may be unsubscriptable, i.e., not an array like provided by sys.exc_info()
+  if e is None:
+    e = sys.exc_info()
+    printFn(msg + "".join(traceback.format_exception(e[0], e[1], e[2])))
+  else:
+    printFn(msg + str(e))
  
 def printExceptionCause(e, printFn=syncPrintQ, msg="", trace=True):
   """
