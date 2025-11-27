@@ -1289,6 +1289,10 @@ class ComputeShift(Callable):
   def call(self):
     # Load pointmatches
     i, j, pointmatches = loadPointMatchesPlus(self.groupNames, self.j-1, self.j, self.csvDir, self.paramsPM, self.properties)
+    # Check
+    if 0 == len(pointmatches):
+      syncPrintQ("WARNING: ZERO pointmatches for sections %i :: %i with names:\n  %s\n  %s" % (i, j, self.groupNames[i], self.groupNames[j]))
+      return self.groupNames[self.j], 0, 0
     # Compute translation model
     model = TranslationModel2D()
     modelFound = model.fit(pointmatches)
