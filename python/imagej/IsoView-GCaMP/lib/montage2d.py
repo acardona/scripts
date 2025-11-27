@@ -12,7 +12,7 @@ from lib.montage2d_table import makeMontageTable
 from lib.segmentation_em import makeFilterFeaturesFn
 
 from java.util import ArrayList, Vector, HashSet
-from java.lang import Double, Exception, Throwable
+from java.lang import Double, Exception, Throwable, String
 from java.util.concurrent import Callable
 from java.io import File
 from ij.process import ShortProcessor, ByteProcessor
@@ -1185,7 +1185,7 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
 def replaceSections(groupNames, tileGroups, replace_sections):
   # Substitute sections with problems for other, adjacent sections
   for bad, good in replace_sections.iteritems():
-    if isinstance(bad, basestring):
+    if isinstance(bad, str) or isinstance(bad, String) or isinstance(bad, basestring):
       try:
         bi = groupNames.index(bad)
         gi = groupNames.index(good)
