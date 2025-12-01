@@ -560,7 +560,7 @@ class SectionLoader(CacheLoader):
     self.paramsSIFT = paramsSIFT
     self.paramsRANSAC = paramsRANSAC
     self.paramsTileConfiguration = paramsTileConfiguration
-    self.paramsFilterFeatures
+    self.paramsFilterFeatures = paramsFilterFeatures
     self.csvDir = csvDir
     self.params_pixels = params_pixels
     self.section_offsets = section_offsets
