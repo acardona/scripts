@@ -17,8 +17,8 @@ n5Dir = tgtDir + "n5/"
 # Region of interest in 2D for exporting
 crop_roi = [0, # X
             0, # Y
-            2968 / params_pixels['interim_scale'], # width
-            3404 / params_pixels['interim_scale']] # height
+            int(2968 / params_pixels['interim_scale'] + 0.5), # width
+            int(3404 / params_pixels['interim_scale'] + 0.5)] # height
 
 # Rotate the view: None, "right", "left", or "180"
 rotate = "180"
