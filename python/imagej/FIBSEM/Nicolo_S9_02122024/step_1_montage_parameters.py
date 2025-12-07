@@ -42,8 +42,8 @@ paramsFilterFeatures = None #{
 #}
 
 # Skip sections. Define a range to work with.
-first_section = 0  # 0-based
-last_section = -1
+first_section = 746  # 0-based  # 746 (1-based) is entirely blurred
+last_section = 27500
 
 
 # Replace sections: (0-based, not 1-based !)
@@ -53,7 +53,17 @@ last_section = -1
 # Alternatively, add entries as <groupName>: <groupName>, i.e., like:
 #     "Merlin-WEMS_24-05-30_104352_": "Merlin-WEMS_24-05-30_112457_"
 replace_sections = {
-
+  #"Merlin-WEMS_25-01-09_075848_": "Merlin-WEMS_25-01-09_075831_",
+  "Merlin-WEMS_25-01-14_140637_": "Merlin-WEMS_25-01-14_140345_",
+  "Merlin-WEMS_25-01-16_000205_": "Merlin-WEMS_25-01-16_000205_",
+  "Merlin-WEMS_25-01-16_185327_": "Merlin-WEMS_25-01-16_185148_",
+  #"Merlin-WEMS_25-01-27_091648_": "Merlin-WEMS_25-01-27_091502_",
+  "Merlin-WEMS_25-02-02_155308_": "Merlin-WEMS_25-02-02_155105_",
+  "Merlin-WEMS_25-02-06_020251_": "Merlin-WEMS_25-02-06_020114_",
+  "Merlin-WEMS_25-02-06_183758_": "Merlin-WEMS_25-02-06_183549_",
+  "Merlin-WEMS_25-02-07_221145_": "Merlin-WEMS_25-02-07_220939_",
+  "Merlin-WEMS_25-02-10_075555_": "Merlin-WEMS_25-02-10_084522_",
+  "Merlin-WEMS_25-02-12_191645_": "Merlin-WEMS_25-02-12_191508_",
 }
 
 # Image contrast parameters
@@ -98,13 +108,30 @@ paramsTileConf = {
 # Add entries like this, with a comment for the record":
 # "Merlin-WEMS_24-02-27_170732_" # added 0-0-0 tile to ignore: truncated, no pixels, only header
 to_remove = set([
-  
+  "Merlin-WEMS_25-01-09_075848_",
+  "Merlin-WEMS_25-01-27_091648_",
 ])
 
 # Add entries like this, with the file name of individual image tiles and a comment:
 # "Merlin-WEMS_24-02-27_170732_0-0-0.dat", # only header, whole image truncated
 ignore_images = set([
-  
+#  "Merlin-WEMS_25-01-09_075848_0-0-1.dat", # problematic, replace with previous
+#  "Merlin-WEMS_25-01-09_075848_0-1-0.dat",
+#  "Merlin-WEMS_25-01-14_140637_0-1-1.dat", # replaced with previous section
+#  "Merlin-WEMS_25-01-16_000205_0-1-1.dat", # replaced with previous section
+#  "Merlin-WEMS_25-01-16_185327_0-1-0.dat", # replaced with previous section
+#  "Merlin-WEMS_25-01-27_091648_0-0-0.dat", # replaced with previous section
+#  "Merlin-WEMS_25-01-27_091648_0-0-1.dat",
+#  "Merlin-WEMS_25-01-27_091648_0-1-0.dat",
+#  "Merlin-WEMS_25-01-27_091648_0-1-1.dat",
+#  "Merlin-WEMS_25-02-02_155308_0-0-0.dat", # replaced with previous
+#  "Merlin-WEMS_25-02-02_155308_0-0-1.dat",
+#  "Merlin-WEMS_25-02-06_020251_0-0-1.dat", # replaced with previous
+#  "Merlin-WEMS_25-02-06_183758_0-1-0.dat", # replaced with previous
+#  "Merlin-WEMS_25-02-06_183758_0-1-1.dat",
+#  "Merlin-WEMS_25-02-07_221145_0-1-1.dat", # replaced with previous
+#  "Merlin-WEMS_25-02-10_075555_0-0-0.dat", # replaced with previous
+#  "Merlin-WEMS_25-02-12_191645_0-0-1.dat", # replaced with previous
 ])
 
 # Replacement files to be found under the repaired folder:

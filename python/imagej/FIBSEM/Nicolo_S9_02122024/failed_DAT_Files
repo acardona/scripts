@@ -1,0 +1,80 @@
+Merlin-WEMS_25-02-07_221145_ HEADER: <type 'NoneType'>
+Failed to read header or file size for:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D27/Merlin-WEMS_25-01-27_091648_0-1-1.dat
+Inconsistent tile dimensions of file sizes in section:
+Merlin-WEMS_25-01-27_091648_
+
+Merlin-WEMS_25-01-27_091648_ HEADER: <type 'NoneType'>
+Merlin-WEMS_25-01-27_091648_ HEADER: <type 'NoneType'>
+Merlin-WEMS_25-01-27_091648_ HEADER: <type 'NoneType'>
+Failed to read header or file size for:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D27/Merlin-WEMS_25-01-27_091648_0-1-1.dat
+Inconsistent tile dimensions of file sizes in section:
+Merlin-WEMS_25-01-27_091648_
+
+Will ignore section: Merlin-WEMS_25-01-27_091648_
+Will ignore section: Merlin-WEMS_25-01-27_091648_
+Merlin-WEMS_25-02-06_020251_ HEADER: <type 'NoneType'>
+Merlin-WEMS_25-01-14_140637_ HEADER: <type 'NoneType'>
+[ERROR] Unrecognized WatchKey: sun.nio.fs.LinuxWatchService$LinuxWatchKey@17d05611
+Failed to read header or file size for:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D10/Merlin-WEMS_25-02-10_075555_0-0-0.dat
+Failed to read header or file size for:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D10/Merlin-WEMS_25-02-10_075555_0-0-0.dat
+Merlin-WEMS_25-02-12_191645_ HEADER: <type 'NoneType'>
+Merlin-WEMS_25-01-16_000205_ HEADER: <type 'NoneType'>
+Merlin-WEMS_25-01-09_075848_ HEADER: <type 'NoneType'>
+Merlin-WEMS_25-01-09_075848_ HEADER: <type 'NoneType'>
+Failed to read header or file size for:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D06/Merlin-WEMS_25-02-06_183758_0-1-1.dat
+Merlin-WEMS_25-02-06_183758_ HEADER: <type 'NoneType'>
+Failed to read header or file size for:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D06/Merlin-WEMS_25-02-06_183758_0-1-1.dat
+Merlin-WEMS_25-01-16_185327_ HEADER: <type 'NoneType'>
+Failed to read header or file size for:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D02/Merlin-WEMS_25-02-02_155308_0-0-1.dat
+Failed to read header or file size for:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D02/Merlin-WEMS_25-02-02_155308_0-1-0.dat
+Merlin-WEMS_25-02-02_155308_ HEADER: <type 'NoneType'>
+Failed to read header or file size for:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D02/Merlin-WEMS_25-02-02_155308_0-0-1.dat
+Failed to read header or file size for:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D02/Merlin-WEMS_25-02-02_155308_0-1-0.dat
+Will ignore section: Merlin-WEMS_25-01-27_091648_
+Unexpectedly Merlin-WEMS_25-01-27_091648_ is not in groups.
+Will ignore section: Merlin-WEMS_25-01-27_091648_
+Invalid sections: 1
+Number of sections found valid: 28852
+
+
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D09/Merlin-WEMS_25-01-09_075848_0-0-1.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D09/Merlin-WEMS_25-01-09_075848_0-1-0.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D14/Merlin-WEMS_25-01-14_140637_0-1-1.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D16/Merlin-WEMS_25-01-16_000205_0-1-1.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D16/Merlin-WEMS_25-01-16_185327_0-1-0.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D02/Merlin-WEMS_25-02-02_155308_0-0-0.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D06/Merlin-WEMS_25-02-06_020251_0-0-1.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D06/Merlin-WEMS_25-02-06_183758_0-1-0.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D07/Merlin-WEMS_25-02-07_221145_0-1-1.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M02/D12/Merlin-WEMS_25-02-12_191645_0-0-1.dat
+
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D09/Merlin-WEMS_25-01-09_075848_0-1-0.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D27/Merlin-WEMS_25-01-27_091648_0-0-0.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D27/Merlin-WEMS_25-01-27_091648_0-0-1.dat
+magic number mismatch: v8 magic 3555587570 != 0 for path:
+/net/fibserver1/raw/Nicolo_S9_02122024/Y2025/M01/D27/Merlin-WEMS_25-01-27_091648_0-1-0.dat
+
+
