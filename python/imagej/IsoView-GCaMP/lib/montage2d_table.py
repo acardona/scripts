@@ -30,7 +30,7 @@ except:
   print "WARNING Labkit isn't installed. Install it via the Fiji updater."
 
 from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist, imageInfo, makeNonOverwritingName
-from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, batched
+from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, batched, printException
 from lib.ui import duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.registration import saveMatrices
 
@@ -117,7 +117,7 @@ class OpenDAT(Runnable):
       if self.show:
         imp.show()
     except:
-      print sys.exc_info()
+      printException()
 
 class Action(AbstractAction):
   def __init__(self, opener):
@@ -492,18 +492,23 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
   # Load stats of pairwise tile connections in each montage
   montage_stats = [] # as long as groupNames
   for i, groupName in enumerate(groupNames):
-    path = os.path.join(csvDir, groupName + ".montage_stats.csv")
-    if 1 == len(tileGroups[i]):
-      montage_stats.append([0, ""]) # single tile, no montage necessary
-    elif os.path.exists(path):
-      with open(path, 'r') as csvfile:
-        reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-        reader.next() # skip the header
-        inlier_counts = [n_inliers for _, _, n_inliers in reader] # all as strings
-        montage_stats.append([min(int(s) for s in inlier_counts), ", ".join(inlier_counts)])
-    else:
-      # Either it was deleted or was never written, from a prior version of this software
+    try:
+      path = os.path.join(csvDir, groupName + ".montage_stats.csv")
+      if 1 == len(tileGroups[i]):
+        montage_stats.append([0, ""]) # single tile, no montage necessary
+      elif os.path.exists(path):
+        with open(path, 'r') as csvfile:
+          reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+          reader.next() # skip the header
+          inlier_counts = [n_inliers for _, _, n_inliers in reader] # all as strings
+          montage_stats.append([min(int(s) for s in inlier_counts), ", ".join(inlier_counts)])
+      else:
+        # Either it was deleted or was never written, from a prior version of this software
+        montage_stats.append([0, "no stats file"])
+    except:
+      syncPrintQ("Reading stats failed for groupName: " + groupName)
       montage_stats.append([0, "no stats file"])
+      printException()
   #
   model = SliceTableModel(groupNames, tileGroups, failed_groupNames, montage_stats)
   # GUI:
