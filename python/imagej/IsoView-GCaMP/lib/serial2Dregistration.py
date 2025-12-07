@@ -1327,12 +1327,13 @@ def computeShiftsP(groupNames, csvDir, threshold, paramsPM, properties, edit=Fal
     min_dy = 0
     for fu in futures:
       groupName, dx, dy = fu.get()
-      min_dx = min(min_dx, dx)
-      min_dy = min(min_dy, dy)
       cummulative_dx += dx
       cummulative_dy += dy
       shifts[groupName] = (cummulative_dx, cummulative_dy)
+      min_dx = min(cummulative_dx, min_dx)
+      min_dy = min(cummulative_dy, min_dy)
     # Correct for negative coordinates that would put images off the canvas (the canvas can always be enlarged)
+    syncPrintQ("min dx, dy: %f, %f" % (min_dx, min_dy))
     if min_dx < 0 or min_dy < 0:
       shifts = {groupName: (dx - min_dx, dy - min_dy) for groupName, (dx, dy) in shifts.iteritems()}
       # First section has moved too
@@ -1652,8 +1653,15 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
     # Write shift matrices to disk
     saveMatrices("matrices-shifts", matrices, SIFTdir)
 
+  # Compute potentially enlarged canvas
+  max_x = 0
+  max_y = 0
+  for m in matrices:
+    max_x = max(max_x, m[2])
+    max_y = max(max_y, m[5])
+
   # Prepare parameters for showAlignedImg
-  cropInterval = FinalInterval([imgMontaged.dimension(0), imgMontaged.dimension(1)]) # The whole 2D view
+  cropInterval = FinalInterval([imgMontaged.dimension(0) + int(max_x + 0.5), imgMontaged.dimension(1) + int(max_y + 0.5)]) # The whole 2D view
   properties["preload"] = 0 # don't
   
   # Correct origin of coordinates with a translation, for when sections fall partially outside the canvas
