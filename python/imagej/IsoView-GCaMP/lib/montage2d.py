@@ -828,9 +828,9 @@ class CheckSectionFiles(Callable):
           self.tilePaths_[i] = os.path.join(self.alternative_dir, self.replace_images[filename])
           syncPrintQ("Replaced filepath for %s :\n%s\n" % (filename, self.tilePaths_[i]))
       # Remove from group any tilePath to ignore
-      for i in drop:
-        syncPrintQ("Will ignore image %s" % self.tilePaths_[i])
-        del self.tilePaths_[i]
+      for k, i in enumerate(drop):
+        syncPrintQ("Will ignore image %s" % self.tilePaths_[i - k])
+        del self.tilePaths_[i - k]
       # If no tiles left, remove section
       if 0 == len(self.tilePaths_):
         # Return the name of the section to be removed, and to be added to to_remove
