@@ -21,8 +21,8 @@ BMdir = tgtDir + "BM-csv/"
 propertiesBM = {
  'name': name,
  'scale': 1, # Compounds with montaging interim_scale
- 'n_threads': 16, #numCPUs(),
- 'roi': [840,5064,19464,18408], #[2000, 7080, 18360, 16720],#[421, 990, 4697, 4974],
+ 'n_threads': 32, #numCPUs(),
+ 'roi': [912, 1416, 18648, 17904]#[840,5064,19464,18408], #[2000, 7080, 18360, 16720],#[421, 990, 4697, 4974],
         # [section_width / 4,  # To extract SIFT features from e.g., center part only, reducing ops by 4x
          #section_height / 4, # [x, y, width, height] or None.
          #section_width / 2,
