@@ -25,8 +25,8 @@ overlap = 990 # pixels
 nominal_overlap = 1000 # 8 microns at 8 nm/px = 1000 px
 
 # Working canvas
-section_width  = 28000      # pixels, after section-wise montaging
-section_height = 28000     # So a canvas of 256,000,000 pixels: 256 MB
+section_width  = 20500 #28000      # pixels, after section-wise montaging
+section_height = 24000 #28000     # So a canvas of 256,000,000 pixels: 256 MB
 
 # Parameters to filter out features outside the tissue using a LabKit model
 # Can be None if you don't want any filtering, but paramsFilterFeatures has to exist as a variable
@@ -64,7 +64,7 @@ params_pixels = {
   "as8bit": True,
   "contrast": (500, 1000), # thresholds in pixel counts per histogram bin
   "roiFn": lambda sp: Roi(sp.width / 6, sp.height / 6, 2 * sp.width / 3, 2 * sp.height / 3), # middle 2/3rds to discard edges
-  "interim_scale": 0.25, # for saving montaged snapshops to disk to be used for evaluation and serial alignment
+  "interim_scale": 0.125, #0.25 # for saving montaged snapshops to disk to be used for evaluation and serial alignment
 }
 
 # Parameters for SIFT features
@@ -102,7 +102,10 @@ to_remove = set([
 # Add entries like this, with the file name of individual image tiles and a comment:
 # "Merlin-WEMS_24-02-27_170732_0-0-0.dat", # only header, whole image truncated
 ignore_images = set([
-  
+  #"Merlin-FIBdeSEMAna_25-07-18_235008_0-0-0.dat",
+  #"Merlin-FIBdeSEMAna_25-07-18_235112_0-0-0.dat",
+  #"Merlin-FIBdeSEMAna_25-07-18_235216_0-0-0.dat",
+  #"Merlin-FIBdeSEMAna_25-07-18_235318_0-0-0.dat"
 ])
 
 # Replacement files to be found under the repaired folder:
