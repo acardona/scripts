@@ -28,10 +28,10 @@ model_width = 400 # target width for resizing so as to match the dimensions of t
 
 properties = {
  'name': name,
- 'scale': 0.5, # Compounds with montaging interim_scale
+ 'scale': 1.0, # Compounds with montaging interim_scale
  'shift_threshold': 10, # pixels, in world coordinates (not scaled)
  'n_threads': numCPUs(),
- 'roi': [section_width / 4, section_height / 4, section_width / 2, section_height / 2], # [x, y, width, height] or None. To extract SIFT features from center part only
+ 'roi': None,#[section_width / 4, section_height / 4, section_width / 2, section_height / 2], # [x, y, width, height] or None. To extract SIFT features from center part only
  'RANSAC_iterations': 1000,
  'RANSAC_maxEpsilon': 25, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
  'RANSAC_minInlierRatio': 0.01,
@@ -45,7 +45,7 @@ paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
 paramsSIFT.maxOctaveSize = int(max(1024, section_width * params_pixels["interim_scale"] * properties['scale'])) # effective scale of 0.125 if interim_scale was 0.25
-paramsSIFT.steps = 5
+paramsSIFT.steps = 3
 paramsSIFT.minOctaveSize = int(max(256, paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps)))
 paramsSIFT.initialSigma = 1.6 # default 1.6
 
@@ -63,9 +63,9 @@ paramsTileConfiguration = {
   "n_adjacent": 3, # minimum of 1; Number of adjacent sections to pair up
   "maxAllowedError": 0, # Saalfeld recommends 0
   "maxPlateauwidth": 200, # Like in TrakEM2
-  "maxIterations": 20000, # Optimizer iterations for each chunk of chunk_size sections
+  "maxIterations": 1000, # Optimizer iterations for each chunk of chunk_size sections
   "damp": 1.0, # Saalfeld recommends 1.0, which means no damp
-  "nThreadsOptimizer": numCPUs(), # as many as CPU cores
+  "nThreadsOptimizer": 1, #numCPUs(), # as many as CPU cores
   "chunk_size": 400, # Will align in 50% overlapping chunks for best use of the optimizer
   "chunk_maxIterations": 40000, # Iterations for the cross-chunk alignment
   "fixed_tile_index": None, # None implies use the middle tile. Otherwise provide an index (0-based)
