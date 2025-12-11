@@ -1297,7 +1297,7 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2,
   # Translation amount
   d = math.sqrt(dx*dx + dy*dy)
 
-  syncPrintQ("cc: %i -- PC: dx, dy, d, cc: %f, %f, %f, %f" % (cc, dx, dy, d, cc2))
+  syncPrintQ("cc: %f -- PC: dx, dy, d, cc: %f, %f, %f, %f" % (cc, dx, dy, d, cc2))
 
   # cc: cross-correlation as-is
   # dx, dy: translation computed with PhaseCorrelation2
@@ -1343,7 +1343,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
         scores.append(("%i-%i vs %i-%i" % (i, j-1, i, j), score))
   # Store and show scores
   with open(os.path.join(csvDir, groupName + ".montage_scores.csv"), 'w') as f:
-    f.write("row, column, score\n")
+    f.write("row, column, CC, dx, dy, d, CC2\n")
     f.write("\n".join("%s, %f, %f, %f, %f, %f" % (s, cc, dx, dy, d, cc2) for s, (cc, dx, dy, d, cc2) in scores))
     # Ensure it's written
     f.flush()
