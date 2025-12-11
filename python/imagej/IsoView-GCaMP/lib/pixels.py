@@ -5,7 +5,7 @@ from java.util.concurrent import Callable
 from net.imglib2.view import Views
 from net.imglib2.type.numeric.real import FloatType
 from net.imglib2.type.numeric.complex import ComplexFloatType
-from net.imglib2.img.array import ArrayImgFactory
+from net.imglib2.img.array import ArrayImgFactory, ArrayImgs
 try:
   from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2, PhaseCorrelation2Util
 except:
