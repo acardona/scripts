@@ -116,13 +116,11 @@ def pairwiseCosineSimilarityST(imgVolume, roi=None):
     sqrtSumSq = [ImgCompare.sqrtSumSquares(Views.hyperSlice(imgVolume, 2, i))
                  for i in xrange(imgVolume.dimension(2))]
     # Compute all pairwise cosyne similarities
-    cs = [ComputeCosineSimilarity(imgVolume, sqrtSumSq, i, i+1)
+    cs = [ComputeCosineSimilarity(imgVolume, sqrtSumSq, i, i+1).call()
           for i in xrange(imgVolume.dimension(2) -1)]
     return cs
   except:
     printException()
-  finally:
-    exe.shutdown()
 
 
 

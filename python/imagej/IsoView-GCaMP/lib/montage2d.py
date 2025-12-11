@@ -267,7 +267,7 @@ def process(sp, params_pixels):
 def makeROIs(width, height, overlap, offset):
   # left-right
   roiEast = Roi(width - overlap, 0, overlap, height) # right edge, for tile 0-0-0  (and 0-1-0)
-  roiWest = Roi(self.offset, 0, overlap, height)     # left edge,  for tile 0-0-1  (and 0-1-1)
+  roiWest = Roi(offset, 0, overlap, height)     # left edge,  for tile 0-0-1  (and 0-1-1)
   # top-bottom
   roiSouth = Roi(0, height - overlap, width, overlap) # bottom edge, for tile 0-0-0  (and 0-0-1)
   roiNorth = Roi(0, 0, width, overlap)                # top edge,    for tile 0-1-0  (and 0-1-1)
@@ -1018,7 +1018,7 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
       stack.setSliceLabel(groupName, i+1) # 1-based
     # Show a JTable for opening raw images and slice ranges
     if showTable:
-      table = makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, offset, params_pixels, show=True)
+      table = makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, offset, params_pixels, runEvaluateMontages, show=True)
   
   return volumeImg
 
@@ -1186,7 +1186,7 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   
   # Show a JTable for opening raw images and slice ranges
   if showTable:
-    table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, overlap, offset, params_pixels, show=True)
+    table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, overlap, offset, params_pixels, runEvaluateMontages, show=True)
   
   return volumeImgMontagedScaled, groupNames, tileGroups
 
@@ -1246,6 +1246,7 @@ def loadMontagedImg(srcDir, montageDir, repairedDir,
 
 def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2):
   """
+  Expects matrices in integers.
   Returns the cosine similarity score of the overlapping region, or 0.0 when no overlap.
   """
   # Find the intersection
@@ -1255,7 +1256,7 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2)
   r2.translate(matrix2[2], matrix2[5]) # in montage coordinates
   intersection = r1.intersection(r2) # in montage coordinates
   # Check if they intersect at all
-  if 0 == width or 0 == height:
+  if 0 == intersection.width or 0 == intersection.height:
     return 0.0
   # Translate the intersection to each tile's pixels coordinates
   ir1 = intersection.clone()
@@ -1269,17 +1270,19 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2)
   sp2 = sps[filepath2]
   sp2.setRoi(ir2)
   sp_ir2 = sp2.crop()
+  print type(sp_ir1)
   # Compare the cutouts with cosine similarity
-  stack = Views.stack(ArrayImgs.unsignedShorts(sp_ir1.getPixels(), sp_ir1.getWidth(), sp_ir1.getHeight(),
-                      ArrayImgs.unsignedShorts(sp_ir2.getPixels(), sp_ir2.getWidth(), sp_ir2.getHeight())))
+  stack = Views.stack(ArrayImgs.unsignedShorts(sp_ir1.getPixels(), sp_ir1.getWidth(), sp_ir1.getHeight()),
+                      ArrayImgs.unsignedShorts(sp_ir2.getPixels(), sp_ir2.getWidth(), sp_ir2.getHeight()))
   cs = pairwiseCosineSimilarityST(stack, roi=None)
   return cs[0]
 
 
 def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels):
   # TODO should really be done right after montaging, when images are loaded.
-  # One matrix per tile in the montage
-  matrices = loadMatrices(groupName, csvDir)
+  # One matrix per tile in the montage, in ints
+  matrices = dict(zip(tilePaths,
+                      [[int(v + 0.5) for v in matrix] for matrix in loadMatrices(groupName, csvDir)]))
   # The list of ShortProcessor, one per tile
   sps = loadShortProcessors(tilePaths, params_pixels, asDict=True) # as 16-bit, unprocessed (needs the params_pixels in case images have to be opened as floats)
   # Assumes images have the same dimensions
@@ -1300,7 +1303,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
         if not filepath1: # an empty string
           continue # tile is missing from the montage
         # Test with roiSouth, roiNorth
-        scores[i][j] = evaluateTileOverlap(filepath1, filepath2, sps, roiSouth, roiNorth, matrices.index(filepath1), matrices.index(filepath2))
+        scores[i][j] = evaluateTileOverlap(filepath1, filepath2, sps, roiSouth, roiNorth, matrices[filepath1], matrices[filepath2])
 
       if j > 0:
         # Link with tile to the left
@@ -1308,7 +1311,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
         if not filepath1: # an empty string
           continue # tile is missing from the montage
         # Test with roiEast, roiWest
-        scores[i][j] = evaluateTileOverlap(filepath1, filepath2, sps, roiEast, roiWest, matrices.index(filepath1), matrices.index(filepath2))
+        scores[i][j] = evaluateTileOverlap(filepath1, filepath2, sps, roiEast, roiWest, matrices[filepath1], matrices[filepath2])
   # Store and show scores
   sc = [(i, j, score) for i, row in scores.iteritems() for j, score in row.iteritems()]
   with open(os.path.join(csvDir, groupName + ".montage_scores.csv"), 'w') as f:
@@ -1333,7 +1336,7 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
         if 1 == len(tileGroups[i-1]):
           syncPrintQ("evaluate montage: skipping %s with 1 single tile." % groupNames[i-1])
           continue
-        futures.add(exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels)))
+        futures.append(exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels)))
       for fu in futures:
         scores = fu.get()
         syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %i,%i: %f" % s for s in scores)))

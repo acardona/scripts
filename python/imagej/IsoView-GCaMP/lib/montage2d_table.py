@@ -129,7 +129,7 @@ class Action(AbstractAction):
     opener.openImages(rowIndex)
 
 class RowClickListener(MouseAdapter, ListSelectionListener):
-  def __init__(self, model, exe, imp, volumeImg, csvDir, table, overlap, offset, params_pixels):
+  def __init__(self, model, exe, imp, volumeImg, csvDir, table, overlap, offset, params_pixels, runEvaluateMontages):
     self.model = model
     self.exe = exe
     self.imp = imp
@@ -139,6 +139,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     self.overlap = overlap
     self.offset = offset
     self.params_pixels = params_pixels
+    self.runEvaluateMontages = runEvaluateMontages
     self.firstIndex = -1
     self.lastIndex = -1
     
@@ -449,10 +450,10 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
       firstIndex, lastIndex = int(gd.getNextNumber()), int(gd.getNextNumber())
       slice_indices = range(firstIndex, lastIndex + 1) # Already 1-based
       numThreads = int(gd.getNextNumber())
-      self.exe.submit(Task(runEvaluateMontages, self.model.groupNames, self.model.tileGroups, csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, n_threads=numThreads))
+      self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, n_threads=numThreads))
 
   def evaluateAllMontages(self):
-    self.exe.submit(Task(runEvaluateMontages, self.model.groupNames, self.model.tileGroups, csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, n_threads=numCPUs()))
+    self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, n_threads=numCPUs()))
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
@@ -506,7 +507,7 @@ class ColorCellRenderer(DefaultTableCellRenderer):
       label.setBackground(Color.white)
     return label
 
-def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, offset, params_pixels, show=True):
+def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, offset, params_pixels, runEvaluateMontages, show=True):
   # Load data for all failed montages
   failed = filter(lambda filename: filename.startswith("failed_montages_"), os.listdir(csvDir))
   failed_groupNames = set()
@@ -579,7 +580,7 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, of
   search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
 
   # Enable opening raw DAT files when double-clicking a row
-  opener = RowClickListener(model, exe, imp, volumeImg, csvDir, table, overlap, offset, params_pixels)
+  opener = RowClickListener(model, exe, imp, volumeImg, csvDir, table, overlap, offset, params_pixels, runEvaluateMontages)
   table.addMouseListener(opener)
 
   # Enable pushing enter instead of clicking
