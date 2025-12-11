@@ -3,7 +3,7 @@ from lib.registration import loadMatrices
 from lib.img import showAlignedImg
 from lib.util import syncPrintQ, printException, newThread
 from lib.ui import RowClickListener, showTable, duplicateInParallel
-from lib.pixels import pairwiseCosyneSimilarity
+from lib.pixels import pairwiseCosineSimilarity
 from lib.io import moveToTmpDir
 from net.imglib2 import FinalInterval
 from functools import partial
@@ -58,11 +58,11 @@ def openChunkVolume(groupNames, montage_img, csvDir, properties, chunk_matrices_
   return imgA, impA, start, end
 
 
-def makeTableCosyneSimilarity(openVolumeFn):
+def makeTableCosineSimilarity(openVolumeFn):
   # Load a virtual aligned volume
   imgA, impA, start, end = openVolumeFn()
   # Compute for all pairs of adjacent sections, in parallel
-  cs = pairwiseCosyneSimilarity(imgA)
+  cs = pairwiseCosineSimilarity(imgA)
   
   table, frame = showTable(zip(("%i-%i" % (i, i+1) for i in xrange(start, end)), cs), # two columns: indices and score
       title="Cosyne similarities for sections %i-%i" % (start, end),
@@ -139,10 +139,10 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties, reRunFn):
     newThread(openChunkVolume, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 1), virtual=False)
   
   def launchCosSimForChunk(table_model, rowIndex):
-    newThread(makeTableCosyneSimilarity, partial(openChunkVolume, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 1)))
+    newThread(makeTableCosineSimilarity, partial(openChunkVolume, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 1)))
   
   def launchCosSimForAll(table_model, rowIndex):
-    newThread(makeTableCosyneSimilarity, partial(openVolume, groupNames, montage_img, csvDir, properties, "matrices.csv"))
+    newThread(makeTableCosineSimilarity, partial(openVolume, groupNames, montage_img, csvDir, properties, "matrices.csv"))
 
   def reRunChunkAlignmentForSection(table_model, rowIndex):
     gd = GenericDialog("Choose")

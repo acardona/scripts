@@ -54,7 +54,7 @@ def autoAdjust(ip):
   return minimum, maximum
 
 
-class ComputeCosyneSimilarity(Callable):
+class ComputeCosineSimilarity(Callable):
   def __init__(self, img, sqrtSumSq, i, j):
     self.img = img
     self.sqrtSumSq = sqrtSumSq
@@ -71,13 +71,13 @@ class ComputeCosyneSimilarity(Callable):
     return v
 
 
-def pairwiseCosyneSimilarity(imgVolume, nThreads=0, roi=None):
+def pairwiseCosineSimilarity(imgVolume, nThreads=0, roi=None):
   """
   roi: [x, y, width, height]
   Returns an array of length imgVolume.dimension(2) -1,
   where each item is the cosyne similarity between slice i and i+1.
   """
-  exe = newFixedThreadPool(min(numCPUs(), imgVolume.dimension(2)) if 0 == nThreads else 0) # 0 means max
+  exe = newFixedThreadPool(min(numCPUs(), imgVolume.dimension(2)) if 0 == nThreads else nThreads) # 0 means max
   try:
     # Crop view to interval if roi is not None
     if roi:
@@ -91,7 +91,7 @@ def pairwiseCosyneSimilarity(imgVolume, nThreads=0, roi=None):
     # Compute all pairwise cosyne similarities
     futures = []
     for i in xrange(imgVolume.dimension(2) -1):
-      futures.append(exe.submit(ComputeCosyneSimilarity(imgVolume, sqrtSumSq, i, i+1)))
+      futures.append(exe.submit(ComputeCosineSimilarity(imgVolume, sqrtSumSq, i, i+1)))
     return [fu.get() for fu in futures]
   except:
     printException()
