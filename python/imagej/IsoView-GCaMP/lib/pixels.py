@@ -67,7 +67,7 @@ class ComputeCosineSimilarity(Callable):
                                         self.sqrtSumSq[self.i],
                                         Views.hyperSlice(self.img, 2, self.j),
                                         self.sqrtSumSq[self.j])
-    syncPrintQ("Cosine similarity for %i-%i: %f" % (self.i, self.j, v))
+    #syncPrintQ("Cosine similarity for %i-%i: %f" % (self.i, self.j, v))
     return v
 
 

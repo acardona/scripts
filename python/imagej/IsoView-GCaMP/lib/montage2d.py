@@ -19,7 +19,7 @@ from java.io import File
 from ij.process import ShortProcessor, ByteProcessor
 from ij.gui import ShapeRoi, PointRoi, Roi, GenericDialog
 from ij.io import OpenDialog, FileSaver
-from ij import ImagePlus, IJ
+from ij import ImagePlus, IJ, ImageStack
 from net.imglib2.img.array import ArrayImgs
 try:
   from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
@@ -1244,7 +1244,7 @@ def loadMontagedImg(srcDir, montageDir, repairedDir,
   return img, groupNames, tileGroups, filepaths
 
 
-def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2):
+def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2, debug=False):
   """
   Expects matrices in integers.
   Returns the cosine similarity score of the overlapping region, or 0.0 when no overlap.
@@ -1270,7 +1270,15 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2)
   sp2 = sps[filepath2]
   sp2.setRoi(ir2)
   sp_ir2 = sp2.crop()
-  print type(sp_ir1)
+  if debug:
+    # Show the crops in a stack titled with tile IDs like 0-0 vs 0-1
+    pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
+    stack = ImageStack(sp_ir1.getWidth(), sp_ir1.getHeight())
+    for filepath, sp_ir in [(filepath1, sp_ir1), (filepath2, sp_ir2)]:
+      i_row, i_col = map(int, re.match(pattern, filepath[filepath.rfind('_')+1:]).groups())
+      #ImagePlus("%i-%i" % (i_row, i_col), sp_ir).show()
+      stack.addSlice("%i-%i" % (i_row, i_col), sp_ir)
+    ImagePlus(filepath1[filepath1.rfind('/')+1:filepath1.rfind('_')+1], stack).show()
   # Compare the cutouts with cosine similarity
   stack = Views.stack(ArrayImgs.unsignedShorts(sp_ir1.getPixels(), sp_ir1.getWidth(), sp_ir1.getHeight()),
                       ArrayImgs.unsignedShorts(sp_ir2.getPixels(), sp_ir2.getWidth(), sp_ir2.getHeight()))
@@ -1278,7 +1286,7 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2)
   return cs[0]
 
 
-def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels):
+def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels, debug=False):
   # TODO should really be done right after montaging, when images are loaded.
   # One matrix per tile in the montage, in ints
   matrices = dict(zip(tilePaths,
@@ -1293,7 +1301,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
   # The list of tiles sorted into rows and columns by their e.g., 0-0-0 name tags
   rows = parseRowsAndCols(tilePaths)
   # For every overlapping pair of tiles run pixels.py cosine similarity for the overlapping areas
-  scores = defaultdict(partial(defaultdict, float))
+  scores = []
   for i, row in rows.items():
     for j, filepath2 in row.items():
       # Test each tile with the tile on its left and on top, if any
@@ -1303,24 +1311,24 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
         if not filepath1: # an empty string
           continue # tile is missing from the montage
         # Test with roiSouth, roiNorth
-        scores[i][j] = evaluateTileOverlap(filepath1, filepath2, sps, roiSouth, roiNorth, matrices[filepath1], matrices[filepath2])
-
+        score = evaluateTileOverlap(filepath1, filepath2, sps, roiSouth, roiNorth, matrices[filepath1], matrices[filepath2], debug=debug)
+        scores.append(("%i-%i vs %i-%i" % (i-1, j, i, j), score))
       if j > 0:
         # Link with tile to the left
         filepath1 = rows[i][j-1]
         if not filepath1: # an empty string
           continue # tile is missing from the montage
         # Test with roiEast, roiWest
-        scores[i][j] = evaluateTileOverlap(filepath1, filepath2, sps, roiEast, roiWest, matrices[filepath1], matrices[filepath2])
+        score = evaluateTileOverlap(filepath1, filepath2, sps, roiEast, roiWest, matrices[filepath1], matrices[filepath2], debug=debug)
+        scores.append(("%i-%i vs %i-%i" % (i, j-1, i, j), score))
   # Store and show scores
-  sc = [(i, j, score) for i, row in scores.iteritems() for j, score in row.iteritems()]
   with open(os.path.join(csvDir, groupName + ".montage_scores.csv"), 'w') as f:
     f.write("row, column, score\n")
-    f.write("\n".join("%i, %i, %f\n" % tile for tile in sc))
+    f.write("\n".join("%s, %f" % pair for pair in scores))
     # Ensure it's written
     f.flush()
     os.fsync(f.fileno())
-  return sc
+  return scores
 
 
 
@@ -1339,7 +1347,7 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
         futures.append(exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels)))
       for fu in futures:
         scores = fu.get()
-        syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %i,%i: %f" % s for s in scores)))
+        syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %s: %f" % s for s in scores)))
       return [fu.get() for fu in futures]
     except:
       printException()
