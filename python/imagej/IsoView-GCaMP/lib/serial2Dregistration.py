@@ -1662,6 +1662,7 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
 
   # Prepare parameters for showAlignedImg
   cropInterval = FinalInterval([imgMontaged.dimension(0) + int(max_x + 0.5), imgMontaged.dimension(1) + int(max_y + 0.5)]) # The whole 2D view
+  #cropInterval = FinalInterval([imgMontaged.dimension(0), imgMontaged.dimension(1)]) # The whole 2D view
   properties["preload"] = 0 # don't
   
   # Correct origin of coordinates with a translation, for when sections fall partially outside the canvas
@@ -1670,6 +1671,8 @@ def runShiftDetection(imgMontaged, groupNames, SIFTdir, properties,
     for m in matrices:
       m[2] += dx
       m[5] += dy
+      
+  syncPrintQ("cropInterval: " + str(cropInterval))
   
   # View the imgMontaged with shifts
   img, imp = showAlignedImg(imgMontaged, cropInterval, groupNames, properties,
