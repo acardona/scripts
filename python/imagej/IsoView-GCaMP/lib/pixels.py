@@ -163,7 +163,7 @@ def phaseCorrelationTranslation(spA, spB, n_threads=1, nHighestPeaks=5, minOverl
                                          ComplexFloatType(),
                                          exe)
     # Minimum image overlap to consider, in pixels
-    minOverlap = min(spA.getWidth(), spA.getHeight()) * max(0, min(minOverlapFraction, 1.0))
+    minOverlap = int(min(spA.getWidth(), spA.getHeight()) * max(0, min(minOverlapFraction, 1.0)) + 0.5)
     # Returns an instance of PhaseCorrelationPeak2
     peak = PhaseCorrelation2.getShift(pcm, spA_img, spB_img, nHighestPeaks,
                                       minOverlap, True, True, exe)
@@ -180,6 +180,7 @@ def phaseCorrelationTranslation(spA, spB, n_threads=1, nHighestPeaks=5, minOverl
     # No peaks found
     syncPrintQ("PhaseCorrelation2: no peaks found.")
     printException()
+    return [float('NaN')] * 3
   finally:
     exe.shutdown()
 
