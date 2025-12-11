@@ -10,6 +10,7 @@ from lib.ui import wrap, wrap8bit
 from lib.loop import createBiConsumerTypeSet
 from lib.montage2d_table import makeMontageTable
 from lib.segmentation_em import makeFilterFeaturesFn
+from lib.pixels import pairwiseCosineSimilarityST
 
 from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable, String
@@ -263,6 +264,25 @@ def process(sp, params_pixels):
   return sp
 
 
+def makeROIs(width, height, overlap, offset):
+  # left-right
+  roiEast = Roi(width - overlap, 0, overlap, height) # right edge, for tile 0-0-0  (and 0-1-0)
+  roiWest = Roi(self.offset, 0, overlap, height)     # left edge,  for tile 0-0-1  (and 0-1-1)
+  # top-bottom
+  roiSouth = Roi(0, height - overlap, width, overlap) # bottom edge, for tile 0-0-0  (and 0-0-1)
+  roiNorth = Roi(0, 0, width, overlap)                # top edge,    for tile 0-1-0  (and 0-1-1)
+  return roiEast, roiWest, roiSouth, roiNorth
+
+
+def parseRowsAndCols(tilePaths):
+  # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
+  rows = defaultdict(partial(defaultdict, str))
+  pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
+  for filepath in tilePaths:
+    i_row, i_col = map(int, re.match(pattern, filepath[filepath.rfind('_')+1:]).groups())
+    rows[i_row][i_col] = filepath
+  return rows
+
 
 class MontageSlice(Callable):
   def __init__(self, groupName, tilePaths, overlap, nominal_overlap, offset,
@@ -294,13 +314,7 @@ class MontageSlice(Callable):
     self.paramsFilterFeatures = paramsFilterFeatures
 
     # Determine rows and columns
-    self.rows = defaultdict(partial(defaultdict, str))
-    pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
-    for filepath in self.tilePaths:
-      # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
-      i_row, i_col = map(int, re.match(pattern, filepath[filepath.rfind('_')+1:]).groups())
-      self.rows[i_row][i_col] = filepath
-
+    self.rows = parseRowsAndCols(self.tilePaths)
 
   def connectTiles(self, filepath1, filepath2, sps, tiles, roi0, roi1, offset, filterFeaturesFn=None):
     pointmatches, n_inliers = getPointMatches(sps[filepath1], roi0, sps[filepath2], roi1, offset,
@@ -336,12 +350,7 @@ class MontageSlice(Callable):
     height = sps[self.tilePaths[0]].getHeight()
 
     # Define 4 ROIs: (x, y, width, height)
-    # left-right
-    roiEast = Roi(width - self.overlap, 0, self.overlap, height) # right edge, for tile 0-0-0  (and 0-1-0)
-    roiWest = Roi(self.offset, 0, self.overlap, height)          # left edge,  for tile 0-0-1  (and 0-1-1)
-    # top-bottom
-    roiSouth = Roi(0, height - self.overlap, width, self.overlap) # bottom edge, for tile 0-0-0  (and 0-0-1)
-    roiNorth = Roi(0, 0, width, self.overlap)                     # top edge,    for tile 0-1-0  (and 0-1-1)
+    roiEast, roiWest, roiSouth, roiNorth = makeROIs(width, height, self.overlap, self.offset)
 
     # Assumes all tiles have the same dimensions
     if self.paramsFilterFeatures:
@@ -1009,7 +1018,7 @@ def makeVolume(groupNames, tileGroups, section_width, section_height, overlap, n
       stack.setSliceLabel(groupName, i+1) # 1-based
     # Show a JTable for opening raw images and slice ranges
     if showTable:
-      table = makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True)
+      table = makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, offset, params_pixels, show=True)
   
   return volumeImg
 
@@ -1233,3 +1242,105 @@ def loadMontagedImg(srcDir, montageDir, repairedDir,
                    showTable=False, crop_ROI=crop_ROI, paramsFilterFeatures=paramsFilterFeatures)
                    
   return img, groupNames, tileGroups, filepaths
+
+
+def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2):
+  """
+  Returns the cosine similarity score of the overlapping region, or 0.0 when no overlap.
+  """
+  # Find the intersection
+  r1 = roi1.getBounds() # in tile1 coordinates
+  r1.translate(matrix1[2], matrix1[5]) # in montage coordinates
+  r2 = roi2.getBounds() # in tile2 coordinates
+  r2.translate(matrix2[2], matrix2[5]) # in montage coordinates
+  intersection = r1.intersection(r2) # in montage coordinates
+  # Check if they intersect at all
+  if 0 == width or 0 == height:
+    return 0.0
+  # Translate the intersection to each tile's pixels coordinates
+  ir1 = intersection.clone()
+  ir1.translate(-matrix1[2], -matrix1[5]) # in tile1 coordinates
+  ir2 = intersection.clone()
+  ir2.translate(-matrix2[2], -matrix2[5]) # in tile2 coordinates
+  # Cut the two ROIs from the image tiles
+  sp1 = sps[filepath1]
+  sp1.setRoi(ir1)
+  sp_ir1 = sp1.crop()
+  sp2 = sps[filepath2]
+  sp2.setRoi(ir2)
+  sp_ir2 = sp2.crop()
+  # Compare the cutouts with cosine similarity
+  stack = Views.stack(ArrayImgs.unsignedShorts(sp_ir1.getPixels(), sp_ir1.getWidth(), sp_ir1.getHeight(),
+                      ArrayImgs.unsignedShorts(sp_ir2.getPixels(), sp_ir2.getWidth(), sp_ir2.getHeight())))
+  cs = pairwiseCosineSimilarityST(stack, roi=None)
+  return cs[0]
+
+
+def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels):
+  # TODO should really be done right after montaging, when images are loaded.
+  # One matrix per tile in the montage
+  matrices = loadMatrices(groupName, csvDir)
+  # The list of ShortProcessor, one per tile
+  sps = loadShortProcessors(tilePaths, params_pixels, asDict=True) # as 16-bit, unprocessed (needs the params_pixels in case images have to be opened as floats)
+  # Assumes images have the same dimensions
+  width  = sps[tilePaths[0]].getWidth()
+  height = sps[tilePaths[0]].getHeight()
+  # Generic positional edge ROIs
+  roiEast, roiWest, roiSouth, roiNorth = makeROIs(width, height, overlap, offset)
+  # The list of tiles sorted into rows and columns by their e.g., 0-0-0 name tags
+  rows = parseRowsAndCols(tilePaths)
+  # For every overlapping pair of tiles run pixels.py cosine similarity for the overlapping areas
+  scores = defaultdict(partial(defaultdict, float))
+  for i, row in rows.items():
+    for j, filepath2 in row.items():
+      # Test each tile with the tile on its left and on top, if any
+      if i > 0:
+        # Link with tile above
+        filepath1 = rows[i-1][j]
+        if not filepath1: # an empty string
+          continue # tile is missing from the montage
+        # Test with roiSouth, roiNorth
+        scores[i][j] = evaluateTileOverlap(filepath1, filepath2, sps, roiSouth, roiNorth, matrices.index(filepath1), matrices.index(filepath2))
+
+      if j > 0:
+        # Link with tile to the left
+        filepath1 = rows[i][j-1]
+        if not filepath1: # an empty string
+          continue # tile is missing from the montage
+        # Test with roiEast, roiWest
+        scores[i][j] = evaluateTileOverlap(filepath1, filepath2, sps, roiEast, roiWest, matrices.index(filepath1), matrices.index(filepath2))
+  # Store and show scores
+  sc = [(i, j, score) for i, row in scores.iteritems() for j, score in row.iteritems()]
+  with open(os.path.join(csvDir, groupName + ".montage_scores.csv"), 'w') as f:
+    f.write("row, column, score\n")
+    f.write("\n".join("%i, %i, %f\n" % tile for tile in sc))
+    # Ensure it's written
+    f.flush()
+    os.fsync(f.fileno())
+  return sc
+
+
+
+def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, offset, params_pixels, n_threads=0):
+    """
+    For every montage in slice_indices (1-based), score the overlapping parts of tiles
+    with cosine similarity.
+    """
+    exe = newFixedThreadPool(n_threads)
+    try:
+      futures = []
+      for i in slice_indices: # 1-based
+        if 1 == len(tileGroups[i-1])
+          syncPrintQ("evaluate montage: skipping %s with 1 single tile." % groupNames[i-1])
+          continue
+        futures.add(exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels)))
+      for fu in futures:
+        scores = fu.get()
+        syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %i,%i: %f" % s for s in scores)))
+      return [fu.get() for fu in futures]
+    except:
+      printException()
+    finally:
+      exe.shutdown()
+
+

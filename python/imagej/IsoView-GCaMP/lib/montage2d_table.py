@@ -129,12 +129,16 @@ class Action(AbstractAction):
     opener.openImages(rowIndex)
 
 class RowClickListener(MouseAdapter, ListSelectionListener):
-  def __init__(self, model, exe, imp, csvDir, table):
+  def __init__(self, model, exe, imp, volumeImg, csvDir, table, overlap, offset, params_pixels):
     self.model = model
     self.exe = exe
     self.imp = imp
+    self.volumeImg = volumeImg
     self.csvDir = csvDir
     self.table = table
+    self.overlap = overlap
+    self.offset = offset
+    self.params_pixels = params_pixels
     self.firstIndex = -1
     self.lastIndex = -1
     
@@ -192,7 +196,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       if os.path.exists(targetDir):
         OpenDialog.setDefaultDirectory(targetDir)
       #print targetDir, firstIndex, lastIndex, scale, numThreads, incremental
-      self.exe.submit(Task(saveInParallel(targetDir, self.imp, slice_indices, n_threads=numThreads, show=True, scale=scale, incremental=incremental)))
+      self.exe.submit(Task(saveInParallel, targetDir, self.imp, slice_indices, n_threads=numThreads, show=True, scale=scale, incremental=incremental))
 
   def deleteMontageCSVFiles(self):
     if self.table.getSelectedRowCount() > 0:
@@ -432,6 +436,23 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
     #
     newThread(sampleStack, self.imp, spacing, width, self.csvDir)
   
+  def evaluateMontages(self, event):
+    if self.firstIndex > -1 and self.lastIndex > -1:
+      gd = GenericDialog("Evaluate montages")
+      gd.addMessage("1-based slice indices")
+      gd.addNumericField("First slice: ", self.getRow(firstIndex)[0], 0, 6, "")
+      gd.addNumericField("Last slice: ", self.getRow(lastIndex)[0], 0, 6, "")
+      gd.addNumericField("Number of threads: ", max(1, numCPUs()), 0, 4, "")
+      gd.showDialog()
+      if not gd.wasOKed():
+        return
+      firstIndex, lastIndex = int(gd.getNextNumber()), int(gd.getNextNumber())
+      slice_indices = range(firstIndex, lastIndex + 1) # Already 1-based
+      numThreads = int(gd.getNextNumber())
+      self.exe.submit(Task(runEvaluateMontages, self.model.groupNames, self.model.tileGroups, csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, n_threads=numThreads))
+
+  def evaluateAllMontages(self, event):
+    self.exe.submit(Task(runEvaluateMontages, self.model.groupNames, self.model.tileGroups, csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, n_threads=numThreads())
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
@@ -449,6 +470,10 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
       popup.addSeparator()
       popup.add(JMenuItem("Open sampled stack for Labkit...",
                           actionPerformed=lambda event: self.openSampledStackForLabkit()))
+      popup.addSeparator()
+      popup.add(JMenuItem("Evaluate montages..."),
+      popup.add(JMenuItem("Evaluate all montages"),
+                          actionPerformed=lambda event: self.evaluateAllMontages())
       popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):
@@ -480,7 +505,7 @@ class ColorCellRenderer(DefaultTableCellRenderer):
       label.setBackground(Color.white)
     return label
 
-def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
+def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, params_pixels, show=True):
   # Load data for all failed montages
   failed = filter(lambda filename: filename.startswith("failed_montages_"), os.listdir(csvDir))
   failed_groupNames = set()
@@ -553,7 +578,7 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, show=True):
   search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
 
   # Enable opening raw DAT files when double-clicking a row
-  opener = RowClickListener(model, exe, imp, csvDir, table)
+  opener = RowClickListener(model, exe, imp, volumeImg, csvDir, table, overlap, offset, params_pixels)
   table.addMouseListener(opener)
 
   # Enable pushing enter instead of clicking
