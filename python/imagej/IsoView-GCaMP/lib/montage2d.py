@@ -1,5 +1,5 @@
 from __future__ import with_statement
-import os, re, sys
+import os, re, sys, math
 from datetime import datetime
 
 from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task, ParallelTasks
@@ -10,7 +10,7 @@ from lib.ui import wrap, wrap8bit
 from lib.loop import createBiConsumerTypeSet
 from lib.montage2d_table import makeMontageTable
 from lib.segmentation_em import makeFilterFeaturesFn
-from lib.pixels import pairwiseCosineSimilarityST
+from lib.pixels import pairwiseCosineSimilarityST, crossCorrelation, phaseCorrelationTranslation
 
 from java.util import ArrayList, Vector, HashSet
 from java.lang import Double, Exception, Throwable, String
@@ -22,11 +22,13 @@ from ij.io import OpenDialog, FileSaver
 from ij import ImagePlus, IJ, ImageStack
 from net.imglib2.img.array import ArrayImgs
 try:
-  from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2, PhaseCorrelation2Util
+  from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
 except:
   print "MISSING: class PhaseCorrelation2, from the BigStitcher update site."
 from net.imglib2.type import Type
 from net.imglib2.type.numeric.real import FloatType
+from net.imglib2.type.numeric.real import FloatType
+from net.imglib2.type.numeric.complex import ComplexFloatType
 from net.imglib2.type.numeric.complex import ComplexFloatType
 from net.imglib2.type.numeric.integer import UnsignedShortType, UnsignedByteType, GenericByteType
 from net.imglib2.type import PrimitiveType
@@ -1287,9 +1289,21 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2,
   return cs[0]
   """
   # Compare the cutouts with cross-correlation
-  return PhaseCorrelation2Util.getCorrelation(
-           ArrayImgs.unsignedShorts(sp_ir1.getPixels(), sp_ir1.getWidth(), sp_ir1.getHeight()),
-           ArrayImgs.unsignedShorts(sp_ir2.getPixels(), sp_ir2.getWidth(), sp_ir2.getHeight()))
+  cc = crossCorrelation(sp_ir1, sp_ir2)
+
+  # Compute translation shift with phase correlation
+  dx, dy, cc2 = phaseCorrelationTranslation(sp_ir1, sp_ir2)
+
+  # Translation amount
+  d = math.sqrt(dx*dx + dy*dy)
+
+  syncPrintQ("cc: %i -- PC: dx, dy, d, cc: %f, %f, %f, %f" % (cc, dx, dy, d, cc2))
+
+  # cc: cross-correlation as-is
+  # dx, dy: translation computed with PhaseCorrelation2
+  # d: the translation as a distance, i.e., length of the dx,dy vector
+  # cc2: cross-correlation score when translated by dx,dy
+  return cc, dx, dy, d, cc2
 
 
 def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels, debug=False):
@@ -1330,7 +1344,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
   # Store and show scores
   with open(os.path.join(csvDir, groupName + ".montage_scores.csv"), 'w') as f:
     f.write("row, column, score\n")
-    f.write("\n".join("%s, %f" % pair for pair in scores))
+    f.write("\n".join("%s, %f, %f, %f, %f, %f" % (s, cc, dx, dy, d, cc2) for s, (cc, dx, dy, d, cc2) in scores))
     # Ensure it's written
     f.flush()
     os.fsync(f.fileno())
@@ -1354,7 +1368,7 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
         futures.append((i, exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels))))
       for i, fu in futures:
         scores = fu.get()
-        syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %s: %f" % s for s in scores)))
+        syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %s: %f, %f" % (s, cc, d) for s, (cc, d) in scores)))
       return [fu.get() for i, fu in futures]
     except:
       printException()

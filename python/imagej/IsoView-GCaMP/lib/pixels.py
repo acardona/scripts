@@ -3,6 +3,14 @@ from lib.pixels_asm import ImgCompare
 from lib.util import printException, newFixedThreadPool, numCPUs, isThreadDead, syncPrintQ, Task
 from java.util.concurrent import Callable
 from net.imglib2.view import Views
+from net.imglib2.type.numeric.real import FloatType
+from net.imglib2.type.numeric.complex import ComplexFloatType
+from net.imglib2.img.array import ArrayImgFactory
+try:
+  from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2, PhaseCorrelation2Util
+except:
+  print "MISSING: class PhaseCorrelation2, from the BigStitcher update site."
+
 
 def autoAdjust(ip):
   """
@@ -123,9 +131,56 @@ def pairwiseCosineSimilarityST(imgVolume, roi=None):
     printException()
 
 
+def crossCorrelation(sp1, sp2):
+  """
+  Assumes both ShortProcessor have the same dimensions.
+  Returns a float between 0 and 1: the Pearson cross-correlation score.
+  """
+  return PhaseCorrelation2Util.getCorrelation(
+           ArrayImgs.unsignedShorts(sp1.getPixels(), sp1.getWidth(), sp1.getHeight()),
+           ArrayImgs.unsignedShorts(sp2.getPixels(), sp2.getWidth(), sp2.getHeight()))
 
 
+def phaseCorrelationTranslation(spA, spB, n_threads=1, nHighestPeaks=5, minOverlapFraction=0.25):
+  """
+  Compute the best translation between two ShortProcessor images of the same dimensions.
+  nHighestPeaks: number of phase correlation peaks to check with cross-correlation.
+  minOverlapFraction: minimal percent of overlap between the images to consider a peak valid.
 
+  Returns: dx, dy, crossCorr
+  """
+  spA_img = ArrayImgs.unsignedShorts(spA.getPixels(), spA.getWidth(), spA.getHeight())
+  spB_img = ArrayImgs.unsignedShorts(spB.getPixels(), spB.getWidth(), spB.getHeight())
+  # Thread pool
+  exe = newFixedThreadPool(n_threads=n_threads, name="phase-correlation")
+  try:
+    # PCM: phase correlation matrix
+    pcm = PhaseCorrelation2.calculatePCM(spA_img,
+                                         spB_img,
+                                         ArrayImgFactory(FloatType()),
+                                         FloatType(),
+                                         ArrayImgFactory(ComplexFloatType()),
+                                         ComplexFloatType(),
+                                         exe)
+    # Minimum image overlap to consider, in pixels
+    minOverlap = min(spA.getWidth(), spA.getHeight()) * max(0, min(minOverlapFraction, 1.0))
+    # Returns an instance of PhaseCorrelationPeak2
+    peak = PhaseCorrelation2.getShift(pcm, spA_img, spB_img, nHighestPeaks,
+                                      minOverlap, True, True, exe)
+    # Best translation
+    shift = peak.getSubpixelShift()
+    dx = shift.getFloatPosition(0)
+    dy = shift.getFloatPosition(1)
 
+    # Cross-correlation
+    cc = peak.getCrossCorr()
+
+    return dx, dy, cc
+  except Exception, e:
+    # No peaks found
+    syncPrintQ("PhaseCorrelation2: no peaks found.")
+    printException()
+  finally:
+    exe.shutdown()
 
 
