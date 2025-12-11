@@ -100,6 +100,29 @@ def pairwiseCosineSimilarity(imgVolume, nThreads=0, roi=None):
 
 
 
+def pairwiseCosineSimilarityST(imgVolume, roi=None):
+  """
+  roi: [x, y, width, height]
+  Returns an array of length imgVolume.dimension(2) -1,
+  where each item is the cosyne similarity between slice i and i+1.
+  Runs on the calling thread, single-threaded.
+  """
+  try:
+    # Crop view to interval if roi is not None
+    if roi:
+      imgVolume = Views.interval(imgVolume, [roi[0], roi[0] + roi[2] -1, 0],
+                                            [roi[1], roi[1] + roi[3] -1, imgVolume.dimension(2) -1])    
+    # Compute all sqrtSumSquares values, one for each 2D section
+    sqrtSumSq = [ImgCompare.sqrtSumSquares(Views.hyperSlice(imgVolume, 2, i))
+                 for i in xrange(imgVolume.dimension(2))]
+    # Compute all pairwise cosyne similarities
+    cs = [ComputeCosineSimilarity(imgVolume, sqrtSumSq, i, i+1)
+          for i in xrange(imgVolume.dimension(2) -1)]
+    return cs
+  except:
+    printException()
+  finally:
+    exe.shutdown()
 
 
 
