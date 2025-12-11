@@ -22,7 +22,7 @@ from ij.io import OpenDialog, FileSaver
 from ij import ImagePlus, IJ, ImageStack
 from net.imglib2.img.array import ArrayImgs
 try:
-  from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2
+  from net.imglib2.algorithm.phasecorrelation import PhaseCorrelation2, PhaseCorrelation2Util
 except:
   print "MISSING: class PhaseCorrelation2, from the BigStitcher update site."
 from net.imglib2.type import Type
@@ -1279,11 +1279,17 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2,
       #ImagePlus("%i-%i" % (i_row, i_col), sp_ir).show()
       stack.addSlice("%i-%i" % (i_row, i_col), sp_ir)
     ImagePlus(filepath1[filepath1.rfind('/')+1:filepath1.rfind('_')+1], stack).show()
+  """
   # Compare the cutouts with cosine similarity
   stack = Views.stack(ArrayImgs.unsignedShorts(sp_ir1.getPixels(), sp_ir1.getWidth(), sp_ir1.getHeight()),
                       ArrayImgs.unsignedShorts(sp_ir2.getPixels(), sp_ir2.getWidth(), sp_ir2.getHeight()))
   cs = pairwiseCosineSimilarityST(stack, roi=None)
   return cs[0]
+  """
+  # Compare the cutouts with cross-correlation
+  return PhaseCorrelation2Util.getCorrelation(
+           ArrayImgs.unsignedShorts(sp_ir1.getPixels(), sp_ir1.getWidth(), sp_ir1.getHeight()),
+           ArrayImgs.unsignedShorts(sp_ir2.getPixels(), sp_ir2.getWidth(), sp_ir2.getHeight()))
 
 
 def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels, debug=False):
@@ -1343,12 +1349,13 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
       for i in slice_indices: # 1-based
         if 1 == len(tileGroups[i-1]):
           syncPrintQ("evaluate montage: skipping %s with 1 single tile." % groupNames[i-1])
+          futures.append(i, float('NaN'))
           continue
-        futures.append(exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels)))
-      for fu in futures:
+        futures.append((i, exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels))))
+      for i, fu in futures:
         scores = fu.get()
         syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %s: %f" % s for s in scores)))
-      return [fu.get() for fu in futures]
+      return [fu.get() for i, fu in futures]
     except:
       printException()
     finally:
