@@ -25,4 +25,4 @@ params_pixels = {
   "interim_scale": 0.125, # for saving montaged snapshops to disk to be used for evaluation and serial alignment
 }
 
-print evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels, debug=True)
+print evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels, debug=False)
