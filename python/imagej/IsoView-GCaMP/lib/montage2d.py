@@ -1186,7 +1186,7 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   
   # Show a JTable for opening raw images and slice ranges
   if showTable:
-    table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, show=True)
+    table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, overlap, offset, params_pixels, show=True)
   
   return volumeImgMontagedScaled, groupNames, tileGroups
 
@@ -1330,7 +1330,7 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
     try:
       futures = []
       for i in slice_indices: # 1-based
-        if 1 == len(tileGroups[i-1])
+        if 1 == len(tileGroups[i-1]):
           syncPrintQ("evaluate montage: skipping %s with 1 single tile." % groupNames[i-1])
           continue
         futures.add(exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels)))

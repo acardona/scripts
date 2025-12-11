@@ -436,12 +436,12 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
     #
     newThread(sampleStack, self.imp, spacing, width, self.csvDir)
   
-  def evaluateMontages(self, event):
+  def evaluateMontages(self):
     if self.firstIndex > -1 and self.lastIndex > -1:
       gd = GenericDialog("Evaluate montages")
       gd.addMessage("1-based slice indices")
-      gd.addNumericField("First slice: ", self.getRow(firstIndex)[0], 0, 6, "")
-      gd.addNumericField("Last slice: ", self.getRow(lastIndex)[0], 0, 6, "")
+      gd.addNumericField("First slice: ", self.getRow(self.firstIndex)[0], 0, 6, "")
+      gd.addNumericField("Last slice: ", self.getRow(self.lastIndex)[0], 0, 6, "")
       gd.addNumericField("Number of threads: ", max(1, numCPUs()), 0, 4, "")
       gd.showDialog()
       if not gd.wasOKed():
@@ -451,8 +451,8 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
       numThreads = int(gd.getNextNumber())
       self.exe.submit(Task(runEvaluateMontages, self.model.groupNames, self.model.tileGroups, csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, n_threads=numThreads))
 
-  def evaluateAllMontages(self, event):
-    self.exe.submit(Task(runEvaluateMontages, self.model.groupNames, self.model.tileGroups, csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, n_threads=numThreads())
+  def evaluateAllMontages(self):
+    self.exe.submit(Task(runEvaluateMontages, self.model.groupNames, self.model.tileGroups, csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, n_threads=numCPUs()))
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
@@ -471,9 +471,10 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
       popup.add(JMenuItem("Open sampled stack for Labkit...",
                           actionPerformed=lambda event: self.openSampledStackForLabkit()))
       popup.addSeparator()
-      popup.add(JMenuItem("Evaluate montages..."),
-      popup.add(JMenuItem("Evaluate all montages"),
-                          actionPerformed=lambda event: self.evaluateAllMontages())
+      popup.add(JMenuItem("Evaluate montages...",
+                          actionPerformed=lambda event: self.evaluateMontages()))
+      popup.add(JMenuItem("Evaluate all montages",
+                          actionPerformed=lambda event: self.evaluateAllMontages()))
       popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):
@@ -505,7 +506,7 @@ class ColorCellRenderer(DefaultTableCellRenderer):
       label.setBackground(Color.white)
     return label
 
-def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, params_pixels, show=True):
+def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, offset, params_pixels, show=True):
   # Load data for all failed montages
   failed = filter(lambda filename: filename.startswith("failed_montages_"), os.listdir(csvDir))
   failed_groupNames = set()
