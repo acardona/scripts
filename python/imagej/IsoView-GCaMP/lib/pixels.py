@@ -1,4 +1,4 @@
-from ij.process import ImageStatistics
+from ij.process import ImageStatistics, ImageProcessor
 from lib.pixels_asm import ImgCompare
 from lib.util import printException, newFixedThreadPool, numCPUs, isThreadDead, syncPrintQ, Task
 from java.util.concurrent import Callable
@@ -183,7 +183,7 @@ def phaseCorrelationTranslation(spA, spB, n_threads=1, nHighestPeaks=5, minOverl
 
     # Correct scale
     if scale < 1.0:
-      return int(dx / scale + 0.5), int(dy / scale + 0.5), cc
+      return dx / scale, dy / scale, cc
 
     return dx, dy, cc
 
