@@ -551,6 +551,7 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, of
 
   # To open images and run operations outside the event dispatch thread
   exe = newFixedThreadPool(min(32, numCPUs() / 2))
+  frame.addWindowListener(ExecutorCloser(exe))
 
   # Enable search by regular expression matching
   search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
@@ -599,7 +600,6 @@ def makeFrame(model, title, show=True):
   all.add(jsp)
 
   frame = JFrame(title)
-  frame.addWindowListener(ExecutorCloser(exe))
   frame.getContentPane().add(all)
   frame.pack()
   if show:
