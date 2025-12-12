@@ -1355,8 +1355,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
 
 def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, offset, params_pixels, PCscale=0.5, n_threads=0):
     """
-    For every montage in slice_indices (1-based), score the overlapping parts of tiles
-    with cosine similarity.
+    For every montage in slice_indices (1-based), score the overlapping parts of tiles.
     """
     exe = newFixedThreadPool(n_threads)
     try:

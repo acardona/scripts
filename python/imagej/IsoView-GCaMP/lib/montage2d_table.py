@@ -1,7 +1,7 @@
 import os, sys, re, csv, math
 from functools import partial
 
-from java.lang import Integer, Runnable, String
+from java.lang import Integer, Runnable, String, Float
 from javax.swing import JPanel, JFrame, JTable, JScrollPane, JTextField, ListSelectionModel, SwingUtilities,\
                         JLabel, BorderFactory, JPopupMenu, JMenuItem, AbstractAction, KeyStroke, JOptionPane, JButton
 from javax.swing.table import AbstractTableModel, DefaultTableCellRenderer
@@ -541,39 +541,13 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, of
   #
   model = SliceTableModel(groupNames, tileGroups, failed_groupNames, montage_stats)
   # GUI:
-  all = JPanel()
-  all.setBackground(Color.white)
-  gb = GridBagLayout()
-  all.setLayout(gb)
-  c = GridBagConstraints()
-  # Top-left element: search box
-  c.gridx = 0
-  c.gridy = 0
-  c.anchor = GridBagConstraints.CENTER
-  c.fill = GridBagConstraints.HORIZONTAL
-  search_field = JTextField("")
-  gb.setConstraints(search_field, c)
-  all.add(search_field)
-  # Bottom left, the table, wrapped in a scrollable component
-  table = JTable(model)
-  table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
-  table.setRowSelectionAllowed(True)
-  table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION)
+  frame, table, search_field, all = makeFrame(model, "Slice montages", show=show)
+
   centerRenderer = DefaultTableCellRenderer()
   centerRenderer.setHorizontalAlignment(JLabel.CENTER)
   table.getColumnModel().getColumn(0).setCellRenderer(centerRenderer)
   table.getColumnModel().getColumn(2).setCellRenderer(centerRenderer)
   table.getColumnModel().getColumn(3).setCellRenderer(ColorCellRenderer(lambda v: (Color.red if "failed" == v else None)))
-  c.gridx = 0
-  c.gridy = 1
-  c.anchor = GridBagConstraints.NORTHWEST
-  c.fill = GridBagConstraints.BOTH # resize with the frame
-  c.weightx = 1.0
-  c.gridheight = 2
-  jsp = JScrollPane(table)
-  jsp.setMinimumSize(Dimension(400, 500))
-  gb.setConstraints(jsp, c)
-  all.add(jsp)
 
   # To open images and run operations outside the event dispatch thread
   exe = newFixedThreadPool(min(32, numCPUs() / 2))
@@ -593,9 +567,116 @@ def makeMontageTable(groupNames, tileGroups, imp, volumeImg, csvDir, overlap, of
   # Enable popup menu on right click over a multi-row selection
   table.getSelectionModel().addListSelectionListener(opener)
   
-  frame = JFrame("Slice montages")
+
+def makeFrame(model, title, show=True):
+  all = JPanel()
+  all.setBackground(Color.white)
+  gb = GridBagLayout()
+  all.setLayout(gb)
+  c = GridBagConstraints()
+  # Top-left element: search box
+  c.gridx = 0
+  c.gridy = 0
+  c.anchor = GridBagConstraints.CENTER
+  c.fill = GridBagConstraints.HORIZONTAL
+  search_field = JTextField("")
+  gb.setConstraints(search_field, c)
+  all.add(search_field)
+  # Bottom left, the table, wrapped in a scrollable component
+  table = JTable(model)
+  table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
+  table.setRowSelectionAllowed(True)
+  table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION)
+  c.gridx = 0
+  c.gridy = 1
+  c.anchor = GridBagConstraints.NORTHWEST
+  c.fill = GridBagConstraints.BOTH # resize with the frame
+  c.weightx = 1.0
+  c.gridheight = 2
+  jsp = JScrollPane(table)
+  jsp.setMinimumSize(Dimension(400, 500))
+  gb.setConstraints(jsp, c)
+  all.add(jsp)
+
+  frame = JFrame(title)
   frame.addWindowListener(ExecutorCloser(exe))
   frame.getContentPane().add(all)
   frame.pack()
-  frame.setVisible(True)
+  if show:
+    frame.setVisible(True)
+
+  return frame, table, search_field, all
+
+
+def EvaluateMontageModel(AbstractTableModel):
+  def __init__(self, groupNames, tileGroups, imp, csvDir, montage_scores):
+    self.groupNames = groupNames
+    self.tileGroups = tileGroups
+    self.imp = imp
+    self.csvDir = csvDir
+    self.montage_scores = montage_scores
+    self.header = ["Slice", "Group name", "pair", "CC", "dx", "dy", "d", "CC2"]
+    self.column_class = [Integer, String, String, Float, Float, Float, Float, Float]
+    self.rows = []
+    self.restore() # populate rows
+
+  def restore(self):
+    # Add one row for each tile-vs-tile registration,
+    # so a section with 2 tiles will have 1 row
+    # and a section with 4 tiles will have 4 rows.
+    for i, groupName in enumerate(groupNames): # sorted
+      scores = montage_scores.get(groupName, None)
+      if not scores:
+        continue
+      for score in scores:
+        self.rows.append([i, groupName] + score)
+
+  def getColumnName(self, col):
+    return self.header[col]
+  def getColumnClass(self, col):
+    return self.column_class[col]
+  def getRowCount(self):
+    return len(self.rows)
+  def getColumnCount(self):
+    return len(self.header)
+  def getValueAt(self, row, col):
+    return self.rows[row][col]
+  def isCellEditable(self, row, col):
+    return False # none editable
+  def setValueAt(self, value, row, col):
+    pass # none editable
+
+  def filterTable(self, text):
+    text = text.strip()
+    try:
+      if 0 == len(text):
+        self.restore()
+      else:
+        pattern = re.compile(text)
+        self.rows = filter(lambda row: pattern.search(row[0]) or pattern.search(row[1]) or pattern.search(row[2]), self.rows)
+
+
+def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True):
+  # Load evaluation data if any
+  score_files = filter(lambda filename: filename.endswith("montage_scores.csv"), os.listdir(csvDir))
+  montage_scores = {}
+  for filename in score_files: # order doesn't matter, later will be sorted
+    try:
+      with open(os.path.join(csvDir, filename), 'r') as csvfile:
+        reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+        reader.next() # skip header
+        groupName = filename[0:-18]
+        row = [v for v in reader]
+        montage_scores[groupName] = row[0] + map(float, row[1:])
+  
+  #
+  model = EvaluateMontageModel(groupNames, tileGroups, imp, csvDir, montage_scores)
+  # GUI
+  frame, table, search_field, all = makeFrame(model, "Slice montages", show=show)
+  # Enable search by regular expression matching
+  search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
+
+# TODO open this table
+
+
 
