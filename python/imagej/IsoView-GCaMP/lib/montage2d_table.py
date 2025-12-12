@@ -654,6 +654,9 @@ def EvaluateMontageModel(AbstractTableModel):
       else:
         pattern = re.compile(text)
         self.rows = filter(lambda row: pattern.search(row[0]) or pattern.search(row[1]) or pattern.search(row[2]), self.rows)
+    except:
+      self.restore()
+      printException()
 
 
 def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True):
@@ -668,6 +671,9 @@ def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True):
         groupName = filename[0:-18]
         row = [v for v in reader]
         montage_scores[groupName] = row[0] + map(float, row[1:])
+    except:
+      syncPrintQ("Failed to load file %s" % filename)
+      printException()
   
   #
   model = EvaluateMontageModel(groupNames, tileGroups, imp, csvDir, montage_scores)
