@@ -141,7 +141,7 @@ def crossCorrelation(sp1, sp2):
            ArrayImgs.unsignedShorts(sp2.getPixels(), sp2.getWidth(), sp2.getHeight()))
 
 
-def phaseCorrelationTranslation(spA, spB, n_threads=1, nHighestPeaks=5, minOverlapFraction=0.25):
+def phaseCorrelationTranslation(spA, spB, n_threads=1, nHighestPeaks=5, minOverlapFraction=0.25, scale=0.5):
   """
   Compute the best translation between two ShortProcessor images of the same dimensions.
   nHighestPeaks: number of phase correlation peaks to check with cross-correlation.
@@ -149,6 +149,12 @@ def phaseCorrelationTranslation(spA, spB, n_threads=1, nHighestPeaks=5, minOverl
 
   Returns: dx, dy, crossCorr
   """
+  if scale < 1.0:
+    spA.setInterpolationMethod(ImageProcessor.BILINEAR)
+    spB.setInterpolationMethod(ImageProcessor.BILINEAR)
+    spA = spA.resize(spA.getWidth() / 2)
+    spB = spB.resize(spB.getWidth() / 2)
+  #
   spA_img = ArrayImgs.unsignedShorts(spA.getPixels(), spA.getWidth(), spA.getHeight())
   spB_img = ArrayImgs.unsignedShorts(spB.getPixels(), spB.getWidth(), spB.getHeight())
   # Thread pool
@@ -175,7 +181,12 @@ def phaseCorrelationTranslation(spA, spB, n_threads=1, nHighestPeaks=5, minOverl
     # Cross-correlation
     cc = peak.getCrossCorr()
 
+    # Correct scale
+    if scale < 1.0:
+      return int(dx / scale + 0.5), int(dy / scale + 0.5), cc
+
     return dx, dy, cc
+
   except Exception, e:
     # No peaks found
     syncPrintQ("PhaseCorrelation2: no peaks found.")

@@ -444,13 +444,15 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
       gd.addNumericField("First slice: ", self.getRow(self.firstIndex)[0], 0, 6, "")
       gd.addNumericField("Last slice: ", self.getRow(self.lastIndex)[0], 0, 6, "")
       gd.addNumericField("Number of threads: ", max(1, numCPUs()), 0, 4, "")
+      gd.addNumericField("PhaseCorrelation scale: ", 0.5, 2, 6, "")
       gd.showDialog()
       if not gd.wasOKed():
         return
       firstIndex, lastIndex = int(gd.getNextNumber()), int(gd.getNextNumber())
       slice_indices = range(firstIndex, lastIndex + 1) # Already 1-based
       numThreads = int(gd.getNextNumber())
-      self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, n_threads=numThreads))
+      PCscale = gd.getNextNumber()
+      self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, PCscale=PCscale, n_threads=numThreads))
 
   def evaluateAllMontages(self):
     self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, n_threads=numCPUs()))

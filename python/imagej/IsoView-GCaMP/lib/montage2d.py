@@ -1246,10 +1246,11 @@ def loadMontagedImg(srcDir, montageDir, repairedDir,
   return img, groupNames, tileGroups, filepaths
 
 
-def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2, debug=False):
+def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2, PCscale=0.5, debug=False):
   """
   Expects matrices in integers.
   Returns the cosine similarity score of the overlapping region, or 0.0 when no overlap.
+  PCscale: to compute PhaseCorrelation2 at that scale.
   """
   # Find the intersection
   r1 = roi1.getBounds() # in tile1 coordinates
@@ -1292,7 +1293,7 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2,
   cc = crossCorrelation(sp_ir1, sp_ir2)
 
   # Compute translation shift with phase correlation
-  dx, dy, cc2 = phaseCorrelationTranslation(sp_ir1, sp_ir2)
+  dx, dy, cc2 = phaseCorrelationTranslation(sp_ir1, sp_ir2, scale=PCscale)
 
   # Translation amount
   d = math.sqrt(dx*dx + dy*dy)
@@ -1306,7 +1307,7 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2,
   return cc, dx, dy, d, cc2
 
 
-def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels, debug=False):
+def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels, PCscale=0.5, debug=False):
   # TODO should really be done right after montaging, when images are loaded.
   # One matrix per tile in the montage, in ints
   matrices = dict(zip(tilePaths,
@@ -1331,7 +1332,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
         if not filepath1: # an empty string
           continue # tile is missing from the montage
         # Test with roiSouth, roiNorth
-        score = evaluateTileOverlap(filepath1, filepath2, sps, roiSouth, roiNorth, matrices[filepath1], matrices[filepath2], debug=debug)
+        score = evaluateTileOverlap(filepath1, filepath2, sps, roiSouth, roiNorth, matrices[filepath1], matrices[filepath2], PCscale=PCscale, debug=debug)
         scores.append(("%i-%i vs %i-%i" % (i-1, j, i, j), score))
       if j > 0:
         # Link with tile to the left
@@ -1339,7 +1340,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
         if not filepath1: # an empty string
           continue # tile is missing from the montage
         # Test with roiEast, roiWest
-        score = evaluateTileOverlap(filepath1, filepath2, sps, roiEast, roiWest, matrices[filepath1], matrices[filepath2], debug=debug)
+        score = evaluateTileOverlap(filepath1, filepath2, sps, roiEast, roiWest, matrices[filepath1], matrices[filepath2], PCscale=PCscale, debug=debug)
         scores.append(("%i-%i vs %i-%i" % (i, j-1, i, j), score))
   # Store and show scores
   with open(os.path.join(csvDir, groupName + ".montage_scores.csv"), 'w') as f:
@@ -1352,7 +1353,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
 
 
 
-def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, offset, params_pixels, n_threads=0):
+def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, offset, params_pixels, PCscale=0.5, n_threads=0):
     """
     For every montage in slice_indices (1-based), score the overlapping parts of tiles
     with cosine similarity.
@@ -1365,7 +1366,7 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
           syncPrintQ("evaluate montage: skipping %s with 1 single tile." % groupNames[i-1])
           futures.append(i, float('NaN'))
           continue
-        futures.append((i, exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels))))
+        futures.append((i, exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels, PCscale=PCscale))))
       for i, fu in futures:
         scores = fu.get()
         syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %s: %f, %f" % (s, cc, d) for s, (cc, d) in scores)))
