@@ -8,7 +8,7 @@ from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, readFIBSEM, i
 from lib.img import lazyCachedCellImg
 from lib.ui import wrap, wrap8bit
 from lib.loop import createBiConsumerTypeSet
-from lib.montage2d_table import makeMontageTable
+from lib.montage2d_table import makeMontageTable, makeMontageEvaluationTable
 from lib.segmentation_em import makeFilterFeaturesFn
 from lib.pixels import pairwiseCosineSimilarityST, crossCorrelation, phaseCorrelationTranslation
 
@@ -1353,7 +1353,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
 
 
 
-def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, offset, params_pixels, PCscale=0.5, n_threads=0):
+def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, offset, params_pixels, imp, PCscale=0.5, n_threads=0):
     """
     For every montage in slice_indices (1-based), score the overlapping parts of tiles.
     """
@@ -1369,6 +1369,9 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
       for i, fu in futures:
         scores = fu.get()
         syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %s: %f, %f" % (s, cc, d) for s, (cc, d) in scores)))
+      # Open the table
+      makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True)
+      #
       return [fu.get() for i, fu in futures]
     except:
       printException()

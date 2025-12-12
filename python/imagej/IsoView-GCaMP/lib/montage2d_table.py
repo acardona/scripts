@@ -452,10 +452,10 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
       slice_indices = range(firstIndex, lastIndex + 1) # Already 1-based
       numThreads = int(gd.getNextNumber())
       PCscale = gd.getNextNumber()
-      self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, PCscale=PCscale, n_threads=numThreads))
+      self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, self.imp, PCscale=PCscale, n_threads=numThreads))
 
   def evaluateAllMontages(self):
-    self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, n_threads=numCPUs()))
+    self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, self.imp, n_threads=numCPUs()))
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
