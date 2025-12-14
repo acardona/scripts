@@ -608,7 +608,7 @@ def makeFrame(model, title, show=True):
   return frame, table, search_field, all
 
 
-def EvaluateMontageModel(AbstractTableModel):
+class EvaluateMontageModel(AbstractTableModel):
   def __init__(self, groupNames, tileGroups, imp, csvDir, montage_scores):
     self.groupNames = groupNames
     self.tileGroups = tileGroups
@@ -624,12 +624,11 @@ def EvaluateMontageModel(AbstractTableModel):
     # Add one row for each tile-vs-tile registration,
     # so a section with 2 tiles will have 1 row
     # and a section with 4 tiles will have 4 rows.
-    for i, groupName in enumerate(groupNames): # sorted
-      scores = montage_scores.get(groupName, None)
-      if not scores:
-        continue
-      for score in scores:
-        self.rows.append([i, groupName] + score)
+    for i, groupName in enumerate(self.groupNames): # sorted
+      scores = self.montage_scores.get(groupName, None)
+      if scores:
+        for score in scores:
+          self.rows.append([i, groupName] + score)
 
   def getColumnName(self, col):
     return self.header[col]
@@ -668,21 +667,23 @@ def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True):
       with open(os.path.join(csvDir, filename), 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         reader.next() # skip header
-        groupName = filename[0:-18]
-        row = [v for v in reader]
-        montage_scores[groupName] = row[0] + map(float, row[1:])
+        # Keyed by groupName as parsed from the filename
+        montage_scores[filename[0:-18]] = [row[0:1] + map(float, row[1:]) for row in reader]
     except:
       syncPrintQ("Failed to load file %s" % filename)
       printException()
   
   #
-  model = EvaluateMontageModel(groupNames, tileGroups, imp, csvDir, montage_scores)
-  # GUI
-  frame, table, search_field, all = makeFrame(model, "Slice montages", show=show)
-  # Enable search by regular expression matching
-  search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
+  try:
+    model = EvaluateMontageModel(groupNames, tileGroups, imp, csvDir, montage_scores)
+    # GUI
+    frame, table, search_field, all = makeFrame(model, "Slice montages", show=show)
+    # Enable search by regular expression matching
+    search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
+    return frame, table, search_field, all
+  except:
+    printException()
 
-# TODO open this table
 
 
 
