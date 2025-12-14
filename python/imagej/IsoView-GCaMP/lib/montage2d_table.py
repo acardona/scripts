@@ -662,6 +662,40 @@ class EvaluateMontageModel(AbstractTableModel):
       printException()
 
 
+class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
+  def __init__(self, table, model, imp):
+    self.table = table
+    self.model = model
+    self.imp = imp
+    self.firstIndex = -1 # in rendered table, not in model rows. Use self.getRow to get the model row.
+    self.lastIndex = -1  # idem
+    
+  def getRow(self, index):
+    # To convert from a table index (which could be sorted differently) to the model index
+    return self.model.rows[self.table.convertRowIndexToModel(index)]
+  
+  def mousePressed(self, event):
+    if 2 == event.getClickCount():
+      # Set the imp slice to that of the row
+      rowIndex = event.getSource().rowAtPoint(event.getPoint())
+      row = self.getRow(rowIndex)
+      if self.imp and self.imp.getWindow():
+        self.imp.setSlice(row[0]) # TODO use an ScheduledExecutorService
+
+  def mouseReleased(self, event):
+    if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
+      #popup = JPopupMenu()
+      #popup.add(JMenuItem("Open stack of slice montages",
+      #                    actionPerformed=lambda event: self.openStackOfSliceMontages()))
+      pass # TODO
+      
+  def valueChanged(self, event):
+    if event.getValueIsAdjusting():
+      return
+    self.firstIndex = event.getFirstIndex()
+    self.lastIndex = event.getLastIndex()
+
+
 def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True):
   # Load evaluation data if any
   score_files = filter(lambda filename: filename.endswith(".montage_scores.csv"), os.listdir(csvDir))
@@ -687,9 +721,20 @@ def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True):
   try:
     model = EvaluateMontageModel(groupNames, tileGroups, imp, csvDir, montage_scores)
     # GUI
-    frame, table, search_field, all = makeFrame(model, "Slice montages", show=show)
+    frame, table, search_field, all = makeFrame(model, "Slice montage evaluation", show=show)
     # Enable search by regular expression matching
     search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
+    # Add mouse events
+    opener = EvaluationRowClickListener(table, model, imp)
+    table.addMouseListener(opener)
+    # Enable pushing enter instead of clicking
+    # Instead of a KeyListener, use the input vs action map
+    table.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "enter")
+    table.getActionMap().put("enter", Action(opener))
+    # Enable popup menu on right click over a multi-row selection
+    table.getSelectionModel().addListSelectionListener(opener)
+
+
     return frame, table, search_field, all
   except:
     printException()
