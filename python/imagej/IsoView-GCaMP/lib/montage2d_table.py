@@ -628,7 +628,11 @@ class EvaluateMontageModel(AbstractTableModel):
       scores = self.montage_scores.get(groupName, None)
       if scores:
         for score in scores:
-          self.rows.append([i, groupName] + score)
+          self.rows.append([i+1, groupName] + score) # slice index as 1-based
+    if 0 == len(self.rows):
+      syncPrintQ("No rows found for EvaluateMontageModels. groupName keys in montage_scores were:")
+      for key in self.montage_scores:
+        print key
 
   def getColumnName(self, col):
     return self.header[col]
@@ -660,7 +664,7 @@ class EvaluateMontageModel(AbstractTableModel):
 
 def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True):
   # Load evaluation data if any
-  score_files = filter(lambda filename: filename.endswith("montage_scores.csv"), os.listdir(csvDir))
+  score_files = filter(lambda filename: filename.endswith(".montage_scores.csv"), os.listdir(csvDir))
   montage_scores = {}
   for filename in score_files: # order doesn't matter, later will be sorted
     try:
@@ -668,11 +672,17 @@ def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True):
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         reader.next() # skip header
         # Keyed by groupName as parsed from the filename
-        montage_scores[filename[0:-18]] = [row[0:1] + map(float, row[1:]) for row in reader]
+        groupName = filename[0:-19]
+        rows = [row[0:1] + map(float, row[1:]) for row in reader]
+        if len(rows[0]) < 6:
+          syncPrintQ("Obsolete montage evaluation file:\n%s" % filename)
+          continue
+        montage_scores[groupName] = rows
     except:
       syncPrintQ("Failed to load file %s" % filename)
       printException()
   
+  syncPrintQ("montage_scores: %i entries" % len(montage_scores))
   #
   try:
     model = EvaluateMontageModel(groupNames, tileGroups, imp, csvDir, montage_scores)
