@@ -81,9 +81,9 @@ params_pixels = {
 
 # Parameters for SIFT features
 paramsSIFT = FloatArray2DSIFT.Param()
-paramsSIFT.steps = 1
-paramsSIFT.minOctaveSize = 0 # will be updated in a clone
-paramsSIFT.maxOctaveSize = 0 # will be updated in a clone
+paramsSIFT.steps = 3 # 1
+paramsSIFT.minOctaveSize = 1024 # if 0, will be updated in a clone # TODO the max should be about 4096 to enable smoothing when Gaussian-scaling down
+paramsSIFT.maxOctaveSize = 4096 # if 0, will be updated in a clone
 paramsSIFT.initialSigma = 1.6 # default 1.6
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
