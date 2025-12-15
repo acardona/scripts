@@ -1191,7 +1191,7 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
     # Main table
     table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, overlap, offset, params_pixels, runEvaluateMontages, show=True)
     # Montage evaluation table
-    makeMontageEvaluationTable(groupNames, tileGroups, imp, montageDir, show=True)
+    makeMontageEvaluationTable(groupNames, tileGroups, imp, montageDir, runEvaluateMontages, show=True)
   
   return volumeImgMontagedScaled, groupNames, tileGroups
 
@@ -1249,7 +1249,7 @@ def loadMontagedImg(srcDir, montageDir, repairedDir,
   return img, groupNames, tileGroups, filepaths
 
 
-def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2, PCscale=0.5, debug=False):
+def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2, PCscale=0.5, debug=False, debugJustShowOverlaps=False):
   """
   Expects matrices in integers.
   Returns the cosine similarity score of the overlapping region, or 0.0 when no overlap.
@@ -1285,6 +1285,8 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2,
       #ImagePlus("%i-%i" % (i_row, i_col), sp_ir).show()
       stack.addSlice("%i-%i" % (i_row, i_col), sp_ir)
     ImagePlus(filepath1[filepath1.rfind('/')+1:filepath1.rfind('_')+1], stack).show()
+    if debugJustShowOverlaps:
+      return
   """
   # Compare the cutouts with cosine similarity
   stack = Views.stack(ArrayImgs.unsignedShorts(sp_ir1.getPixels(), sp_ir1.getWidth(), sp_ir1.getHeight()),
@@ -1310,7 +1312,7 @@ def evaluateTileOverlap(filepath1, filepath2, sps, roi1, roi2, matrix1, matrix2,
   return cc, dx, dy, d, cc2
 
 
-def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels, PCscale=0.5, debug=False):
+def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels, PCscale=0.5, debug=False, debugJustShowOverlaps=False):
   # TODO should really be done right after montaging, when images are loaded.
   # One matrix per tile in the montage, in ints
   matrices = dict(zip(tilePaths,
@@ -1335,7 +1337,9 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
         if not filepath1: # an empty string
           continue # tile is missing from the montage
         # Test with roiSouth, roiNorth
-        score = evaluateTileOverlap(filepath1, filepath2, sps, roiSouth, roiNorth, matrices[filepath1], matrices[filepath2], PCscale=PCscale, debug=debug)
+        score = evaluateTileOverlap(filepath1, filepath2, sps, roiSouth, roiNorth, matrices[filepath1], matrices[filepath2], PCscale=PCscale, debug=debug, debugJustShowOverlaps=debugJustShowOverlaps)
+        if debugJustShowOverlaps:
+          continue
         scores.append(("%i-%i vs %i-%i" % (i-1, j, i, j), score))
       if j > 0:
         # Link with tile to the left
@@ -1343,9 +1347,13 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
         if not filepath1: # an empty string
           continue # tile is missing from the montage
         # Test with roiEast, roiWest
-        score = evaluateTileOverlap(filepath1, filepath2, sps, roiEast, roiWest, matrices[filepath1], matrices[filepath2], PCscale=PCscale, debug=debug)
+        score = evaluateTileOverlap(filepath1, filepath2, sps, roiEast, roiWest, matrices[filepath1], matrices[filepath2], PCscale=PCscale, debug=debug, debugJustShowOverlaps=debugJustShowOverlaps)
+        if debugJustShowOverlaps:
+          continue
         scores.append(("%i-%i vs %i-%i" % (i, j-1, i, j), score))
-  # Store and show scores
+  if debugJustShowOverlaps:
+    return
+  # Store scores
   with open(os.path.join(csvDir, groupName + ".montage_scores.csv"), 'w') as f:
     f.write("row, column, CC, dx, dy, d, CC2\n")
     f.write("\n".join("%s, %f, %f, %f, %f, %f" % (s, cc, dx, dy, d, cc2) for s, (cc, dx, dy, d, cc2) in scores))
@@ -1356,7 +1364,7 @@ def evaluateMontage(groupName, tilePaths, csvDir, overlap, offset, params_pixels
 
 
 
-def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, offset, params_pixels, imp, PCscale=0.5, n_threads=0):
+def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, offset, params_pixels, imp, PCscale=0.5, n_threads=0, debug=False, debugJustShowOverlaps=False):
     """
     For every montage in slice_indices (1-based), score the overlapping parts of tiles.
     """
@@ -1368,10 +1376,12 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
           syncPrintQ("evaluate montage: skipping %s with 1 single tile." % groupNames[i-1])
           futures.append((i, ["N/A"] + [float('NaN')] * 5))
           continue
-        futures.append((i, exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels, PCscale=PCscale))))
+        futures.append((i, exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels, PCscale=PCscale, debug=debug, debugJustShowOverlaps=debugJustShowOverlaps))))
       for i, fu in futures:
         scores = fu.get()
         #syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %s: %f, %f, %f, %f, %f" % (s, cc, dx, dy, d, cc2) for s, (cc, dx, dy, d, cc2) in scores)))
+      if debugJustShowOverlaps:
+        return
       # Open the table
       makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True)
       #
