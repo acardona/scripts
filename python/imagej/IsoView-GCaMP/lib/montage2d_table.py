@@ -665,7 +665,23 @@ class EvaluateMontageModel(AbstractTableModel):
       if 0 == len(text):
         self.restore()
       else:
-        pattern = re.compile(text)
+        # Filtering what's displayed, so incremental filtering is possible with multiple consecutive searches
+        textOriginal = text
+        # First: by column name
+        text = text.lower()
+        iless = text.find("<")
+        imore = text.find(">")
+        iequal = text.find("=")
+        if iless > -1 or imore > -1 or iequal > -1:
+          i = filter(lambda x: x > -1, [iless, imore, iequal])[0]
+          col_name = text[0:i].strip()
+          for k, name in enumerate(self.header):
+            if name.lower() == col_name:
+              s = text[i+1:].strip()
+              self.rows = filter(lambda row: str(row[k]).startswith(s), self.rows)
+              return
+        # Second: by regular expression across the first 3 columns
+        pattern = re.compile(textOriginal)
         self.rows = filter(lambda row: pattern.search(row[0]) or pattern.search(row[1]) or pattern.search(row[2]), self.rows)
     except:
       self.restore()
