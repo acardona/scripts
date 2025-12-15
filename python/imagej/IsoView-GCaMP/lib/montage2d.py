@@ -309,7 +309,7 @@ class MontageSlice(Callable):
     self.csvDir = csvDir
     self.failed = failed
     self.params = {"max_sd": 1.5, # max_sd: maximal difference in size (ratio max/min)
-                   "max_id": Double.MAX_VALUE, # max_id: maximal distance in image space
+                   "max_id": 0.66 * nominal_overlap, #Double.MAX_VALUE, # max_id: maximal distance in image space -- this has to be at most 2/3rd of the expected overlap to reduce false positives
                    "rod": 0.9} # rod: ratio of best vs second best
     self.paramsTileConfiguration = paramsTileConfiguration
     self.params_pixels = params_pixels
