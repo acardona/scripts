@@ -683,7 +683,7 @@ class EvaluateMontageModel(AbstractTableModel):
               return
         # Second: by regular expression across the first 3 columns
         pattern = re.compile(textOriginal)
-        self.rows = filter(lambda row: pattern.search(row[0]) or pattern.search(row[1]) or pattern.search(row[2]), self.rows)
+        self.rows = filter(lambda row: pattern.search(str(row[0])) or pattern.search(row[1]) or pattern.search(row[2]), self.rows)
     except:
       self.restore()
       printException()
