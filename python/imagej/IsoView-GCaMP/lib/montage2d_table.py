@@ -695,9 +695,15 @@ class ScheduledTask(Runnable):
   def __init__(self, ob):
     self.ob = ob
   def run(self):
-    task = ob.task
+    task = self.ob.task
     if task:
-      task.call()
+      try:
+        task.call()
+      except:
+        printException()
+      # prevent running the task more than once
+      if self.ob.task == task:
+        self.ob.task = None # no synchronisation but risk is very low
 
 class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
   def __init__(self, table, model, imp, runEvaluateMontages, scheduler):
