@@ -149,11 +149,16 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   
   def mousePressed(self, event):
     if 2 == event.getClickCount():
-      # Open the raw images of the montage at that slice
-      rowIndex = event.getSource().rowAtPoint(event.getPoint()) # TODO could use self.firstIndex or the whole range
-      self.openImages(rowIndex)
-    
+      # Set the imp slice to that of the row
+      rowIndex = event.getSource().rowAtPoint(event.getPoint())
+      row = self.getRow(rowIndex)
+      if self.imp and self.imp.getWindow():
+        self.imp.setSlice(row[0]) # TODO use an ScheduledExecutorService
+
   def openImages(self, rowIndex):
+    """
+    Will map rowIndex from the table to the model data rows using self.getRow
+    """
     for filepath in self.getRow(rowIndex)[2]:
       # Execute in a separate set of threads
       if filepath.endswith(".dat"):
