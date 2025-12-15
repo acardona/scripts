@@ -594,13 +594,14 @@ def makeFrame(model, title, show=True):
   table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
   table.setRowSelectionAllowed(True)
   table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION)
-  table.setPreferredSize(Dimension(400, 500))
+  #table.setPreferredSize(Dimension(400, 500))
   c.gridx = 0
   c.gridy = 1
   c.anchor = GridBagConstraints.NORTHWEST
   c.fill = GridBagConstraints.BOTH # resize with the frame
   c.weightx = 1.0
-  c.gridheight = 2
+  c.weighty = 1.0
+  c.gridheight = 1
   jsp = JScrollPane(table)
   jsp.setMinimumSize(Dimension(400, 500))
   gb.setConstraints(jsp, c)
