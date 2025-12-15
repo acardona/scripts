@@ -594,6 +594,7 @@ def makeFrame(model, title, show=True):
   table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
   table.setRowSelectionAllowed(True)
   table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION)
+  table.setPreferredSize(Dimension(400, 500))
   c.gridx = 0
   c.gridy = 1
   c.anchor = GridBagConstraints.NORTHWEST
@@ -601,7 +602,7 @@ def makeFrame(model, title, show=True):
   c.weightx = 1.0
   c.gridheight = 2
   jsp = JScrollPane(table)
-  jsp.setPreferredSize(Dimension(400, 500))
+  jsp.setMinimumSize(Dimension(400, 500))
   gb.setConstraints(jsp, c)
   all.add(jsp)
 
@@ -707,7 +708,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
     self.lastIndex = -1  # idem
     #
     self.task = None
-    scheduler.scheduleAtFixedRate(self, 0, 500) # check every 0.5 seconds
+    scheduler.scheduleAtFixedRate(ScheduledTask(self), 0, 500) # check every 0.5 seconds
  
   def getRow(self, index):
     # To convert from a table index (which could be sorted differently) to the model index
@@ -780,14 +781,14 @@ def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, runEvaluateM
   #
   try:
     scheduler = newScheduledExecutor()
-    model = EvaluateMontageModel(groupNames, tileGroups, imp, csvDir, montage_scores, scheduler)
+    model = EvaluateMontageModel(groupNames, tileGroups, imp, csvDir, montage_scores)
     # GUI
     frame, table, search_field, all = makeFrame(model, "Slice montage evaluation", show=show)
     frame.addWindowListener(ExecutorCloser(scheduler.exe))
     # Enable search by regular expression matching
     search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
     # Add mouse events
-    opener = EvaluationRowClickListener(table, model, imp, runEvaluateMontages)
+    opener = EvaluationRowClickListener(table, model, imp, runEvaluateMontages, scheduler)
     table.addMouseListener(opener)
     # Enable pushing enter instead of clicking
     # Instead of a KeyListener, use the input vs action map
