@@ -601,7 +601,7 @@ def makeFrame(model, title, show=True):
   c.weightx = 1.0
   c.gridheight = 2
   jsp = JScrollPane(table)
-  jsp.setMinimumSize(Dimension(400, 500))
+  jsp.setPreferredSize(Dimension(400, 500))
   gb.setConstraints(jsp, c)
   all.add(jsp)
 
