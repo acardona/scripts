@@ -18,6 +18,6 @@ with open(os.path.join(montageDir, "groupNames"), 'r') as f:
     groupNames.append(p[0])
     tileGroups.append(p[1].strip()[1:-1].split(', '))
 
-frame, table, search_field, all = makeMontageEvaluationTable(groupNames[first_section:last_section+1],
-                                                             tileGroups[first_section:last_section+1],
+frame, table, search_field, all = makeMontageEvaluationTable(groupNames[first_section:last_section+1][0:100],
+                                                             tileGroups[first_section:last_section+1][0:100],
                                                              IJ.getImage(), montageDir, runEvaluateMontages, show=True)
