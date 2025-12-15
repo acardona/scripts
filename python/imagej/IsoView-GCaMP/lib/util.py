@@ -192,6 +192,19 @@ def newFixedThreadPool(n_threads=0, name="jython-worker"):
     n_threads = max(1, Runtime.getRuntime().availableProcessors() + n_threads)
   return Executors.newFixedThreadPool(n_threads, ThreadFactorySameGroup(name))
 
+class newScheduledExecutor():
+  """ Setup an ScheduledExecutorService whose Thread instances belong
+      to the same group as the caller's Thread, and therefore will
+      be interrupted when the caller is.
+  """
+  def __init__(self, name="jython-worker"):
+    self.exe = Executors.newSingleThreadScheduledExecutor(ThreadFactorySameGroup(name))
+  def scheduleAtFixedRate(self, task, initialDelay, period):
+    """ Times in milliseconds. """
+    self.exe.scheduleAtFixedRate(task, initialDelay, period, TimeUnit.MILLISECONDS)
+  def shutdown(self):
+    self.exe.shutdown()
+
 def numCPUs():
   return Runtime.getRuntime().availableProcessors()
 
