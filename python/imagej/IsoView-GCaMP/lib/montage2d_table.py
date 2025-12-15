@@ -729,7 +729,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       if self.imp and self.imp.getWindow():
         self.task = Task(self.imp.setSlice, row[0]) # will be run by the scheduler
 
-  def showOverlaps(self):
+  def showOverlaps(self, event):
     rowIndex = self.getRow(event.getSource().rowAtPoint(event.getPoint()))
     self.task = Task(self.runEvaluateMontages, [self.model.groupNames[rowIndex]], [self.model.tileGroups[rowIndex]], self.model.csvDir, self.imp, debug=True, debugJustShowOverlaps=True) # will be run by the scheduler
 
@@ -753,7 +753,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       #popup.add(JMenuItem("Open stack of slice montages",
       #                    actionPerformed=lambda event: self.openStackOfSliceMontages()))
       popup = JPopupMenu()
-      popup.add(JMenuItem("Show montage overlaps", actionPerformed=lambda event: self.showOverlaps()))
+      popup.add(JMenuItem("Show montage overlaps", actionPerformed=lambda event: self.showOverlaps(event)))
       popup.add(JMenuItem("Export CSV...", actionPerformed=lambda event: self.exportCSV()))
       popup.show(event.getComponent(), event.getX(), event.getY())
       
