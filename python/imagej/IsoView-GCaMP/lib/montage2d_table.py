@@ -640,10 +640,10 @@ class EvaluateMontageModel(AbstractTableModel):
       if scores:
         for score in scores:
           rows.append([i+1, groupName] + score) # slice index as 1-based
-    if 0 == len(self.rows):
+    if 0 == len(rows):
       syncPrintQ("No rows found for EvaluateMontageModels. groupName keys in montage_scores were:")
       for key in self.montage_scores:
-        print key
+        syncPrintQ(key)
     return rows
 
   def getColumnName(self, col):
@@ -690,13 +690,13 @@ class EvaluateMontageModel(AbstractTableModel):
       printException()
 
 
-class ScheduledTask(Callable):
+class ScheduledTask(Runnable):
   def __init__(self, ob):
     self.ob = ob
-  def call(self):
+  def run(self):
     task = ob.task
     if task:
-      return task.call()
+      task.call()
 
 class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
   def __init__(self, table, model, imp, runEvaluateMontages, scheduler):
