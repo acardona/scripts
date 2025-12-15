@@ -706,10 +706,13 @@ class ScheduledTask(Runnable):
         self.ob.task = None # no synchronisation but risk is very low
 
 class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
-  def __init__(self, table, model, imp, runEvaluateMontages, scheduler):
+  def __init__(self, table, model, imp, overlap, offset, params_pixels, runEvaluateMontages, scheduler):
     self.table = table
     self.model = model
     self.imp = imp
+    self.overlap = overlap
+    self.offset = offset
+    self.params_pixels = params_pixels
     self.runEvaluateMontages = runEvaluateMontages
     self.firstIndex = -1 # in rendered table, not in model rows. Use self.getRow to get the model row.
     self.lastIndex = -1  # idem
@@ -729,9 +732,12 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       if self.imp and self.imp.getWindow():
         self.task = Task(self.imp.setSlice, row[0]) # will be run by the scheduler
 
-  def showOverlaps(self, event):
-    rowIndex = self.getRow(event.getSource().rowAtPoint(event.getPoint()))
-    self.task = Task(self.runEvaluateMontages, [self.model.groupNames[rowIndex]], [self.model.tileGroups[rowIndex]], self.model.csvDir, self.imp, debug=True, debugJustShowOverlaps=True) # will be run by the scheduler
+  def showOverlaps(self):
+    if -1 == self.firstIndex:
+      syncPrintQ("No rows selected.")
+      return
+    sliceIndex = self.getRow(self.firstIndex)[0] # 1-based
+    self.task = Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.model.csvDir, [sliceIndex], self.overlap, self.offset, self.params_pixels, debug=True, debugJustShowOverlaps=True) # will be run by the scheduler
 
   def exportCSV(self):
     sd = SaveDialog("Save table to CSV", "montage-evaluation", ".csv")
@@ -753,7 +759,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       #popup.add(JMenuItem("Open stack of slice montages",
       #                    actionPerformed=lambda event: self.openStackOfSliceMontages()))
       popup = JPopupMenu()
-      popup.add(JMenuItem("Show montage overlaps", actionPerformed=lambda event: self.showOverlaps(event)))
+      popup.add(JMenuItem("Show montage overlaps", actionPerformed=lambda event: self.showOverlaps()))
       popup.add(JMenuItem("Export CSV...", actionPerformed=lambda event: self.exportCSV()))
       popup.show(event.getComponent(), event.getX(), event.getY())
       
@@ -764,7 +770,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
     self.lastIndex = event.getLastIndex()
 
 
-def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, runEvaluateMontages, show=True):
+def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, overlap, offset, params_pixels, runEvaluateMontages, show=True):
   # Load evaluation data if any
   score_files = filter(lambda filename: filename.endswith(".montage_scores.csv"), os.listdir(csvDir))
   montage_scores = {}
@@ -795,7 +801,7 @@ def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, runEvaluateM
     # Enable search by regular expression matching
     search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
     # Add mouse events
-    opener = EvaluationRowClickListener(table, model, imp, runEvaluateMontages, scheduler)
+    opener = EvaluationRowClickListener(table, model, imp, overlap, offset, params_pixels, runEvaluateMontages, scheduler)
     table.addMouseListener(opener)
     # Enable pushing enter instead of clicking
     # Instead of a KeyListener, use the input vs action map

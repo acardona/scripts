@@ -1383,7 +1383,7 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
       if debugJustShowOverlaps:
         return
       # Open the table
-      makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True)
+      makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, overlap, offset, params_pixels, show=True) # TODO can't send itself, runEvaluateMontages, as argument here. Maybe send evaluateMontages
       #
       return [fu.get() for i, fu in futures]
     except:
