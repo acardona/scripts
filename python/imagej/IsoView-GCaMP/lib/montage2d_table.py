@@ -9,6 +9,7 @@ from java.awt import GridBagLayout, GridBagConstraints, Dimension, Font, Insets,
 from java.awt.geom import AffineTransform
 from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, WindowAdapter
 from javax.swing.event import ListSelectionListener
+from java.util.concurrent import Callable
 
 from ij import IJ, ImagePlus, ImageStack
 from ij.io import FileSaver, OpenDialog, SaveDialog
@@ -745,7 +746,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       #                    actionPerformed=lambda event: self.openStackOfSliceMontages()))
       popup = JPopupMenu()
       popup.add(JMenuItem("Show montage overlaps", actionPerformed=lambda event: self.showOverlaps()))
-      popup.add(JMenuItem("Export CSV...", actionPerformed=lambda event: self.exportCSV())
+      popup.add(JMenuItem("Export CSV...", actionPerformed=lambda event: self.exportCSV()))
       popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):
