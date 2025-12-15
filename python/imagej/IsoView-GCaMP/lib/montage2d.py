@@ -1188,7 +1188,10 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   
   # Show a JTable for opening raw images and slice ranges
   if showTable:
+    # Main table
     table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, overlap, offset, params_pixels, runEvaluateMontages, show=True)
+    # Montage evaluation table
+    makeMontageEvaluationTable(groupNames, tileGroups, imp, montageDir, show=True)
   
   return volumeImgMontagedScaled, groupNames, tileGroups
 
