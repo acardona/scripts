@@ -11,7 +11,7 @@ from java.awt.event import KeyAdapter, MouseAdapter, KeyEvent, ActionListener, W
 from javax.swing.event import ListSelectionListener
 
 from ij import IJ, ImagePlus, ImageStack
-from ij.io import FileSaver, OpenDialog
+from ij.io import FileSaver, OpenDialog, SaveDialog
 from ij.gui import GenericDialog
 from ij.process import ImageProcessor
 
@@ -30,7 +30,7 @@ except:
   print "WARNING Labkit isn't installed. Install it via the Fiji updater."
 
 from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist, imageInfo, makeNonOverwritingName
-from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, batched, printException
+from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, batched, printException, newScheduledExecutor
 from lib.ui import duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.registration import saveMatrices
 
@@ -672,14 +672,26 @@ class EvaluateMontageModel(AbstractTableModel):
       printException()
 
 
+class ScheduledTask(Callable):
+  def __init__(self, ob):
+    self.ob = ob
+  def call(self):
+    task = ob.task
+    if task:
+      return task.call()
+
 class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
-  def __init__(self, table, model, imp):
+  def __init__(self, table, model, imp, runEvaluateMontages, scheduler):
     self.table = table
     self.model = model
     self.imp = imp
+    self.runEvaluateMontages = runEvaluateMontages
     self.firstIndex = -1 # in rendered table, not in model rows. Use self.getRow to get the model row.
     self.lastIndex = -1  # idem
-    
+    #
+    self.task = None
+    scheduler.scheduleAtFixedRate(self, 0, 500) # check every 0.5 seconds
+ 
   def getRow(self, index):
     # To convert from a table index (which could be sorted differently) to the model index
     return self.model.rows[self.table.convertRowIndexToModel(index)]
@@ -690,14 +702,35 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       rowIndex = event.getSource().rowAtPoint(event.getPoint())
       row = self.getRow(rowIndex)
       if self.imp and self.imp.getWindow():
-        self.imp.setSlice(row[0]) # TODO use an ScheduledExecutorService
+        self.task = Task(self.imp.setSlice, row[0]) # will be run by the scheduler
+
+  def showOverlaps(self):
+    rowIndex = self.getRow(event.getSource().rowAtPoint(event.getPoint()))
+    self.task = Task(self.runEvaluateMontages, [self.model.groupNames[rowIndex]], [self.model.tileGroups[rowIndex]], self.model.csvDir, self.imp, debug=True, debugJustShowOverlaps=True) # will be run by the scheduler
+
+  def exportCSV(self):
+    sd = SaveDialog("Save table to CSV", "montage-evaluation", ".csv")
+    folder = sd.getDirectory()
+    if not folder:
+      return # user cancelled
+    path = os.path.join(folder, sd.getFileName())
+    with open(path, 'w') as f:
+     f.write(", ".join(self.header))
+     f.write("\n")
+     f.write("\n".join(", ".join(str(v) for v in row) for row in self.model.makeRows()))
+     # Ensure it's written
+     f.flush()
+     os.fsync(f.fileno())
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
       #popup = JPopupMenu()
       #popup.add(JMenuItem("Open stack of slice montages",
       #                    actionPerformed=lambda event: self.openStackOfSliceMontages()))
-      pass # TODO
+      popup = JPopupMenu()
+      popup.add(JMenuItem("Show montage overlaps", actionPerformed=lambda event: self.showOverlaps()))
+      popup.add(JMenuItem("Export CSV...", actionPerformed=lambda event: self.exportCSV())
+      popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):
     if event.getValueIsAdjusting():
@@ -706,7 +739,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
     self.lastIndex = event.getLastIndex()
 
 
-def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True):
+def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, runEvaluateMontages, show=True):
   # Load evaluation data if any
   score_files = filter(lambda filename: filename.endswith(".montage_scores.csv"), os.listdir(csvDir))
   montage_scores = {}
@@ -729,13 +762,15 @@ def makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, show=True):
   syncPrintQ("montage_scores: %i entries" % len(montage_scores))
   #
   try:
-    model = EvaluateMontageModel(groupNames, tileGroups, imp, csvDir, montage_scores)
+    scheduler = newScheduledExecutor()
+    model = EvaluateMontageModel(groupNames, tileGroups, imp, csvDir, montage_scores, scheduler)
     # GUI
     frame, table, search_field, all = makeFrame(model, "Slice montage evaluation", show=show)
+    frame.addWindowListener(ExecutorCloser(scheduler.exe))
     # Enable search by regular expression matching
     search_field.addKeyListener(TypingInSearchField(table, model, search_field)) 
     # Add mouse events
-    opener = EvaluationRowClickListener(table, model, imp)
+    opener = EvaluationRowClickListener(table, model, imp, runEvaluateMontages)
     table.addMouseListener(opener)
     # Enable pushing enter instead of clicking
     # Instead of a KeyListener, use the input vs action map
