@@ -1363,7 +1363,7 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
       for i in slice_indices: # 1-based
         if 1 == len(tileGroups[i-1]):
           syncPrintQ("evaluate montage: skipping %s with 1 single tile." % groupNames[i-1])
-          futures.append(i, float('NaN'))
+          futures.append((i, ["N/A"] + [float('NaN')] * 5))
           continue
         futures.append((i, exe.submit(Task(evaluateMontage, groupNames[i-1], tileGroups[i-1], csvDir, overlap, offset, params_pixels, PCscale=PCscale))))
       for i, fu in futures:
