@@ -626,18 +626,23 @@ class EvaluateMontageModel(AbstractTableModel):
     self.restore() # populate rows
 
   def restore(self):
+    self.rows = self.makeRows()
+
+  def makeRows(self):
     # Add one row for each tile-vs-tile registration,
     # so a section with 2 tiles will have 1 row
     # and a section with 4 tiles will have 4 rows.
+    rows = []
     for i, groupName in enumerate(self.groupNames): # sorted
       scores = self.montage_scores.get(groupName, None)
       if scores:
         for score in scores:
-          self.rows.append([i+1, groupName] + score) # slice index as 1-based
+          rows.append([i+1, groupName] + score) # slice index as 1-based
     if 0 == len(self.rows):
       syncPrintQ("No rows found for EvaluateMontageModels. groupName keys in montage_scores were:")
       for key in self.montage_scores:
         print key
+    return rows
 
   def getColumnName(self, col):
     return self.header[col]
