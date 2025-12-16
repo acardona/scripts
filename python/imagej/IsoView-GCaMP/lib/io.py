@@ -643,7 +643,7 @@ def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, pri
                        ArrayDataAccessFactory.get(primitiveType, AccessFlags.setOf(AccessFlags.VOLATILE)))
 
 
-def readN5(path, dataset_name, show=None, showImp=True, title=None):
+def readN5(path, dataset_name, show=None, showImp=True, title=None, maxNumCacheEntries=10000):
   """ path: filepath to the folder with N5 data.
       dataset_name: name of the dataset to use (there could be more than one).
       show: defaults to None. "IJ" for virtual stack, "BDV" for BigDataViewer.
@@ -651,8 +651,9 @@ def readN5(path, dataset_name, show=None, showImp=True, title=None):
         If "BDV", returns the RandomAccessibleInterval and the bdv instance.
       showImp: on when show is "IJ"; defaults to True, when False won't show the ImagePlus.
       title: when shown, if not None, replace ImagePlus title with this.
+      maxNumCacheEntries: default to 10000, which for a blocksize of 256x256x64 and a canvas of 16000x16000x64 comprising then 3906 blocks, fits more than twice over in the default 10,000.
       """
-  img = N5Utils.open(N5FSReader(path, GsonBuilder()), dataset_name)
+  img = N5Utils.openWithBoundedSoftRefCache(N5FSReader(path, GsonBuilder()), dataset_name, maxNumCacheEntries)
   if show:
     if "IJ" == show:
       return img, showStack(img, title=dataset_name if not title else title, show=showImp)
