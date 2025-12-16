@@ -19,6 +19,7 @@ for i in range(len(layers)):
 		if start:
 			fileroot = "_".join(patch.filePath.split("_")[0:3]) + "_"
 			fileroot = fileroot.replace("tmp/", "")
+			fileroot = "/net/fibserver1/raw/NGC-10/registration/montage-csv/" + os.path.split(fileroot)[1]
 			print fileroot+".csv"
 			roottrans = patch.getAffineTransform()
 			rootx = roottrans.getTranslateX()
