@@ -1119,7 +1119,7 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   replaceSections(groupNames, tileGroups, replace_sections)
 
   # How many sections to montage in parallel
-  nThreadsMontaging = max(1, int(numCPUs() / (paramsTileConf["nThreadsOptimizer"] / 2)))
+  nThreadsMontaging = max(1, int(numCPUs() / (paramsTileConf["nThreadsOptimizer"])))
 
   # Print groups to a CSV file if it's the first time
   if not filepaths_cached:
