@@ -3,7 +3,7 @@ import os, sys
 # Add current directory to path
 sys.path.append(os.path.dirname(sys.argv[0]))
 # Import parameters
-from step_1_montage_parameters import montageDir, first_section, last_section
+from step_1_montage_parameters import montageDir, first_section, last_section, overlap, offset, params_pixels
 
 from lib.montage2d import runEvaluateMontages
 from lib.montage2d_table import makeMontageEvaluationTable
@@ -18,6 +18,8 @@ with open(os.path.join(montageDir, "groupNames"), 'r') as f:
     groupNames.append(p[0])
     tileGroups.append(p[1].strip()[1:-1].split(', '))
 
-frame, table, search_field, all = makeMontageEvaluationTable(groupNames[first_section:last_section+1][0:100],
-                                                             tileGroups[first_section:last_section+1][0:100],
-                                                             IJ.getImage(), montageDir, runEvaluateMontages, show=True)
+frame, table, search_field, all = makeMontageEvaluationTable(groupNames[first_section:last_section+1],
+                                                             tileGroups[first_section:last_section+1],
+                                                             IJ.getImage(), montageDir,
+                                                             overlap, offset, params_pixels,
+                                                             runEvaluateMontages, show=True)
