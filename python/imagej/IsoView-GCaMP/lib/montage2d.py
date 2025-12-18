@@ -1174,7 +1174,7 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
   volumeImgMontagedScaled = lazyCachedCellImg(SectionCellLoader(scaled_filepaths, asArrayImg),
                                               [width, height, len(groupNames)],
                                               [width, height, 1],
-                                              pixelType, primitiveType, maxRefs=0)
+                                              pixelType, primitiveType, maxRefs=numCPUs()) # max sections cached
   
   if show:
     # Display as an ImageJ stack
