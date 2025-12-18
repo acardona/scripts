@@ -96,6 +96,7 @@ class Task(Callable):
     self.fn = fn
     self.args = args
     self.kwargs = kwargs
+    self.next = None
   def call(self):
     if isThreadDead():
       return None
@@ -103,6 +104,15 @@ class Task(Callable):
       return self.fn(*self.args, **self.kwargs)
     except:
       printException()
+    finally:
+      if self.next:
+        self.next.call()
+  def continuation(self, task):
+    # task should be a Task or at least a Callable
+    if isinstance(task, Callable):
+      self.next = task
+    else:
+      syncPrintQ("ERROR: Task.continuation: argument is not Callable and won't be invoked.")
 
 class RunTask(Runnable):
   """ A wrapper for executing functions in concurrent threads. """
