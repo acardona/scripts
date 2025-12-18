@@ -618,31 +618,6 @@ class SectionCellLoader(CacheLoader):
                 img.update(None)) # get the underlying DataAccess
 
 
-
-def lazyCachedCellImg(loader, volume_dimensions, cell_dimensions, pixelType, primitiveType, maxRefs=0):
-  """ Create a lazy CachedCellImg, backed by a SoftRefLoaderCache,
-      which can be used to e.g. create the equivalent of ij.VirtualStack but with ImgLib2,
-      with the added benefit of a cache based on SoftReference (i.e. no need to manage memory).
-
-      loader: a CacheLoader that returns a single Cell for each index (like the Z index in a VirtualStack).
-      volume_dimensions: a list of int or long numbers, with the last dimension
-                         being the number of Cell instances (i.e. the number of file paths).
-      cell_dimensions: a list of int or long numbers, whose last dimension is 1.
-      pixelType: e.g. UnsignedByteType
-      primitiveType: e.g. BYTE
-      maxRefs: defaults to zero which means unbounded, that is, soft references may have been garbage collected
-               but entries in the cache table are still around. When maxRefs larger > 0, then only that many references
-               will be kept as entries by using a BoundedSoftRefLoaderCache.
-
-      Returns a CachedCellImg.
-  """
-  cache = SoftRefLoaderCache() if 0 == maxRefs else BoundedSoftRefLoaderCache(maxRefs)
-  return CachedCellImg(CellGrid(volume_dimensions, cell_dimensions),
-                       pixelType(),
-                       cache.withLoader(loader),
-                       ArrayDataAccessFactory.get(primitiveType, AccessFlags.setOf(AccessFlags.VOLATILE)))
-
-
 def readN5(path, dataset_name, show=None, showImp=True, title=None, maxNumCacheEntries=10000):
   """ path: filepath to the folder with N5 data.
       dataset_name: name of the dataset to use (there could be more than one).
@@ -1064,10 +1039,10 @@ class TIFFSlices(CacheLoader):
     finally:
       ra.close()
   
-  def asLazyCachedCellImg(self):
+  def asLazyCachedCellImg(self, maxRefs=0):
     access, primitiveType, pixelType = self.types[self.IFDs[0]["bitDepth"]]
     return lazyCachedCellImg(self, self.cell_dimensions[:-1] + [len(self.IFDs)],
-                             self.cell_dimensions, pixelType, primitiveType)
+                             self.cell_dimensions, pixelType, primitiveType, maxRefs=maxRefs)
 
 
 class DATSlices(CacheLoader):
@@ -1088,11 +1063,11 @@ class DATSlices(CacheLoader):
       img = self.filterFn(img)
     return Cell([img.dimension(0), img.dimension(1), 1], [0, 0, index], img.update(None))
 
-  def asLazyCachedCellImg(self):
+  def asLazyCachedCellImg(self, maxRefs=0):
     if self.dimensions2D is None:
       img = self.get(0)
       self.dimensions2D = [img.dimension(0), img.dimension(1)]
-    return lazyCachedCellImg(self, self.dimensions2D + [len(self.filepaths)], self.dimensions2D + [1], UnsignedShortType, PrimitiveType.SHORT)
+    return lazyCachedCellImg(self, self.dimensions2D + [len(self.filepaths)], self.dimensions2D + [1], UnsignedShortType, PrimitiveType.SHORT, maxRefs=maxRefs)
 
 
 def serialize(obj, filepath):
