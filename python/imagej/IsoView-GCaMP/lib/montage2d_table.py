@@ -458,7 +458,10 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
       slice_indices = range(firstIndex, lastIndex + 1) # Already 1-based
       numThreads = int(gd.getNextNumber())
       PCscale = gd.getNextNumber()
-      self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, self.imp, PCscale=PCscale, n_threads=numThreads))
+      task = Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, self.imp, PCscale=PCscale, n_threads=numThreads)
+      # When done, open the table
+      task.continuation = Task(makeMontageEvaluationTable, self.model.groupNames, self.model.tileGroups, self.imp, self.csvDir, self.overlap, self.offset, self.params_pixels, self.runEvaluateMontages, show=True)
+      self.exe.submit(task)
 
   def evaluateAllMontages(self):
     self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, self.imp, n_threads=numCPUs()))

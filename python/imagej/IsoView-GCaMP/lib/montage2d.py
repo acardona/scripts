@@ -1382,13 +1382,9 @@ def runEvaluateMontages(groupNames, tileGroups, csvDir, slice_indices, overlap, 
         #syncPrintQ("Montage scores for slice index %i (%s):\n%s" % (i, groupNames[i-1], "\n".join("  %s: %f, %f, %f, %f, %f" % (s, cc, dx, dy, d, cc2) for s, (cc, dx, dy, d, cc2) in scores)))
       if debugJustShowOverlaps:
         return
-      # Open the table
-      makeMontageEvaluationTable(groupNames, tileGroups, imp, csvDir, overlap, offset, params_pixels, show=True) # TODO can't send itself, runEvaluateMontages, as argument here. Maybe send evaluateMontages
-      #
       return [fu.get() for i, fu in futures]
     except:
       printException()
     finally:
       exe.shutdown()
-
 
