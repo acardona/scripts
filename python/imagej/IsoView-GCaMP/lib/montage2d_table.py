@@ -749,7 +749,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       return # user cancelled
     path = os.path.join(folder, sd.getFileName())
     with open(path, 'w') as f:
-     f.write(", ".join(self.header))
+     f.write(", ".join(self.model.header))
      f.write("\n")
      f.write("\n".join(", ".join(str(v) for v in row) for row in self.model.makeRows()))
      # Ensure it's written
