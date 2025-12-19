@@ -3,13 +3,14 @@ import sys, traceback
 from synchronize import make_synchronized
 from java.util.concurrent import Callable, Future, Executors, ThreadFactory, TimeUnit
 from java.util.concurrent.atomic import AtomicInteger
-from java.lang.reflect.Array import newInstance as newArray
+from java.util.concurrent.locks import ReentrantLock
 from java.lang import Runtime, Thread, Double, Float, Byte, Short, Integer, Long, Boolean, Character, System, Runnable
+from java.lang.reflect.Array import newInstance as newArray
+from java.lang.ref import SoftReference
 from net.imglib2.realtransform import AffineTransform3D
 from net.imglib2.view import Views
 from java.util import LinkedHashMap, Collections, LinkedList, HashMap
-from java.lang.ref import SoftReference
-from java.util.concurrent.locks import ReentrantLock
+from java.io import File
 
 
 printService = Executors.newSingleThreadScheduledExecutor()
@@ -261,6 +262,24 @@ class ParallelTasks:
     self.exe = None
     self.futures = None
 
+class WaitAndShutdown(Runnable):
+  def __init__(self, futures, exe):
+    self.exe = exe
+    self.futures = futures
+  def run(self):
+    for fu in self.futures:
+      fu.get()
+    self.exe.shutdown()
+
+class RemoveFile(Runnable):
+  def __init__(self, path):
+    self.path = path
+  def run(self):
+    try:
+      syncPrintQ("Deleting file: %s" % self.path)
+      File(path).delete()
+    except:
+      printException()
 
 def timeit(n_iterations, fn, *args, **kwargs):
   times = []
