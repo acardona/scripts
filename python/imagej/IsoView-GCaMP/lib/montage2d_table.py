@@ -443,25 +443,43 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
     #
     newThread(sampleStack, self.imp, spacing, width, self.csvDir)
   
-  def evaluateMontages(self):
+  def evaluateSelectedMontages(self):
     if self.firstIndex > -1 and self.lastIndex > -1:
-      gd = GenericDialog("Evaluate montages")
-      gd.addMessage("1-based slice indices")
-      gd.addNumericField("First slice: ", self.getRow(self.firstIndex)[0], 0, 6, "")
-      gd.addNumericField("Last slice: ", self.getRow(self.lastIndex)[0], 0, 6, "")
+      slice_indices = [self.getRow(index)[0] for index in xrange(self.firstIndex, self.lastIndex + 1)]
+      gd = GenericDialog("Evaluate selected montages")
+      gd.addMessage("Will evaluate %i montages" % len(slice_indices))
       gd.addNumericField("Number of threads: ", max(1, numCPUs()), 0, 4, "")
       gd.addNumericField("PhaseCorrelation scale: ", 0.5, 2, 6, "")
       gd.showDialog()
       if not gd.wasOKed():
         return
-      firstIndex, lastIndex = int(gd.getNextNumber()), int(gd.getNextNumber())
-      slice_indices = range(firstIndex, lastIndex + 1) # Already 1-based
       numThreads = int(gd.getNextNumber())
       PCscale = gd.getNextNumber()
+      self.evaluateMontageRange(slice_indices=slice_indices, numThreads=numThreads, PCscale=PCscale)
+ 
+  def evaluateMontageRange(self, slice_indices=None, numThreads=None, PCscale=0.5):
+    if self.firstIndex > -1 and self.lastIndex > -1:
+      if slice_indices is None or numThreads is None or PCscale is None):
+        # Choose a range
+        gd = GenericDialog("Evaluate range of montages")
+        gd.addMessage("1-based slice indices")
+        gd.addNumericField("First slice: ", self.getRow(self.firstIndex)[0], 0, 6, "")
+        gd.addNumericField("Last slice: ", self.getRow(self.lastIndex)[0], 0, 6, "")
+        gd.addNumericField("Number of threads: ", max(1, numCPUs()), 0, 4, "")
+        gd.addNumericField("PhaseCorrelation scale: ", 0.5, 2, 6, "")
+        gd.showDialog()
+        if not gd.wasOKed():
+          return
+        firstIndex, lastIndex = int(gd.getNextNumber()), int(gd.getNextNumber())
+        slice_indices = range(firstIndex, lastIndex + 1) # Already 1-based
+        numThreads = int(gd.getNextNumber())
+        PCscale = gd.getNextNumber()
+      # run
       task = Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, slice_indices, self.overlap, self.offset, self.params_pixels, self.imp, PCscale=PCscale, n_threads=numThreads)
       # When done, open the table
       task.continuation = Task(makeMontageEvaluationTable, self.model.groupNames, self.model.tileGroups, self.imp, self.csvDir, self.overlap, self.offset, self.params_pixels, self.runEvaluateMontages, show=True)
       self.exe.submit(task)
+    
 
   def evaluateAllMontages(self):
     self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, self.imp, n_threads=numCPUs()))
@@ -483,8 +501,10 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
       popup.add(JMenuItem("Open sampled stack for Labkit...",
                           actionPerformed=lambda event: self.openSampledStackForLabkit()))
       popup.addSeparator()
-      popup.add(JMenuItem("Evaluate montages...",
-                          actionPerformed=lambda event: self.evaluateMontages()))
+      popup.add(JMenuItem("Evaluate selected montages...",
+                          actionPerformed=lambda event: self.evaluateSelectedMontages()))
+      popup.add(JMenuItem("Evaluate montage range...",
+                          actionPerformed=lambda event: self.evaluateMontageRange()))
       popup.add(JMenuItem("Evaluate all montages",
                           actionPerformed=lambda event: self.evaluateAllMontages()))
       popup.show(event.getComponent(), event.getX(), event.getY())
