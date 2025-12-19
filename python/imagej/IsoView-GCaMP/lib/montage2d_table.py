@@ -624,6 +624,11 @@ class EvaluateMontageModel(AbstractTableModel):
     self.groupNames = groupNames
     self.tileGroups = tileGroups
     self.imp = imp
+    if self.imp:
+      # From groupNames the index can be wrong: some slices might have been ignored
+      self.labels = {self.imp.getStack().getSliceLabel(index): index for index in xrange(1, self.imp.getNSlices() + 1)}
+    else:
+      self.labels = {}
     self.csvDir = csvDir
     self.montage_scores = montage_scores
     self.header = ["Slice", "Group name", "pair", "CC", "dx", "dy", "d", "CC2"]
@@ -643,7 +648,7 @@ class EvaluateMontageModel(AbstractTableModel):
       scores = self.montage_scores.get(groupName, None)
       if scores:
         for score in scores:
-          rows.append([i+1, groupName] + score) # slice index as 1-based
+          rows.append([self.model.labels.get(groupName, i+1), groupName] + score) # slice index as 1-based
     if 0 == len(rows):
       syncPrintQ("No rows found for EvaluateMontageModels. groupName keys in montage_scores were:")
       for key in self.montage_scores:
