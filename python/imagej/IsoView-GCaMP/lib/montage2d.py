@@ -1191,7 +1191,7 @@ def runMontaging(name, srcDir, tgtDir, montageDir, repairedDir,
     # Main table
     table = makeMontageTable(groupNames, tileGroups, imp, volumeImgMontagedScaled, montageDir, overlap, offset, params_pixels, runEvaluateMontages, show=True)
     # Montage evaluation table
-    makeMontageEvaluationTable(groupNames, tileGroups, imp, montageDir, runEvaluateMontages, show=True)
+    makeMontageEvaluationTable(groupNames, tileGroups, imp, montageDir, overlap, offset, params_pixels, runEvaluateMontages, show=True)
   
   return volumeImgMontagedScaled, groupNames, tileGroups
 
