@@ -764,7 +764,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
     try:
       futures = []
       for i in self.table.getSelectedRows():
-        fu.append(exe.submit(RemoveFile(os.path.join(self.csvDir, self.getRow(i)[1] + ".csv"))))
+        futures.append(exe.submit(RemoveFile(os.path.join(self.model.csvDir, self.getRow(i)[1] + ".csv"))))
       exe.submit(WaitAndShutdown(futures, exe))
     except:
       printException()
@@ -779,7 +779,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       popup = JPopupMenu()
       popup.add(JMenuItem("Show montage overlaps", actionPerformed=lambda event: self.showOverlaps()))
       popup.add(JMenuItem("Export CSV...", actionPerformed=lambda event: self.exportCSV()))
-      popup.add(JMenuItem("Remove montage CSV files", actionPerformed=lambda event: self.removeMontageCSVFiles())
+      popup.add(JMenuItem("Remove montage CSV files", actionPerformed=lambda event: self.removeMontageCSVFiles()))
       popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):

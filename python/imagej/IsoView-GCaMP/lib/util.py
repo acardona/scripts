@@ -276,8 +276,8 @@ class RemoveFile(Runnable):
     self.path = path
   def run(self):
     try:
-      syncPrintQ("Deleting file: %s" % self.path)
-      File(path).delete()
+      File(self.path).delete()
+      syncPrintQ("Deleted file: %s" % self.path)
     except:
       printException()
 
