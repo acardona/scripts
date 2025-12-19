@@ -208,7 +208,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   def deleteMontageCSVFiles(self):
     if self.table.getSelectedRowCount() > 0:
       #rowIndices = list(self.table.getSelectedRows())  # Can be wrong if sorting by some other column that the first
-      rowIndices = [self.table.convertRowIndexToModel(i) for i in self.table.getSelectedRows()]
+      rowIndices = [self.getRow(i)[0] for i in self.table.getSelectedRows()]
       affected = "\n".join(", ".join(map(str, batch)) for batch in batched(rowIndices, 8))
       msg = "Delete CSV files for %i montages:\n%s\nPlease confirm" % (len(rowIndices), affected)
       yn = JOptionPane.showConfirmDialog(self.table, msg, "Delete CSV montage files",
