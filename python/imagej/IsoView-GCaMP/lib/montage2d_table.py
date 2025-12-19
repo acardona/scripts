@@ -459,7 +459,7 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
  
   def evaluateMontageRange(self, slice_indices=None, numThreads=None, PCscale=0.5):
     if self.firstIndex > -1 and self.lastIndex > -1:
-      if slice_indices is None or numThreads is None or PCscale is None):
+      if slice_indices is None or numThreads is None or PCscale is None:
         # Choose a range
         gd = GenericDialog("Evaluate range of montages")
         gd.addMessage("1-based slice indices")
@@ -668,7 +668,7 @@ class EvaluateMontageModel(AbstractTableModel):
       scores = self.montage_scores.get(groupName, None)
       if scores:
         for score in scores:
-          rows.append([self.model.labels.get(groupName, i+1), groupName] + score) # slice index as 1-based
+          rows.append([self.labels.get(groupName, i+1), groupName] + score) # slice index as 1-based
     if 0 == len(rows):
       syncPrintQ("No rows found for EvaluateMontageModels. groupName keys in montage_scores were:")
       for key in self.montage_scores:
