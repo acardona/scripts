@@ -31,7 +31,7 @@ except:
   print "WARNING Labkit isn't installed. Install it via the Fiji updater."
 
 from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist, imageInfo, makeNonOverwritingName
-from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, batched, printException, newScheduledExecutor
+from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, batched, printException, newScheduledExecutor, RemoveFile, WaitAndShutdown
 from lib.ui import duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.registration import saveMatrices
 
@@ -756,6 +756,21 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
      f.flush()
      os.fsync(f.fileno())
 
+  def removeMontageCSVFiles(self):
+    exe = newFixedThreadPool(numCPUs())
+    yn = JOptionPane.showConfirmDialog(self.table, "Delete %i montage CSV files?" % self.table.getSelectedRowCount(), "Delete CSV montage files", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
+    if JOptionPane.YES_OPTION != yn:
+      return
+    try:
+      futures = []
+      for i in self.table.getSelectedRows():
+        fu.append(exe.submit(RemoveFile(os.path.join(self.csvDir, self.getRow(i)[1] + ".csv"))))
+      exe.submit(WaitAndShutdown(futures, exe))
+    except:
+      printException()
+    finally:
+      exe.shutdown()
+
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
       #popup = JPopupMenu()
@@ -764,6 +779,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       popup = JPopupMenu()
       popup.add(JMenuItem("Show montage overlaps", actionPerformed=lambda event: self.showOverlaps()))
       popup.add(JMenuItem("Export CSV...", actionPerformed=lambda event: self.exportCSV()))
+      popup.add(JMenuItem("Remove montage CSV files", actionPerformed=lambda event: self.removeMontageCSVFiles())
       popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):
