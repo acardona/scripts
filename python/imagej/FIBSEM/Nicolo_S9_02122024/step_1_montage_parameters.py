@@ -5,7 +5,8 @@ from mpicbg.imagefeatures import FloatArray2DSIFT
 from ij.gui import Roi
 
 # REGISTRATION LIBRARY
-libDir = "/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/"
+#libDir = "/lmb/home/acardona/lab/scripts/python/imagej/IsoView-GCaMP/"
+libDir = "/data/code/scripts/python/imagej/IsoView-GCaMP/"
 
 # Import registration library functions
 sys.path.append(libDir)
@@ -82,8 +83,8 @@ params_pixels = {
 # Parameters for SIFT features
 paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.steps = 3 # 1
-paramsSIFT.minOctaveSize = 1024 # if 0, will be updated in a clone # TODO the max should be about 4096 to enable smoothing when Gaussian-scaling down
-paramsSIFT.maxOctaveSize = 4096 # if 0, will be updated in a clone
+paramsSIFT.minOctaveSize = 512 # if 0, will be updated in a clone # TODO the max should be about 4096 to enable smoothing when Gaussian-scaling down
+paramsSIFT.maxOctaveSize = 2048 # if 0, will be updated in a clone
 paramsSIFT.initialSigma = 1.6 # default 1.6
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
