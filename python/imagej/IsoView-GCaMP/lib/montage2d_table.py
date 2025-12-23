@@ -18,7 +18,7 @@ from ij.process import ImageProcessor
 
 from ini.trakem2 import Project
 from ini.trakem2.display import Display, Patch
-from ini.trakem2.imaging.filters import Invert, ResetMinAndMax, EnhanceContrast
+from ini.trakem2.imaging.filters import Invert, ResetMinAndMax, CLAHE, EnhanceContrast
 
 from net.imglib2.img.array import ArrayImgs
 
@@ -31,7 +31,7 @@ except:
   print "WARNING Labkit isn't installed. Install it via the Fiji updater."
 
 from lib.io import readFIBSEMHeader, readFIBSEMdat, ensureDirsExist, imageInfo, makeNonOverwritingName
-from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, batched, printException, newScheduledExecutor, RemoveFile, WaitAndShutdown
+from lib.util import syncPrintQ, Task, numCPUs, newFixedThreadPool, newThread, batched, printException, newScheduledExecutor, RemoveFile, WaitAll
 from lib.ui import duplicateInParallel, saveInParallel, ExecutorCloser
 from lib.registration import saveMatrices
 
@@ -227,177 +227,9 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       return
     # Rows selected:
     modelRowIndices = [self.table.convertRowIndexToModel(i) for i in self.table.getSelectedRows()]
-    newThread(self.manualMontage, modelRowIndices)
-  
-  def manualMontage(self, modelRowIndices):
-    """
-    Open a TrakEM2 project for the set of sections selected.
-    """
-    # Make a tmp directory under self.csvDir
-    tmpDir = os.path.join(self.csvDir, "tmp")
-    ensureDirsExist(tmpDir)
-    # Check if a project for this set of sections already exists
-    modelRowIndices = list(sorted(modelRowIndices))
-    first = modelRowIndices[0] # 0-based
-    last  = modelRowIndices[-1] # 0-based
-    xml_path = os.path.join(tmpDir, "montages-%i-%i.xml" % (first, last))
-    if os.path.exists(xml_path):
-      syncPrintQ("TrakEM2 project for sections %i-% exists already." % (first, last))
-      # Check if it is open already
-      for p in Project.getProjects():
-        if xml_path == p.getLoader().getProjectXMLPath():
-          syncPrintQ("TrakEM2 project is open: bringing its display to the front.")
-          Display.getOrCreateFront(p)
-          return
-      # Otherwise open it
-      syncPrintQ("TrakEM2 project exists, will open it now.")
-      p = Project.openFSProject(xml_path)
-      Display.getOrCreateFront(p)
-      self.addTrakEM2Tab(p)
-      return
-    # Create a TrakEM2 project
-    project = Project.newFSProject("blank", None, tmpDir)
-    layerset = project.getRootLayerSet()
-    # Open image tiles and copy them there (repeats from montage2d "load" function, but can't have circular dependencies
-    for rowIndex in modelRowIndices:
-      row = self.model.rows[rowIndex]
-      groupName = row[1]
-      tilePaths = self.model.tileGroups[row[0]]
-      print "Will setup for montage:", groupName
-      print "With tile filepaths: \n  %s" % "\n  ".join(tilePaths)
-      # Load the montage CSV file if it exists
-      montage_csv = os.path.join(self.csvDir, groupName + ".csv")
-      coords = []
-      if os.path.exists(montage_csv):
-        with open(montage_csv, 'r') as csvfile:
-          reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-          reader.next() # skip header
-          for v in reader:
-            coords.append([float(v[2]), float(v[5])])
-      # Create a TrakEM2 Layer for this section
-      layer = layerset.getLayer(row[0], 0, True)
-      # Save all tile images in the tmpDir folder and add them as Patch instances to the Layer
-      pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
-      for i, tilePath in enumerate(tilePaths):
-        # Create a Patch preprocessor script in BeanShell to laod the data directly from the DAT file,
-        # avoiding having to save intermediate TIFF files.
-        # A recipe for opening channel at index 0 of the DAT file:
-        if tilePath.lower().endswith(".dat"):
-          script = """
-import sc.fiji.io.FIBSEM_Reader;
-import java.io.FileInputStream;
-import ij.ImagePlus;
-var path = "%s";
-var reader = new FIBSEM_Reader();
-var header = reader.parseHeader(new FileInputStream(path));
-imp2 = reader.readFIBSEM(header, new FileInputStream(path), FIBSEM_Reader.openAsFloat);
-// imp and patch exist as injected variables
-imp.setProcessor(path, imp2.getStack().getProcessor(1)); // channel index zero, 1-based
-          """ % tilePath
-        else:
-          script = """
-import ij.IJ;
-path = "%s";
-imp.setProcessor(path, IJ.openImage(path).getProcessor());
-          """ % tilePath
-        # Write the script to disk with a unique name for each image
-        script_path = os.path.join(tmpDir, os.path.basename(tilePath) + ".bsh")
-        with open(script_path, 'w') as sf:
-          sf.write(script)
-          # Ensure file is written to disk now
-          sf.flush()
-          os.fsync(sf.fileno())
-        # Add Patches to Layer
-        # Can't use, loads the image from the path before setting the filters, would have to flush TrakEM2's image cache and reload
-        #patch = Patch.createPatch(project, path)
-        # Create the Patch manually, which avoids loading the image
-        patch = Patch(project, os.path.basename(tilePath),
-             0, 0, 0, 0, # dimensions will be populated upon setting the script path
-             ImagePlus.GRAY16, 1.0,
-             Color.yellow, False,
-             0, pow(2, 16) -1,
-             AffineTransform(),
-             tilePath + ".nope") # bogus file path: script will generate the image
-        patch.setFilters([Invert(), ResetMinAndMax(), EnhanceContrast()])
-        patch.setPreprocessorScriptPath(script_path)
-        patch.setProperty("groupName", groupName)
-        layer.add(patch)
-        # Position the Patch like in te CSV file if possible, since some tiles may be correctly positioned
-        if len(coords) > 0:
-          x, y = coords[i]
-        else:
-          # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
-          i_row, i_col = map(int, re.match(pattern, tilePath[tilePath.rfind('_')+1:]).groups())
-          # Position tiles so as to overlap tiles by 10%
-          x = i_col * 0.9 * info["width"]
-          y = i_row * 0.9 * info["height"]
-        patch.setLocation(x, y)
-      # Update internal quadtree of the layer so it can find the Patch instances
-      layer.recreateBuckets()
-      # Start off mipmap regeneration
-      project.getLoader().generateMipMaps(layer.getPatches(True), True)
-      # Resize the display canvas
-      layerset.setMinimumDimensions()
-    # Delete the layer at Z=0 if empty
-    layer0 = layerset.getLayers().get(0)
-    if layer0.isEmpty():
-      project.findLayerThing(layer0).remove(False)
-    # Update TrakEM2 UI
-    project.getLayerTree().updateList(layerset)
-    # ... and the display slider
-    Display.updateLayerScroller(layerset)
-    # Show the TrakEM2 display
-    Display.getOrCreateFront(project)
-    # Ensure the display shows the tab for exporting the CSV file of the montage
-    self.addTrakEM2Tab(project)
-    # Save the TrakEM2 Project
-    project.saveAs(xml_path, False)
-  
-  def saveTrakEM2MontageCSV(self, project, printOnly, event): # used as actionPerformed for a button
-    """
-    To be executed from a button in a custom tab in the TrakEM2 Display.
-    """
-    display = Display.getOrCreateFront(project)
-    tiles = {}
-    for patch in display.getLayer().getPatches(False): # visible or invisible: all
-      # Path doesn't exist, was generated from a script
-      #path = patch.getImageFilePath()
-      path = patch.getPreprocessorScriptPath() # same as tilePath but with a .bsh extension
-      tiles[os.path.basename(path)] = patch # the folder can be different if the file was repaired. The basename suffices and will sort well.
-    matrices = []
-    groupName = None
-    for path in sorted(tiles.keys()):
-      patch = tiles[path]
-      x, y = patch.getX(), patch.getY()
-      matrices.append([1, 0, x, 0, 1, y])
-      groupName = patch.getProperty("groupName")
-    if printOnly:
-      IJ.log("Matrices describing tile montage for section %s" % groupName)
-      IJ.log("\n".join(map(str, matrices)))
-    else:
-      # Write or overwrite montage matrices CSV file
-      if JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None,
-             "Confirm", "Write montage file\n%s.csv ?" % groupName, JOptionPane.YES_NO_OPTION):
-        saveMatrices(groupName, matrices, self.csvDir)
-   
-  def addTrakEM2Tab(self, project):
-   display = Display.getOrCreateFront(project)
-   tabs = display.getTabbedPane()
-   title = "FIBSEM section montage"
-   # Check if the tab is already there
-   for i in xrange(tabs.getTabCount()):
-     if tabs.getTitleAt(i) == title:
-       syncPrintQ("'FIBSEM section montage' tab already exists.")
-       return
-   # Add it new
-   pane = JPanel()
-   b1 = JButton("Save montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, project, False))
-   pane.add(b1)
-   b2 = JButton("Print montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, project, True))
-   pane.add(b2)
-   tabs.add(title, pane)
-   display.pack() # repaint
-  
+    tm = TrakEM2Montage(self.csvDir, model)
+    newThread(tm.manualMontage, modelRowIndices)
+
   
   def openSampledStackForLabkit(self):
     if not __labkit_present__:
@@ -484,6 +316,24 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
   def evaluateAllMontages(self):
     self.exe.submit(Task(self.runEvaluateMontages, self.model.groupNames, self.model.tileGroups, self.csvDir, range(1, self.imp.getNSlices() + 1), self.overlap, self.offset, self.params_pixels, self.imp, n_threads=numCPUs()))
 
+  def remakeScaledImagesForMontages(self):
+    if self.firstIndex > -1 and self.lastIndex > -1:
+      to_remove = [self.getRow(i)[1] for i in xrange(self.firstIndex, self.lastIndex + 1)]
+      if JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None,
+             "Remove %i images from montage-csv/scaled-images/ ?" % len(to_remove), "Confirm", JOptionPane.YES_NO_OPTION):
+        futures = [self.exe.submit(Task(os.remove, os.path.join(self.csvDir, "scaled-montages/%s.tif" % groupName)))
+                   for groupName in to_remove]
+        def refreshImp(imp):
+          # Finally, update the displayed virtual stack of scaled montages
+          if imp:
+            try:
+              pass  # can only do this if the scaled image is redone again, which it hasn't!
+              #imp.getStack().getSource().getCache().invalidateAll()
+              #imp.updateAndDraw()
+            except:
+              printException()
+        self.exe.submit(WaitAll(futures, continuationTask=Task(refreshImp, self.imp)))
+
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
       popup = JPopupMenu()
@@ -497,6 +347,8 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
                           actionPerformed=lambda event: self.deleteMontageCSVFiles()))
       popup.add(JMenuItem("Montage manually...",
                           actionPerformed=lambda event: self.montageManually()))
+      popup.add(JMenuItem("Remake scaled images for selected montages", # to be able to see newly updated montages
+                          actionPerformed=lambda event: self.remakeScaledImagesForMontages()))
       popup.addSeparator()
       popup.add(JMenuItem("Open sampled stack for Labkit...",
                           actionPerformed=lambda event: self.openSampledStackForLabkit()))
@@ -522,6 +374,199 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
 #  viewIndex = table.getSelectionModel().getLeadSelectionIndex()
 #  modelIndex = table.convertRowIndexToModel(viewIndex)
 #  return modelIndex
+
+
+
+class TrakEM2Montage():
+  def __init__(self, csvDir, model):
+    self.csvDir = csvDir
+    self.model = model
+
+  def manualMontage(self, modelRowIndices):
+    """
+    Open a TrakEM2 project for the set of sections selected.
+    """
+    # Make a tmp directory under self.csvDir
+    tmpDir = os.path.join(self.csvDir, "tmp")
+    ensureDirsExist(tmpDir)
+    # Get the list of sections as labeled by groupName
+    unique = set([self.model.rows[i][1] for i in modelRowIndices]) # column 1 is the groupName in both tables
+    sortedGroupNames = sorted(unique)
+    # Check if a project for this set of sections already exists
+    first = self.model.groupNames.index(sortedGroupNames[0]) # 0-based
+    last  = self.model.groupNames.index(sortedGroupNames[-1]) # 0-based
+    xml_path = os.path.join(tmpDir, "montages-%i-%i.xml" % (first, last))
+    if os.path.exists(xml_path):
+      syncPrintQ("TrakEM2 project for sections %i-%i exists already." % (first, last))
+      # Check if it is open already
+      for p in Project.getProjects():
+        if xml_path == p.getLoader().getProjectXMLPath():
+          syncPrintQ("TrakEM2 project is open: bringing its display to the front.")
+          Display.getOrCreateFront(p)
+          return
+      # Otherwise open it
+      syncPrintQ("TrakEM2 project exists, will open it now.")
+      p = Project.openFSProject(xml_path)
+      Display.getOrCreateFront(p)
+      self.addTrakEM2Tab(p)
+      return
+    # Create a TrakEM2 project
+    project = Project.newFSProject("blank", None, tmpDir)
+    layerset = project.getRootLayerSet()
+    # Create a Patch preprocessor script in BeanShell to laod the data directly from the DAT file,
+    # avoiding having to save intermediate TIFF files.
+    # A recipe for opening channel at index 0 of the DAT file:
+    # Ensure preprocessor scripts exist
+    scriptDAT = """
+import sc.fiji.io.FIBSEM_Reader;
+import java.io.FileInputStream;
+import ij.ImagePlus;
+var path = patch.getProperty("tilePath");
+var reader = new FIBSEM_Reader();
+var header = reader.parseHeader(new FileInputStream(path));
+imp2 = reader.readFIBSEM(header, new FileInputStream(path), FIBSEM_Reader.openAsFloat);
+// imp and patch exist as injected variables
+imp.setProcessor(path, imp2.getStack().getProcessor(1)); // channel index zero, 1-based
+          """
+    scriptIJ = """
+import ij.IJ;
+path = patch.getProperty("tilePath");
+imp.setProcessor(path, IJ.openImage(path).getProcessor());
+          """
+    # Write the script to disk if not there already
+    script_paths = {imageFormat: os.path.join(tmpDir, name + ".bsh")
+                    for imageFormat, name in [(".dat", "script_DAT"), ("IJ", "script_IJ")]}
+    for script, path in [(scriptDAT, script_paths[".dat"]),
+                         (scriptIJ,  script_paths["IJ"])]:
+      if not os.path.exists(path):
+        with open(path, 'w') as sf:
+          sf.write(script)
+          # Ensure file is written to disk now
+          sf.flush()
+          os.fsync(sf.fileno())
+    
+    # Setup the montage for each section
+    for groupName in sortedGroupNames:
+      # Find the index of groupName in groupNames, which, if there were ignored sections, may not be the same as in the table or the imp stack
+      index = self.model.groupNames.index(groupName)
+      tilePaths = self.model.tileGroups[index]
+      print "Will setup for montage:", groupName
+      print "With tile filepaths: \n  %s" % "\n  ".join(tilePaths)
+      # Load the montage CSV file if it exists
+      montage_csv = os.path.join(self.csvDir, groupName + ".csv")
+      coords = []
+      if os.path.exists(montage_csv):
+        with open(montage_csv, 'r') as csvfile:
+          reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+          reader.next() # skip header
+          for v in reader:
+            coords.append([float(v[2]), float(v[5])])
+      # Create a TrakEM2 Layer for this section
+      layer = layerset.getLayer(index + 1, 0, True)
+      #
+      pattern = re.compile("^\d+-(\d+)-(\d+)\..*$") # any extension
+      for i, tilePath in enumerate(tilePaths):
+        # Add Patches to Layer
+        # Can't use, loads the image from the path before setting the filters, would have to flush TrakEM2's image cache and reload
+        #patch = Patch.createPatch(project, path)
+        # Create the Patch manually, which avoids loading the image
+        patch = Patch(project, os.path.basename(tilePath),
+             0, 0, 0, 0, # dimensions will be populated upon setting the script path
+             ImagePlus.GRAY16, 1.0,
+             Color.yellow, False,
+             0, pow(2, 16) -1,
+             AffineTransform(),
+             tilePath + ".nope") # bogus file path: script will generate the image
+        patch.setProperty("groupName", groupName)
+        patch.setProperty("tilePath", tilePath)
+        patch.setProperty("montageDir", self.csvDir)
+        patch.setFilters([Invert(), ResetMinAndMax(), CLAHE(True, 200, 255, 3.0), EnhanceContrast()])
+        patch.setPreprocessorScriptPath(script_paths[".dat" if tilePath.endswith(".dat") else "IJ"])
+        layer.add(patch)
+        # Position the Patch like in the CSV file if possible, since some tiles may be correctly positioned
+        if len(coords) > 0:
+          x, y = coords[i]
+        else:
+          # Parse i, j coordinates from the e.g., ".*_0-0-0.dat" filename
+          i_row, i_col = map(int, re.match(pattern, tilePath[tilePath.rfind('_')+1:]).groups())
+          if tilePath.endswith(".dat"):
+            header = readFIBSEMHeader(tilePath)
+            width, height = header.xRes, header.yRes
+          else:
+            info = imageInfo(tilePath)
+            width, height = info["width"], info["height"]
+          # Position tiles so as to overlap tiles by 10%
+          x = i_col * 0.9 * width
+          y = i_row * 0.9 * height
+        patch.setLocation(x, y)
+      # Update internal quadtree of the layer so it can find the Patch instances
+      layer.recreateBuckets()
+    
+    # Start off mipmap regeneration
+    project.getLoader().regenerateMipMaps(layerset.getAll(Patch))
+    # Resize the display canvas
+    layerset.setMinimumDimensions()
+    # Delete the layer at Z=0 if empty
+    layer0 = layerset.getLayers().get(0)
+    if layer0.isEmpty():
+      project.findLayerThing(layer0).remove(False)
+    # Update TrakEM2 UI
+    project.getLayerTree().updateList(layerset)
+    # ... and the display slider
+    Display.updateLayerScroller(layerset)
+    # Show the TrakEM2 display
+    Display.getOrCreateFront(project)
+    # Ensure the display shows the tab for exporting the CSV file of the montage
+    self.addTrakEM2Tab(project)
+    # Save the TrakEM2 Project
+    project.saveAs(xml_path, False)
+  
+  def saveTrakEM2MontageCSV(self, project, printOnly, event): # used as actionPerformed for a button
+    """
+    To be executed from a button in a custom tab in the TrakEM2 Display.
+    """
+    display = Display.getOrCreateFront(project)
+    tiles = {}
+    csvDir = None
+    for patch in display.getLayer().getPatches(False): # visible or invisible: all
+      tiles[patch.getTitle()] = patch
+      if not csvDir:
+        csvDir = patch.getProperty("montageDir", self.csvDir) # attempt to get the path from the Patch itself if present
+    matrices = []
+    groupName = None
+    for path in sorted(tiles.keys()):
+      patch = tiles[path]
+      x, y = patch.getX(), patch.getY()
+      matrices.append([1, 0, x, 0, 1, y])
+      groupName = patch.getProperty("groupName")
+    if printOnly:
+      IJ.log("Matrices describing tile montage for section %s" % groupName)
+      IJ.log("\n".join(map(str, matrices)))
+    else:
+      # Write or overwrite montage matrices CSV file
+      if JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None,
+             "Confirm", "Write montage file\n%s.csv ?" % groupName, JOptionPane.YES_NO_OPTION):
+        saveMatrices(groupName, matrices, csvDir)
+   
+  def addTrakEM2Tab(self, project):
+   display = Display.getOrCreateFront(project)
+   tabs = display.getTabbedPane()
+   title = "FIBSEM section montage"
+   # Check if the tab is already there
+   for i in xrange(tabs.getTabCount()):
+     if tabs.getTitleAt(i) == title:
+       syncPrintQ("'FIBSEM section montage' tab already exists.")
+       return
+   # Add it new
+   pane = JPanel()
+   b1 = JButton("Save montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, project, False))
+   pane.add(b1)
+   b2 = JButton("Print montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, project, True))
+   pane.add(b2)
+   tabs.add(title, pane)
+   display.pack() # repaint
+
+
 
 
 class ColorCellRenderer(DefaultTableCellRenderer):
@@ -790,11 +835,21 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       futures = []
       for i in self.table.getSelectedRows():
         futures.append(exe.submit(RemoveFile(os.path.join(self.model.csvDir, self.getRow(i)[1] + ".csv"))))
-      exe.submit(WaitAndShutdown(futures, exe))
+      exe.submit(WaitAll(futures, exe=exe, shutdown=True))
     except:
       printException()
     finally:
       exe.shutdown()
+      
+  def montageManually(self):
+    # Open all tiles, save them as TIFF in a temporary folder, and open them in a TrakEM2 project,
+    # then add a new tab to the project to export the montage coordinates as a CSV file.
+    if 0 == self.table.getSelectedRowCount():
+      return
+    # Rows selected:
+    modelRowIndices = [self.table.convertRowIndexToModel(i) for i in self.table.getSelectedRows()]
+    tm = TrakEM2Montage(self.model.csvDir, self.model)
+    newThread(tm.manualMontage, modelRowIndices)
 
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
@@ -805,6 +860,7 @@ class EvaluationRowClickListener(MouseAdapter, ListSelectionListener):
       popup.add(JMenuItem("Show montage overlaps", actionPerformed=lambda event: self.showOverlaps()))
       popup.add(JMenuItem("Export CSV...", actionPerformed=lambda event: self.exportCSV()))
       popup.add(JMenuItem("Remove montage CSV files", actionPerformed=lambda event: self.removeMontageCSVFiles()))
+      popup.add(JMenuItem("Montage manually", actionPerformed=lambda event: self.montageManually()))
       popup.show(event.getComponent(), event.getX(), event.getY())
       
   def valueChanged(self, event):

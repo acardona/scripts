@@ -45,9 +45,11 @@ def syncPrintQ(msg, copy_to_stdout=False):
 
 
 @make_synchronized
-def syncPrint(msg):
+def syncPrint(msg, copy_to_stdout=True):
   """ Synchronized access to python's built-in print function. """
   print(msg)
+  if copy_to_stdout:
+    System.out.println(msg)
   
 
 def printException(e=None, printFn=syncPrintQ, msg=""):
@@ -262,14 +264,18 @@ class ParallelTasks:
     self.exe = None
     self.futures = None
 
-class WaitAndShutdown(Runnable):
-  def __init__(self, futures, exe):
+class WaitAll(Runnable):
+  def __init__(self, futures, exe=None, shutdown=False, continuationTask=None):
     self.exe = exe
     self.futures = futures
+    self.shutdown = shutdown
   def run(self):
     for fu in self.futures:
       fu.get()
-    self.exe.shutdown()
+    if self.continuationTask:
+      self.continuationTask.call() # execute in the same thread that did all the waiting
+    if self.shutdown:
+      self.exe.shutdown()
 
 class RemoveFile(Runnable):
   def __init__(self, path):
