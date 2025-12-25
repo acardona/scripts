@@ -547,24 +547,73 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
       if JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None,
              "Confirm", "Write montage file\n%s.csv ?" % groupName, JOptionPane.YES_NO_OPTION):
         saveMatrices(groupName, matrices, csvDir)
+        # Remove the montage stats and evaluation files, if any
+        for name in ["scores", "stats"]:
+          path = os.path.join(groupName, ".montage_%s.csv" % name)
+          if os.path.exists(path):
+            os.remove(path)
    
+  def saveTrakEM2AllMontageCSVs(self, project, event):
+    """
+    To be executed from a button in a custom tab in the TrakEM2 Display.
+    """
+    display = Display.getOrCreateFront(project)
+    layerset = display.getLayer().getParent()
+    if not (JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None, "Write montage CSV files for all sections?", "Confirm", JOptionPane.YES_NO_OPTION)):
+      return
+    for layer in layerset.getLayers():
+      tiles = {}
+      csvDir = None
+      for patch in display.getLayer().getPatches(False): # visible or invisible: all
+        tiles[patch.getTitle()] = patch
+        if not csvDir:
+          csvDir = patch.getProperty("montageDir", self.csvDir) # attempt to get the path from the Patch itself if present
+      matrices = []
+      groupName = None
+      for path in sorted(tiles.keys()):
+        patch = tiles[path]
+        x, y = patch.getX(), patch.getY()
+        matrices.append([1, 0, x, 0, 1, y])
+        groupName = patch.getProperty("groupName")
+      # Write or overwrite montage matrices CSV file
+      saveMatrices(groupName, matrices, csvDir)
+      # Remove the montage stats and evaluation files, if any
+      for name in ["scores", "stats"]:
+        path = os.path.join(groupName, ".montage_%s.csv" % name)
+        if os.path.exists(path):
+          os.remove(path)
+  
   def addTrakEM2Tab(self, project):
-   display = Display.getOrCreateFront(project)
-   tabs = display.getTabbedPane()
-   title = "FIBSEM section montage"
-   # Check if the tab is already there
-   for i in xrange(tabs.getTabCount()):
-     if tabs.getTitleAt(i) == title:
-       syncPrintQ("'FIBSEM section montage' tab already exists.")
-       return
-   # Add it new
-   pane = JPanel()
-   b1 = JButton("Save montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, project, False))
-   pane.add(b1)
-   b2 = JButton("Print montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, project, True))
-   pane.add(b2)
-   tabs.add(title, pane)
-   display.pack() # repaint
+    display = Display.getOrCreateFront(project)
+    tabs = display.getTabbedPane()
+    title = "FIBSEM section montage"
+    # Check if the tab is already there
+    for i in xrange(tabs.getTabCount()):
+      if tabs.getTitleAt(i) == title:
+        syncPrintQ("'FIBSEM section montage' tab already exists.")
+        return
+    # Add it new
+    pane = JPanel()
+    gb = GridBagLayout()
+    pane.setLayout(gb)
+    c = GridBagConstraints()
+    c.gridx = 0
+    c.gridy = 0
+    c.anchor = GridBagConstraints.CENTER
+    c.fill = GridBagConstraints.NONE
+    b1 = JButton("Save montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, project, False))
+    gb.setConstraints(b1, c)
+    pane.add(b1)
+    b2 = JButton("Print montage CSV", actionPerformed=partial(self.saveTrakEM2MontageCSV, project, True))
+    c.gridy = 1
+    gb.setConstraints(b2, c)
+    pane.add(b2)
+    b3 = JButton("Save all montage CSVs", actionPerformed=partial(self.saveTrakEM2AllMontageCSVs, project))
+    c.gridy = 2
+    gb.setConstraints(b3, c)
+    pane.add(b3)
+    tabs.add(title, pane)
+    display.pack() # repaint
 
 
 
