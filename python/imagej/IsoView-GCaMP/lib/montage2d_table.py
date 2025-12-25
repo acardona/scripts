@@ -561,27 +561,40 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
     layerset = display.getLayer().getParent()
     if not (JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None, "Write montage CSV files for all sections?", "Confirm", JOptionPane.YES_NO_OPTION)):
       return
+    csvDir = None
     for layer in layerset.getLayers():
+      syncPrintQ("Processing layer " + str(layer))
       tiles = {}
-      csvDir = None
-      for patch in display.getLayer().getPatches(False): # visible or invisible: all
+      for patch in layer.getDisplayables(Patch): # visible or invisible: all
         tiles[patch.getTitle()] = patch
-        if not csvDir:
+        if csvDir is None:
           csvDir = patch.getProperty("montageDir", self.csvDir) # attempt to get the path from the Patch itself if present
+          msg = "Will write montage CSVs to:\n%s" % csvDir
+          IJ.log(msg)
+          syncPrintQ(msg)
       matrices = []
       groupName = None
       for path in sorted(tiles.keys()):
         patch = tiles[path]
         x, y = patch.getX(), patch.getY()
         matrices.append([1, 0, x, 0, 1, y])
-        groupName = patch.getProperty("groupName")
+        if groupName is None:
+          groupName = patch.getProperty("groupName")
+      if groupName is None:
+        IJ.log("Can't save matrices for layer %s: no groupName" % str(layer))
+        continue
       # Write or overwrite montage matrices CSV file
       saveMatrices(groupName, matrices, csvDir)
       # Remove the montage stats and evaluation files, if any
       for name in ["scores", "stats"]:
-        path = os.path.join(groupName, ".montage_%s.csv" % name)
+        path = os.path.join(csvDir, "%s.montage_%s.csv" % (groupName, name))
         if os.path.exists(path):
-          os.remove(path)
+          try:
+            os.remove(path)
+            IJ.log("File %s removed: %s" % (path, str(not os.path.exists(path))))
+          except:
+            syncPrintQ("Could not delete:\n%s" % path)
+            printException()
   
   def addTrakEM2Tab(self, project):
     display = Display.getOrCreateFront(project)
