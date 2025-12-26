@@ -227,7 +227,7 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
       return
     # Rows selected:
     modelRowIndices = [self.table.convertRowIndexToModel(i) for i in self.table.getSelectedRows()]
-    tm = TrakEM2Montage(self.csvDir, model)
+    tm = TrakEM2Montage(self.csvDir, self.model)
     newThread(tm.manualMontage, modelRowIndices)
 
   
