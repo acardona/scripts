@@ -65,7 +65,7 @@ from tables import showTable
 from converter import convert2
 from pixels import autoAdjust
 from loop import createBiConsumerTypeSet
-from segmentation_em import classifyImageLabKitSegCached, makeFilterFeaturesFn
+from segmentation_em import classifyImageLabKitSegCached, makeFilterFeaturesFn, segThreadCache
 from img import showAlignedImg, makeImg
 from tables import makeTableChunks
 from montage2d import makeSliceLoader, fuseTranslationMatrices, loadMontagedImg
