@@ -28,7 +28,7 @@ model_width = 400 # target width for resizing so as to match the dimensions of t
 
 properties = {
  'name': name,
- 'scale': 1.0, # Compounds with montaging interim_scale
+ 'scale': 0.5, # Compounds with montaging interim_scale
  'shift_threshold': 10, # pixels, in world coordinates (not scaled)
  'n_threads': numCPUs(),
  'roi': None,#[section_width / 4, section_height / 4, section_width / 2, section_height / 2], # [x, y, width, height] or None. To extract SIFT features from center part only

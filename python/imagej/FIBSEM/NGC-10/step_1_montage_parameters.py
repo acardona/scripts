@@ -5,7 +5,8 @@ from ij.gui import Roi
 import os
 
 # REGISTRATION LIBRARY
-libDir = "/lmb/home/phague/fibsem/scripts/python/imagej/IsoView-GCaMP/"
+#libDir = "/lmb/home/phague/fibsem/scripts/python/imagej/IsoView-GCaMP/"
+libDir = "/net/fibserver1/code/scripts/python/imagej/IsoView-GCaMP/"
 
 # VOLUME
 name = "NGC-10" # Name of the folder containing the .dat files, e.g., "MR1.4-3"
