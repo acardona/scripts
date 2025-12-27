@@ -235,6 +235,14 @@ def extractBlockMatches(filepaths, index1, index2, params, paramsSIFT, propertie
       ijSIFT2 = SIFT(FloatArray2DSIFT(paramsSIFT2))
       features2 = ArrayList() # of Point instances
       ijSIFT2.extractFeatures(fp2, features2)
+      
+      # Use only points within the tissue
+      filterFeaturesFn = properties.get("filterFeaturesFn", None)
+      if filterFeaturesFn:
+        # sourcePoints are unscaled, but fp1 is scaled. Hence pass on the scale
+        features1 = filterFeaturesFn(fp1.convertToByte(True), features1, ip_scale=params["scale"])
+        features2 = filterFeaturesFn(fp2.convertToByte(True), features2, ip_scale=params["scale"]) # TODO seems wasteful, could be cached
+      
       # Vector of PointMatch instances
       sourceMatches = FloatArray2DSIFT.createMatches(features1,
                                                      features2,
