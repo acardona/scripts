@@ -29,12 +29,13 @@ propertiesBM = {
          #section_height / 2],
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
  'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width, as3D=False), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
+ 'min_blockmatching': 1, # minimum number of BM features to use. Setting to 1 for a re-run of the first and second chunks which have barely any tissue
 }
 
 # Parameters for blockmatching
 paramsBlockMatching = {
  'scale': propertiesBM['scale'], # Compounds with montaging interim_scale, so 0.5 would mean half of that
- 'meshResolution': 15, # 10x10 = 100 points
+ 'meshResolution': 25, # 10x10 = 100 points   # had run with 15 for all, re-running with 25 for first and second chunks which have barely any tissue
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
