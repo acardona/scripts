@@ -320,13 +320,14 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
     if self.firstIndex > -1 and self.lastIndex > -1:
       to_remove = [self.getRow(i)[1] for i in xrange(self.firstIndex, self.lastIndex + 1)]
       if JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None,
-             "Remove %i images from montage-csv/scaled-images/ ?" % len(to_remove), "Confirm", JOptionPane.YES_NO_OPTION):
+             "Remove %i images from montage-csv/scaled-montages/ ?" % len(to_remove), "Confirm", JOptionPane.YES_NO_OPTION):
         futures = [self.exe.submit(Task(os.remove, os.path.join(self.csvDir, "scaled-montages/%s.tif" % groupName)))
                    for groupName in to_remove]
         def refreshImp(imp):
           # Finally, update the displayed virtual stack of scaled montages
           if imp:
             try:
+              print "Sorry, not implemented yet."
               pass  # can only do this if the scaled image is redone again, which it hasn't!
               #imp.getStack().getSource().getCache().invalidateAll()
               #imp.updateAndDraw()
@@ -545,13 +546,17 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
     else:
       # Write or overwrite montage matrices CSV file
       if JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None,
-             "Confirm", "Write montage file\n%s.csv ?" % groupName, JOptionPane.YES_NO_OPTION):
+             "Write montage file\n%s.csv ?\nWill delete associated csv files and the scaled montage snapshot TIFF file." % groupName, "Confirm", JOptionPane.YES_NO_OPTION):
         saveMatrices(groupName, matrices, csvDir)
         # Remove the montage stats and evaluation files, if any
         for name in ["scores", "stats"]:
           path = os.path.join(groupName, ".montage_%s.csv" % name)
           if os.path.exists(path):
             os.remove(path)
+        # Remove the TIFF file under scaled-montages folder
+        path = os.path.join(csvDir, "scaled-montages/%s.tif" % groupName)
+        if os.path.exists(path):
+          os.remove(path)
    
   def saveTrakEM2AllMontageCSVs(self, project, event):
     """
@@ -559,7 +564,7 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
     """
     display = Display.getOrCreateFront(project)
     layerset = display.getLayer().getParent()
-    if not (JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None, "Write montage CSV files for all sections?", "Confirm", JOptionPane.YES_NO_OPTION)):
+    if not (JOptionPane.YES_OPTION == JOptionPane.showConfirmDialog(None, "Write montage CSV files for all sections?\nWill delete .csv files and the scaled image snapshot for each montage.", "Confirm", JOptionPane.YES_NO_OPTION)):
       return
     csvDir = None
     for layer in layerset.getLayers():
@@ -595,6 +600,14 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
           except:
             syncPrintQ("Could not delete:\n%s" % path)
             printException()
+      # Remove the TIFF file under scaled-montages folder
+      try:
+        path = os.path.join(csvDir, "scaled-montages/%s.tif" % groupName)
+        if os.path.exists(path):
+          os.remove(path)
+      except:
+        syncPrintQ("Could not delete montage scaled image at:\n%s" % path)
+        printException()
   
   def addTrakEM2Tab(self, project):
     display = Display.getOrCreateFront(project)
