@@ -1122,6 +1122,11 @@ def exportN5(filepaths,
       first = max(0, keys[-1] - (keys[-1] % block_size[2]))
       last = min(len(filepaths), first + block_size[2]) -1
       keys = None
+      # Remove all keys prior to first if any
+      for key in keys:
+        if key < first:
+          softCache.invalidate(key)
+      #
       syncPrintQ("### Preloading %i-%i ###" % (first, last))
       futures = []
       for index in xrange(first, last + 1):
