@@ -542,7 +542,7 @@ def singleTile(tilePath, width, height, params_pixels, sdx=0, sdy=0, matrix=None
   ip.insert(ipTile,
             int(sdx + dx + 0.5),
             int(sdy + dy + 0.5))
-  syncPrintQ("single tile: sdx, sdy: %f,%f  dx,dy: %f,%f  x,y: %i,%i" % (sdx, sdy, dx, dy, int(sdx + dx + 0.5), int(sdy + dy + 0.5)))
+  #syncPrintQ("single tile: sdx, sdy: %f,%f  dx,dy: %f,%f  x,y: %i,%i" % (sdx, sdy, dx, dy, int(sdx + dx + 0.5), int(sdy + dy + 0.5)))
   fn = ArrayImgs.unsignedBytes if as8bit else ArrayImgs.unsignedShorts
   aimg = fn(ip.getPixels(), [width, height])
   imp.flush()
@@ -585,7 +585,7 @@ class SectionLoader(CacheLoader):
     tilePaths = self.tileGroups[index]
     matrix = self.matrices[index] if self.matrices else None
     sdx, sdy = self.section_offsets(index) if self.section_offsets else (0, 0)
-    syncPrintQ("sdx, sdy: %f, %f" % (sdx, sdy))
+    #syncPrintQ("sdx, sdy: %f, %f" % (sdx, sdy))
     as8bit = self.params_pixels["as8bit"]
     if self.crop_ROI is not None:
       bounds = self.crop_ROI.getBounds() # a java.awt.Rectangle
