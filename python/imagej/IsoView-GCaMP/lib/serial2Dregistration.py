@@ -1091,7 +1091,7 @@ def exportN5(filepaths,
   t = UnsignedByteType if as8bit else UnsignedShortType
   nt = BYTE if as8bit else SHORT
     
-  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, t, nt)
+  cachedCellImg = lazyCachedCellImg(loader, voldims, cell_dimensions, t, nt, maxRefs=block_size[2])
 
   exe_preloader = newFixedThreadPool(n_threads=min(block_size[2], n5_threads if n5_threads > 0 else numCPUs()), name="preloader")
 
