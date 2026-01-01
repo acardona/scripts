@@ -11,6 +11,13 @@ from net.imglib2.type.numeric.integer import UnsignedByteType
 from java.awt import Toolkit
 from java.net import URL
 from java.lang import System
+try:
+  from org.janelia.saalfeldlab.n5.imglib2 import N5Utils
+  from org.janelia.saalfeldlab.n5 import N5FSReader, N5FSWriter, GzipCompression, RawCompression
+except:
+  print "*** n5-imglib2 from github.com/saalfeldlab/n5-imglib2 not installed. ***"
+from com.google.gson import GsonBuilder
+from java.util.concurrent import Executors
 
 # Seymour ssTEM volume:
 # width 28128
@@ -88,6 +95,20 @@ cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
                     ReadOnlyCachedCellImgOptions.options().volatileAccesses(True).cellDimensions(cell_dimensions))
 
 # Test it: let's see the stack
-stack = ImageJVirtualStackUnsignedByte.wrap(cachedCellImg)
-imp = ImagePlus("CATMAID Type 4 image mirror", stack)
-imp.show()
+#stack = ImageJVirtualStackUnsignedByte.wrap(cachedCellImg)
+#imp = ImagePlus("CATMAID Type 4 image mirror", stack)
+#imp.show()
+
+# Write to disk as an N5 volume
+blockSize = [256, 256, 64] # each block ~4 MB
+gzip_compression_level = 4
+
+exe = Executors.newFixedThreadPool(256)
+try:
+  N5Utils.save(cachedCellImg, N5FSWriter(path, GsonBuilder()),
+               "s0", blockSize,
+               GzipCompression(gzip_compression_level) if gzip_compression_level > 0 else RawCompression(),
+               exe)
+finally:
+  exe.shutdown()
+
