@@ -30,7 +30,7 @@ cell_dimensions = [512, 512, 1]
 
 # Make the volume dimensions be multiples of the cell dimensions
 volume_dimensions = [int(vd / cd + 1) * cd for vd, cd in
-                     zip(volume_dimensions[0:2], cell_dimensions[0:2])] + cell_dimensions[2:3]
+                     zip(volume_dimensions[0:2], cell_dimensions[0:2])] + volume_dimensions[2:3]
 
 class CATMAIDType4Loader(CacheLoader):
   def __init__(self, volume_dimensions, cell_dimensions, base_url="https://flyemdev.mrc-lmb.cam.ac.uk/L1-CNS-tiles", scale_level=0):
