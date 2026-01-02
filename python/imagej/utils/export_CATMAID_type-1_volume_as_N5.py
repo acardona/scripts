@@ -102,8 +102,9 @@ cachedCellImg = ReadOnlyCachedCellImgFactory().createWithCacheLoader(
 # Write to disk as an N5 volume
 blockSize = [256, 256, 64] # each block ~4 MB
 gzip_compression_level = 4
+path = "/data/raw/Seymour/n5/"
 
-exe = Executors.newFixedThreadPool(256)
+exe = Executors.newFixedThreadPool(32)
 try:
   N5Utils.save(cachedCellImg, N5FSWriter(path, GsonBuilder()),
                "s0", blockSize,
