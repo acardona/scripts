@@ -55,16 +55,39 @@ img = Views.concatenate(2, # on the Z axis
 print "Spliced."
 
 # View the spliced volume
-wrap(img, title="spliced").show()
+#wrap(img, title="spliced").show()
+
+impShift.setTitle("shifts")
+#impShift.show()
+impShiftBM.setTitle("shifts+BM")
+#impShiftBM.show()
+
 
 # To export when the image is showing, comment out the above and uncomment this below:
 #from ij import IJ
 #img = IJ.getImage().getStack().getSource().getSource().getSource() # IntervalView (4 dim), MixedTransformView (4 dim), StackView (3 dim)
 #print img
 
+
+# Every 10 minutes, flush the caches completely.
+from lib.util import newScheduledExecutor, RunTask, printException, syncPrintQ
+def emptyCaches(cachedCellImgs):
+  for i, img in enumerate(cachedCellImgs):
+    try:
+      syncPrintQ("Emptying cache of image %i :: %s" % (i, str(img)))
+      img.getCache().invalidateAll()
+    except:
+      syncPrintQ("Failed to empty cache for image %i :: %s" % (i, str(img)))
+      printException()
+
+exe = newScheduledExecutor()
+exe.scheduleAtFixedRate(RunTask(emptyCaches, [imgShift,imgShiftBM]), 600000, 600000) # 10 minutes = 10 * 60 s / min * 1000 ms / s 
+
 # Write N5 volume
 writeN5(img, n5Dir, name,
         paramsN5["block_size"],
         gzip_compression_level=paramsN5["gzip_compression"],
         n_threads=paramsN5["n_threads"])
+
+exe.shutdown()
 
