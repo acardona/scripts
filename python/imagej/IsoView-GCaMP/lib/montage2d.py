@@ -302,14 +302,15 @@ class MontageSlice(Callable):
     self.tilePaths = [paths[p] for p in sorted(paths.keys())]
     
     self.overlap = overlap
-    self.nominal_overlap = nominal_overlap
+    self.nominal_overlap = nominal_overlap if nominal_overlap else 250 # needed non-null for self.params below 
+    syncPrintQ("nominal_overlap: " + str(self.nominal_overlap))
     self.offset = offset
     self.paramsSIFT = paramsSIFT
     self.paramsRANSAC = paramsRANSAC
     self.csvDir = csvDir
     self.failed = failed
     self.params = {"max_sd": 1.5, # max_sd: maximal difference in size (ratio max/min)
-                   "max_id": 0.66 * nominal_overlap, #Double.MAX_VALUE, # max_id: maximal distance in image space -- this has to be at most 2/3rd of the expected overlap to reduce false positives
+                   "max_id": 0.66 * self.nominal_overlap, #Double.MAX_VALUE, # max_id: maximal distance in image space -- this has to be at most 2/3rd of the expected overlap to reduce false positives
                    "rod": 0.9} # rod: ratio of best vs second best
     self.paramsTileConfiguration = paramsTileConfiguration
     self.params_pixels = params_pixels
