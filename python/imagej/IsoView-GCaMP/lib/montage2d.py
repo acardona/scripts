@@ -502,7 +502,7 @@ class MontageSlice(Callable):
         continue # already painted
       x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
       y = int(sdy + matrix[5] + dy + 0.5)
-      syncPrintQ("sdx, sdy: %f,%f  matrix: %f,%f  dx,dy: %f,%f  x,y: %i,%i" % (sdx, sdy, matrix[2], matrix[5], dx, dy, x, y))
+      #syncPrintQ("sdx, sdy: %f,%f  matrix: %f,%f  dx,dy: %f,%f  x,y: %i,%i" % (sdx, sdy, matrix[2], matrix[5], dx, dy, x, y))
       spMontage.insert(sp, x, y)
       rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     sps = None
