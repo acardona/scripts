@@ -1648,8 +1648,9 @@ def loadAlignedImage(name, srcDir, repairedDir, montageDir,
   if crop_roi is None:
     cropInterval = FinalInterval(imgMontaged.dimension(0), imgMontaged.dimension(1))
   else:
-    cropInterval = FinalInterval([crop_roi[0], crop_roi[1]],
-                                 [crop_roi[2] -1, crop_roi[3] -1])
+    # crop_roi is [x, y, width, height]
+    cropInterval = FinalInterval([crop_roi[0], crop_roi[1]], # min coordinates
+                                 [crop_roi[0] + crop_roi[2] -1, crop_roi[1] + crop_roi[3] -1]) # max coordinates
 
   properties = {
     "name": name,
