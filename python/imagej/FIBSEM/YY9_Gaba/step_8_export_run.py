@@ -59,6 +59,7 @@ exe.scheduleAtFixedRate(RunTask(emptyCaches, [imgShiftBM]), 0, 360000) # 7 minut
 # Tell me about the image
 syncPrintQ(impShiftBM)
 syncPrintQ(imgShiftBM)
+syncPrintQ("crop_roi: " + str(crop_roi))
 
 # Write N5 volume
 writeN5(imgShiftBM, n5Dir, name,
