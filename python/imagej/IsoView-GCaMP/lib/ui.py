@@ -351,7 +351,7 @@ class DataTable(AbstractTableModel):
 
 
 def showTable(rows, title="Table", column_names=None, dataType=Number, width=400, height=500, showTable=True,
-              windowClosing=None, onCellClickFn=None, onRowClickFn=None,
+              windowClosing=None, onCellClickFn=None, onRowClickFn=None, onClickFn=None,
               singleBlockSelection=True,
               renderCenteredColumns=[], renderRightColumns=[]):
   """
@@ -368,7 +368,10 @@ def showTable(rows, title="Table", column_names=None, dataType=Number, width=400
      return: a tuple with the JTable and the JFrame
   """
   table_data = DataTable(rows, column_names=column_names, onCellClickFn=onCellClickFn, onRowClickFn=onRowClickFn)
-  table = JTable(table_data)
+  if onClickFn:
+    table = JTable(table_data, mousePressed=onClickFn)
+  else:
+    table = JTable(table_data)
   table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
   #table.setAutoCreateRowSorter(True) # to sort the view only, not the data in the underlying TableModel
   sorter = TableRowSorter(table_data)
