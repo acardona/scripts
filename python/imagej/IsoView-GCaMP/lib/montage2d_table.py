@@ -17,6 +17,7 @@ from ij.gui import GenericDialog
 from ij.process import ImageProcessor
 
 from ini.trakem2 import Project
+from ini.trakem2.persistence import FSLoader
 from ini.trakem2.display import Display, Patch
 from ini.trakem2.imaging.filters import Invert, ResetMinAndMax, CLAHE, EnhanceContrast
 
@@ -413,6 +414,12 @@ class TrakEM2Montage():
       return
     # Create a TrakEM2 project
     project = Project.newFSProject("blank", None, tmpDir)
+    
+    # Define the number of threads for generating mipmaps to the maximum possible
+    n_threads = numCPUs() -1
+    project.setProperty("n_mipmap_threads", str(n_threads))
+    FSLoader.restartMipMapThreads(n_threads)
+    
     layerset = project.getRootLayerSet()
     # Create a Patch preprocessor script in BeanShell to laod the data directly from the DAT file,
     # avoiding having to save intermediate TIFF files.
@@ -428,6 +435,7 @@ var header = reader.parseHeader(new FileInputStream(path));
 imp2 = reader.readFIBSEM(header, new FileInputStream(path), FIBSEM_Reader.openAsFloat);
 // imp and patch exist as injected variables
 imp.setProcessor(path, imp2.getStack().getProcessor(1)); // channel index zero, 1-based
+imp.getProcessor().findMinAndmax();
           """
     scriptIJ = """
 import ij.IJ;
@@ -482,7 +490,7 @@ imp.setProcessor(path, IJ.openImage(path).getProcessor());
         patch.setProperty("tilePath", tilePath)
         patch.setProperty("montageDir", self.csvDir)
         patch.setFilters([Invert(), ResetMinAndMax(), CLAHE(True, 200, 255, 3.0), EnhanceContrast()])
-        patch.setPreprocessorScriptPath(script_paths[".dat" if tilePath.endswith(".dat") else "IJ"])
+        project.getLoader().setPreprocessorScriptPathSilently(patch, script_paths[".dat" if tilePath.endswith(".dat") else "IJ"])
         layer.add(patch)
         # Position the Patch like in the CSV file if possible, since some tiles may be correctly positioned
         if len(coords) > 0:
