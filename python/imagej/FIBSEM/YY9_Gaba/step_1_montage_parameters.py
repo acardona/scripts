@@ -51,8 +51,11 @@ last_section = -331
 #     "Merlin-WEMS_24-05-30_104352_": "Merlin-WEMS_24-05-30_112457_"
 replace_sections = {
   "Merlin-FIBdeSEMAna_25-12-04_073041_": "Merlin-FIBdeSEMAna_25-12-04_072903_", # mid-section black line plus blur
-  "Merlin-FIBdeSEMAna_25-12-06_213718_": "Merlin-FIBdeSEMAna_25-12-06_213546_", # idem
+  "Merlin-FIBdeSEMAna_25-12-06_213718_": "Merlin-FIBdeSEMAna_25-12-06_213546_", # Black-line mid section crossing neuropile discard
   "Merlin-FIBdeSEMAna_25-11-27_185132_": "Merlin-FIBdeSEMAna_25-11-27_184930_", # idem
+  "Merlin-FIBdeSEMAna_25-12-19_213919_": "Merlin-FIBdeSEMAna_25-12-19_213827_", # 1/4 Image, no neuropil unrecoverable
+  "Merlin-FIBdeSEMAna_25-11-27_185132_": "Merlin-FIBdeSEMAna_25-11-27_185233_0-0-0.dat", # Black-line mid section crossing neuropile discard
+  "Merlin-FIBdeSEMAna_25-12-15_195457_": "Merlin-FIBdeSEMAna_25-12-15_195400_0-0-0.dat", # Black image
 }
 
 
@@ -104,7 +107,17 @@ to_remove = set([
 # Add entries like this, with the file name of individual image tiles and a comment:
 # "Merlin-WEMS_24-02-27_170732_0-0-0.dat", # only header, whole image truncated
 ignore_images = set([
-"Merlin-FIBdeSEMAna_25-12-15_195457_0-0-0.dat", # blurred
+#"Merlin-FIBdeSEMAna_25-12-19_213919_0-0-0.dat", # 1/4 Image, no neuropil unrecoverable
+#"Merlin-FIBdeSEMAna_25-12-04_073041_0-0-0.dat", # Black-line mid section but doesnt affect brain
+#"Merlin-FIBdeSEMAna_25-12-04_073041_0-0-1.dat", # Black-line mid section but doesnt affect brain
+#"Merlin-FIBdeSEMAna_25-12-06_213718_0-0-0.dat", # Black-line mid section crossing neuropile discard
+#"Merlin-FIBdeSEMAna_25-12-06_213718_0-0-1.dat", # Black-line mid section crossing neuropile discard
+#"Merlin-FIBdeSEMAna_25-11-27_185132_0-0-0.dat", # Black-line mid section crossing neuropile discard
+#"Merlin-FIBdeSEMAna_25-11-27_185132_0-0-1.dat", # Black-line mid section crossing neuropile discard
+#"Merlin-FIBdeSEMAna_25-11-28_004440_0-0-0.dat", # Black-line mid section but doesnt affect brain
+#"Merlin-FIBdeSEMAna_25-11-28_004440_0-0-1.dat",# Black-line mid section but doesnt affect brain
+#"Merlin-FIBdeSEMAna_25-12-15_195457_0-0-0.dat", #  Black single image tile: discard
+
 ])
 
 # Replacement files to be found under the repaired folder:
