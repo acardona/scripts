@@ -2,7 +2,7 @@ from __future__ import with_statement
 import os, re, sys, math
 from datetime import datetime
 
-from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task, ParallelTasks
+from lib.util import newFixedThreadPool, syncPrintQ, printException, printExceptionCause, numCPUs, Task, ParallelTasks, isThreadDead
 from lib.registration import saveMatrices, loadMatrices
 from lib.io import loadFilePaths, readFIBSEMHeader, readFIBSEMdat, readFIBSEM, imageInfo, ensureDirsExist, SectionCellLoader
 from lib.img import lazyCachedCellImg
@@ -636,6 +636,8 @@ class MontageAndSave(Callable):
   
   def call(self):
     try:
+      if isThreadDead():
+        return
       return self.callImpl()
     except:
       printException()
