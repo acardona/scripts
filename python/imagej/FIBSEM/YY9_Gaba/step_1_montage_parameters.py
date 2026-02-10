@@ -55,6 +55,8 @@ replace_sections = {
   "Merlin-FIBdeSEMAna_25-11-27_185132_": "Merlin-FIBdeSEMAna_25-11-27_184930_", # idem
   "Merlin-FIBdeSEMAna_25-12-19_213919_": "Merlin-FIBdeSEMAna_25-12-19_213827_", # 1/4 Image, no neuropil unrecoverable
   "Merlin-FIBdeSEMAna_25-12-15_195457_": "Merlin-FIBdeSEMAna_25-12-15_195400_", # Black image
+  "Merlin-FIBdeSEMAna_25-12-19_202514_": "Merlin-FIBdeSEMAna_25-12-19_202622_", # truncated
+  "Merlin-FIBdeSEMAna_25-11-28_004440_": "Merlin-FIBdeSEMAna_25-11-28_004340_", # big white line, bad contrast
 }
 
 
@@ -100,7 +102,7 @@ paramsTileConf = {
 # Add entries like this, with a comment for the record":
 # "Merlin-WEMS_24-02-27_170732_" # added 0-0-0 tile to ignore: truncated, no pixels, only header
 to_remove = set([
-  
+  "Merlin-FIBdeSEMAna_25-12-19_214022_" # truncated last section
 ])
 
 # Add entries like this, with the file name of individual image tiles and a comment:

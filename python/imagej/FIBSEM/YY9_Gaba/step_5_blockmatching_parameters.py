@@ -20,7 +20,7 @@ BMdir = tgtDir + "BM-csv/"
 
 propertiesBM = {
  'name': name,
- 'scale': 1, # Compounds with montaging interim_scale
+ 'scale': 0.5, # Compounds with montaging interim_scale
  'n_threads': numCPUs(),
  'roi': None,
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
@@ -34,7 +34,7 @@ paramsBlockMatching = {
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 200, # Maximum expected displacement between slices after SIFT-based registration.
+ 'searchRadius': 70, # Maximum expected displacement between slices after SIFT-based registration.
                       # Make it large enough, 300 is a good first searcRadius value. 50 to a 100 for a fast run.
  'blockRadius': 200, # small, yet enough: size of the window to use for comparing across images.
 }
