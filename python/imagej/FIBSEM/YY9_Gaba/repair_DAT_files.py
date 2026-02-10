@@ -480,6 +480,7 @@ good_singles = {
   399755436: "Merlin-FIBdeSEMAna_25-12-19_141313_0-0-0.dat", # same size
   319883024: "Merlin-FIBdeSEMAna_25-12-19_172158_0-0-0.dat", # truncated
   152931024: "Merlin-FIBdeSEMAna_25-12-19_213827_0-0-0.dat", # truncated
+  521312524: "Merlin-FIBdeSEMAna_25-12-17_110022_0-0-0.dat", # truncated
 }
 
 # This works for 2-tiled because there is always one good
