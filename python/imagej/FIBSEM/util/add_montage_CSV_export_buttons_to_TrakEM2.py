@@ -8,7 +8,7 @@ from ini.trakem2.display import Display
 # as an argument to TrakEM2Montage. The montageDir is written in the Patch properties.
 
 # VOLUME
-name = "NGC-10" # Nicolo_S9_02122024" # Name of the folder containing the .dat files, e.g., "MR1.4-3"
+name = "YY9_Gaba" # Nicolo_S9_02122024" # Name of the folder containing the .dat files, e.g., "MR1.4-3"
 targetServer = "/net/fibserver1/raw/"
 tgtDir = targetServer + name + "/registration/"
 montageDir = tgtDir + "montage-csv/" # for in-section montaging
