@@ -54,8 +54,7 @@ replace_sections = {
   "Merlin-FIBdeSEMAna_25-12-06_213718_": "Merlin-FIBdeSEMAna_25-12-06_213546_", # Black-line mid section crossing neuropile discard
   "Merlin-FIBdeSEMAna_25-11-27_185132_": "Merlin-FIBdeSEMAna_25-11-27_184930_", # idem
   "Merlin-FIBdeSEMAna_25-12-19_213919_": "Merlin-FIBdeSEMAna_25-12-19_213827_", # 1/4 Image, no neuropil unrecoverable
-  "Merlin-FIBdeSEMAna_25-11-27_185132_": "Merlin-FIBdeSEMAna_25-11-27_185233_0-0-0.dat", # Black-line mid section crossing neuropile discard
-  "Merlin-FIBdeSEMAna_25-12-15_195457_": "Merlin-FIBdeSEMAna_25-12-15_195400_0-0-0.dat", # Black image
+  "Merlin-FIBdeSEMAna_25-12-15_195457_": "Merlin-FIBdeSEMAna_25-12-15_195400_", # Black image
 }
 
 
