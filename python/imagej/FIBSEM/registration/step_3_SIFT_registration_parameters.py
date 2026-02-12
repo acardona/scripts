@@ -31,7 +31,7 @@ properties = {
  'scale': 0.5, # Compounds with montaging interim_scale
  'shift_threshold': 10, # pixels, in world coordinates (not scaled)
  'n_threads': numCPUs(),
- 'roi': [section_width / 4, section_height / 4, section_width / 2, section_height / 2], # [x, y, width, height] or None. To extract SIFT features from center part only
+ 'roi': [section_width / 6, section_height / 6, int(section_width * 2.0 / 3 + 0.5), int(section_height * 2.0 / 3 + 0.5)], # [x, y, width, height] or None. To extract SIFT features from center part only
  'RANSAC_iterations': 1000,
  'RANSAC_maxEpsilon': 25, # default is 25, for ssTEM 40nm sections cross-section alignment, but FIBSEM at 8nm sections is far thinner
  'RANSAC_minInlierRatio': 0.01,
@@ -44,9 +44,9 @@ properties = {
 paramsSIFT = FloatArray2DSIFT.Param()
 paramsSIFT.fdSize = 8 # default is 4
 paramsSIFT.fdBins = 8 # default is 8
-paramsSIFT.maxOctaveSize = int(max(1024, section_width * params_pixels["interim_scale"] * properties['scale'])) # effective scale of 0.125 if interim_scale was 0.25
-paramsSIFT.steps = 5
-paramsSIFT.minOctaveSize = int(max(256, paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps)))
+paramsSIFT.maxOctaveSize = int(min(1024, section_width * params_pixels["interim_scale"] * properties['scale'])) # effective scale of 0.125 if interim_scale was 0.25 – at most 1024, suffices for an approximated transation
+paramsSIFT.steps = 4
+paramsSIFT.minOctaveSize = int(max(128, paramsSIFT.maxOctaveSize / pow(2, paramsSIFT.steps)))
 paramsSIFT.initialSigma = 1.6 # default 1.6
 
 
