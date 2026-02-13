@@ -283,21 +283,22 @@ class RowClickListener(MouseAdapter, ListSelectionListener):
   def mousePressed(self, event):
     if 2 == event.getClickCount():
       # Open the raw images of the montage at that slice
-      rowIndex = event.getSource().rowAtPoint(event.getPoint()) # TODO could use self.firstIndex or the whole range
+      dataRowIndex = self.table.convertRowIndexToModel(event.getSource().rowAtPoint(event.getPoint())) # TODO could use self.firstIndex or the whole range
+
       if self.double_click_fn:
         try:
-          self.double_click_fn(self.table.getModel(), rowIndex)
+          self.double_click_fn(self.table.getModel(), dataRowIndex)
         except:
           syncPrintQ(sys.exc_info())
   
   def mouseReleased(self, event):
     if 1 == event.getClickCount() and SwingUtilities.isRightMouseButton(event):
       popup = JPopupMenu()
-      rowIndex = event.getSource().rowAtPoint(event.getPoint())
+      dataRowIndex = self.table.convertRowIndexToModel(event.getSource().rowAtPoint(event.getPoint()))
       
       for title, fn in self.right_click_fns:
         item = JMenuItem(title)
-        item.addActionListener(MenuItemListener(fn, self.table.getModel(), rowIndex))
+        item.addActionListener(MenuItemListener(fn, self.table.getModel(), dataRowIndex))
         popup.add(item)
       popup.show(event.getComponent(), event.getX(), event.getY())
   
