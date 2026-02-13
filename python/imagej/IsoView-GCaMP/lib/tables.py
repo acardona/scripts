@@ -138,23 +138,25 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties, reRunFn):
   def uiOpenChunkVolume(groupNames, montage_img, csvDir, properties, table_model, rowIndex):
     newThread(openChunkVolume, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 1), virtual=False)
   
-  def launchCosSimForChunk(table_model, rowIndex):
-    newThread(makeTableCosineSimilarity, partial(openChunkVolume, groupNames, montage_img, csvDir, properties, table_model.getValueAt(rowIndex, 1)))
+  def launchCosSimForChunk(table_model, dataRowIndex):
+    newThread(makeTableCosineSimilarity, partial(openChunkVolume, groupNames, montage_img, csvDir, properties, table_model.getValueAt(dataRowIndex, 1)))
   
-  def launchCosSimForAll(table_model, rowIndex):
+  def launchCosSimForAll(table_model, _):
     newThread(makeTableCosineSimilarity, partial(openVolume, groupNames, montage_img, csvDir, properties, "matrices.csv"))
 
-  def reRunChunkAlignmentForSection(table_model, rowIndex):
+  def reRunChunkAlignmentForSection(table_model, dataRowIndex):
     gd = GenericDialog("Choose")
-    gd.addNumericField("Section (0-based): ", 0, 0)
+    gd.addNumericField("Section (1-based): ", dataRowIndex + 1, 0)
     gd.showDialog()
     if gd.wasCanceled():
       return
     section_index = int(gd.getNextNumber())
-    if section_index < 0 or section_index >= len(groupNames):
+    if section_index < 1 or section_index > len(groupNames):
       JOptionPane.showMessageDialog(None, "Section index out of range: %i" % section_index, "Error", JOptionPane.ERROR_MESSAGE)
       return
     # Find out in which chunks is the chosen section
+    # Make secton_index 0-based
+    section_index = section_index -1 # now 0-based
     chunks = []
     for rowIndex in xrange(table_model.getRowCount()):
       start = table_model.getValueAt(rowIndex, 2)
@@ -170,14 +172,16 @@ def makeTableChunks(groupNames, montage_img, csvDir, properties, reRunFn):
     # Re-run the overall alignment
     newThread(reRunFn)
   
-  def removePointMatches(table_model, rowIndex):
-    start = int(table_model.getValueAt(rowIndex, 2))
-    end   = int(table_model.getValueAt(rowIndex, 3))
+  def removePointMatches(table_model, dataRowIndex):
+    # dataRowIndex is 0-based
+    start = int(table_model.getValueAt(dataRowIndex, 2))
+    end   = int(table_model.getValueAt(dataRowIndex, 3))
     pointmatches_files = set(filter(lambda filename: filename.endswith(".pointmatches.csv"), os.listdir(csvDir)))
     for groupName in groupNames[start:end+1]:
       for filename in list(pointmatches_files): # iterate a copy
         if filename.find(groupName) > -1:
           pointmatches_files.remove(filename)
+          syncPrintQ("Removing pointmatches CSV file:\n%s" % filename)
           os.remove(os.path.join(csvDir, filename))
 
   commands = [("Open chunk volume", partial(uiOpenChunkVolume, groupNames, montage_img, csvDir, properties)),
