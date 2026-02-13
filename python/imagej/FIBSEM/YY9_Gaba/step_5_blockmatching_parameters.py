@@ -24,7 +24,7 @@ propertiesBM = {
  'n_threads': numCPUs(),
  'roi': map(lambda x: int(x / params_pixels["interim_scale"] + 0.5), [486, 351, 1722, 1548]), # in full image coordinates
  'handleNoPointMatchesFn': handleNoPointMatches, # Amounts to no translation, with a single PointMatch at 0,0
- 'filterFeaturesFn': makeFilterFeaturesFn(model_path, model_width, as3D=False), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
+ 'filterFeaturesFn': None, # makeFilterFeaturesFn(model_path, model_width, as3D=False), # Filter out features not in the tissue but in the resin, to ignore the resin which has streaks and curtains
 }
 
 # Parameters for blockmatching
@@ -34,7 +34,7 @@ paramsBlockMatching = {
  'minR': 0.1, # min PMCC (Pearson product-moment correlation coefficient)
  'rod': 0.9, # max second best r / best r
  'maxCurvature': 1000.0, # default is 10
- 'searchRadius': 100, # Maximum expected displacement between slices after SIFT-based registration.
+ 'searchRadius': 200, # Maximum expected displacement between slices after SIFT-based registration.
                       # Make it large enough, 300 is a good first searcRadius value. 50 to a 100 for a fast run.
  'blockRadius': 200, # small, yet enough: size of the window to use for comparing across images.
 }

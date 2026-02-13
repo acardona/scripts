@@ -33,7 +33,7 @@ volumeImgMontaged, groupNames, tileGroups = runMontaging(
              params_pixels, paramsSIFT, paramsRANSAC, paramsTileConf,
              to_remove, ignore_images, replace_images,
              paramsFilterFeatures=paramsFilterFeatures,
-             showTable=False, show=True)
+             showTable=False, show=False)
 
 # Run pairwise SIFT feature-based computation of translation models
 # to detect large translations in X and Y,

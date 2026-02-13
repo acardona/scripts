@@ -40,7 +40,7 @@ paramsFilterFeatures = None
 
 # Skip sections. Define a range to work with.
 first_section = 0  # 0-based
-last_section = -331
+last_section = -332 # was: -331
 
 
 # Replace sections: (0-based, not 1-based !)
