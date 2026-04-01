@@ -21,7 +21,8 @@ SIFTdir = tgtDir + "SIFT-csv/"
 # EDIT below until the end if needed
 
 # Parameters to filter out features outside the tissue using a LabKit model
-model_path = "/net/fibserver1/raw/Nicolo_D13/registration_scripts/clasifier_2.classifier" # from LabKit
+#model_path = "/net/fibserver1/raw/Nicolo_D13/registration_scripts/clasifier_2.classifier" # from LabKit
+model_path = "/net/fibserver1/raw/YY9_Gaba/registration_scripts/classifier_0-298.classifier" # from LabKit
 model_width = 400 # target width for resizing so as to match the dimensions of the image used when training the model.
 as3D = False # False if the LabKit model was explicitly trained to be a 2D model.
 
