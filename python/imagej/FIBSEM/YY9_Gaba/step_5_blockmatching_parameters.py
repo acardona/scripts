@@ -17,6 +17,9 @@ from lib.util import numCPUs
 # Folder for storing blockmatching features per montage and pointmatches across montages, and the matrices.csv files
 BMdir = tgtDir + "BM-csv/"
 
+# Override for 14505 and 16960
+model_path = "/net/fibserver1/raw/YY9_Gaba/registration_scripts/classifier_14505+16960.classifier" # from LabKit
+
 
 propertiesBM = {
  'name': name,
