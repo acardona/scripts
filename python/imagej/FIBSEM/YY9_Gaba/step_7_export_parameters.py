@@ -12,7 +12,7 @@ from lib.util import numCPUs
 
 
 # Directory for exporting the N5 volume
-n5Dir = tgtDir + "n5_ac1_070226/"
+n5Dir = tgtDir + "n5/"
 
 # Region of interest in 2D for exporting
 crop_roi = [696, 5664, 16848, 11496]
