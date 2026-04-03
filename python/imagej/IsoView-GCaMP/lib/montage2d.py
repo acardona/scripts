@@ -487,19 +487,19 @@ class MontageSlice(Callable):
     # If a file is in the repaired dir and it ends in TIFF, paint it first:
     # a crude way of signaling that the file was repaired and it's potentially incomplete,
     # particularly near the edges where it overlaps with other tiles.
-    for filepath, sp, matrix in reversed(zip(self.tilePaths, sps, matrices)):
-      if not (filepath.find("/repaired/") > 0 and filepath.endswith("tif")):
-        continue
-      # Paint repaired file that was saved as TIFF
-      x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
-      y = int(sdy + matrix[5] + dy + 0.5)
-      spMontage.insert(sp, x, y)
-      rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
+    #for filepath, sp, matrix in reversed(zip(self.tilePaths, sps, matrices)):
+    #  if not (filepath.find("/repaired/") > 0 and filepath.endswith("tif")):
+    #    continue
+    #  # Paint repaired file that was saved as TIFF
+    #  x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
+    #  y = int(sdy + matrix[5] + dy + 0.5)
+    #  spMontage.insert(sp, x, y)
+    #  rois.append(Roi(x, y, sp.getWidth(), sp.getHeight()))
     
     # Start pasting from the end, to bury the bad left edges
     for filepath, sp, matrix in reversed(zip(self.tilePaths, sps, matrices)):
-      if filepath.find("/repaired/") > 0 and filepath.endswith("tif"):
-        continue # already painted
+      #if filepath.find("/repaired/") > 0 and filepath.endswith("tif"):
+      #  continue # already painted
       x = int(sdx + matrix[2] + dx + 0.5) # indices 2 and 5 are the X, Y translation
       y = int(sdy + matrix[5] + dy + 0.5)
       #syncPrintQ("sdx, sdy: %f,%f  matrix: %f,%f  dx,dy: %f,%f  x,y: %i,%i" % (sdx, sdy, matrix[2], matrix[5], dx, dy, x, y))
