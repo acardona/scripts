@@ -50,6 +50,7 @@ last_section = -332 # was: -331
 # Alternatively, add entries as <groupName>: <groupName>, i.e., like:
 #     "Merlin-WEMS_24-05-30_104352_": "Merlin-WEMS_24-05-30_112457_"
 replace_sections = {
+  "Merlin-FIBdeSEMAna_25-12-02_072605_": "Merlin-FIBdeSEMAna_25-12-02_074059_", # left tile has a non-linear deformation
   "Merlin-FIBdeSEMAna_25-12-04_073041_": "Merlin-FIBdeSEMAna_25-12-04_072903_", # mid-section black line plus blur
   "Merlin-FIBdeSEMAna_25-12-06_213718_": "Merlin-FIBdeSEMAna_25-12-06_213546_", # Black-line mid section crossing neuropile discard
   "Merlin-FIBdeSEMAna_25-11-27_185132_": "Merlin-FIBdeSEMAna_25-11-27_184930_", # idem
@@ -125,7 +126,7 @@ ignore_images = set([
 # Add key:value entries like this:
 # "Merlin-WEMS_24-03-02_190309_0-0-0.dat": "Merlin-WEMS_24-03-02_190309_0-0-0.tif",
 replace_images = {
-  
+  "Merlin-FIBdeSEMAna_25-12-15_075757_0-0-0.dat": "Merlin-FIBdeSEMAna_25-12-15_075757_0-0-0.tif",
 }
 
 
