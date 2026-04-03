@@ -64,13 +64,18 @@ def makeTableCosineSimilarity(openVolumeFn):
   # Compute for all pairs of adjacent sections, in parallel
   cs = pairwiseCosineSimilarity(imgA)
   
-  table, frame = showTable(zip(("%i-%i" % (i, i+1) for i in xrange(start, end)), cs), # two columns: indices and score
+  def rowClick(pair, score):
+    slice_index = int(pair[:pair.find("-")]) # 1-based
+    impA.setSlice(slice_index)
+  
+  # 1-based section indices like in the ImageJ stack
+  table, frame = showTable(zip(("%i-%i" % (i+1, i+2) for i in xrange(start, end)), cs), # two columns: indices and score
       title="Cosyne similarities for sections %i-%i" % (start, end),
       column_names=["pair", "score"],
       dataType=String,
       width=400, height=500,
       showTable=True,
-      windowClosing=None, onCellClickFn=None, onRowClickFn=None,
+      windowClosing=None, onCellClickFn=None, onRowClickFn=rowClick,
       singleBlockSelection=True, renderRightColumns=[0, 1])
   
   # Show as a plot
