@@ -9,7 +9,8 @@ imp = IJ.getImage()
 roi = imp.getRoi()
 
 ranges = [
-  (0, 1850),
+  #(0, 1850),
+  (16300, 17368)
 ]
 
 for r in ranges:
