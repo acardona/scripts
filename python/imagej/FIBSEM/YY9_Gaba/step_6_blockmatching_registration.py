@@ -3,7 +3,8 @@
 import sys, os
 
 # Import registration library functions
-libDir = "/net/fibserver1/raw/YY9_Gaba/scripts/python/imagej/IsoView-GCaMP/"
+#libDir = "/net/fibserver1/raw/YY9_Gaba/scripts/python/imagej/IsoView-GCaMP/"
+libDir = "/net/fibserver1/code/scripts/python/imagej/IsoView-GCaMP/"
 sys.path.append(libDir)
 from lib.util import syncPrintQ
 
