@@ -24,6 +24,14 @@ from lib.serial2Dregistration import loadAlignedImage
 from lib.io import writeN5
 
 
+# SPECIAL for FIBSEM YY9_Gaba: make the canvas wider for the extra crop roi,
+# see step 7 export parameters
+section_width += int((180 + 350) / params_pixels['interim_scale'] + 0.5)
+# Can't be done in earlier steps without regenerating the scaled montages,
+# but here the full-resolution original images are used.
+
+
+
 # Load the montages in full resolution, unaligned, and cropped as per crop_roi
 imgShiftBM, impShiftBM = loadAlignedImage(name, srcDir, repairedDir, montageDir,
         SIFTdir, BMdir,
@@ -47,7 +55,9 @@ def emptyCaches(cachedCellImgs):
   for i, img in enumerate(cachedCellImgs):
     try:
       syncPrintQ("Emptying cache of image %i :: %s" % (i, str(img)))
-      img.getCache().invalidateAll()
+      if rotate:
+        img.getSource().getSource().getCache().invalidateAll()
+      else: img.getCache().invalidateAll()
     except:
       syncPrintQ("Failed to empty cache for image %i :: %s" % (i, str(img)))
       printException()
@@ -61,12 +71,14 @@ syncPrintQ(impShiftBM)
 syncPrintQ(imgShiftBM)
 syncPrintQ("crop_roi: " + str(crop_roi))
 
+#impShiftBM.show()
+
 # Write N5 volume
 writeN5(imgShiftBM, n5Dir, name,
         paramsN5["block_size"],
         gzip_compression_level=paramsN5["gzip_compression"],
         n_threads=paramsN5["n_threads"])
-        
+
 exe.shutdown()
 
 
